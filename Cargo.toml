@@ -1,0 +1,11 @@
+[package]
+name = "piss-fan"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4.41"
+clap = { version = "4.5.39", features = ["derive"] }
+futures-util = "0.3.31"
+tokio = { version = "1.45.1", features = ["full"] }
+tokio-tungstenite = { version = "0.26.2", features = ["native-tls"] }
