@@ -1,65 +1,75 @@
-#![allow(non_snake_case, dead_code)]
+#![allow(non_snake_case, dead_code, unused_variables)]
 
 use super::types::{ChannelChatMessagePayload, ChannelChatMessageRequest};
 use anyhow::anyhow;
 use reqwest::header::HeaderMap;
 use ring::{
+    digest,
     hmac::{self, Key},
-    rand::SystemRandom,
+    rand,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use std::sync::{LazyLock, RwLock};
+use std::{
+    fmt,
+    sync::{LazyLock, RwLock},
+};
 
-pub static KEY: LazyLock<RwLock<Secret>> = LazyLock::new(|| RwLock::new(Secret::new()));
+pub static KEY_DIGEST: LazyLock<RwLock<Secret>> = LazyLock::new(|| RwLock::new(Secret::new()));
 
+/// Struct for HMAC key storage and generation methods.
+///
+/// Key is stored in-memory for the duration of the server's uptime; restarting the server should
+/// reset this key (this mechanism is, at present, by design).
+///
+/// # Security
+///
+/// As far as I am aware, `ring::rand::SystemRandom` is cryptographically secure by itself smile
 #[derive(Debug)]
 pub struct Secret {
-    key: Key,
+    pub key: Key,
+    _digest: [u8; digest::SHA256_OUTPUT_LEN],
+    pub _hex: String,
 }
 
 impl Secret {
     pub fn new() -> Self {
-        let rng = SystemRandom::new();
-        let key = Key::generate(hmac::HMAC_SHA256, &rng).unwrap();
+        let rng = rand::SystemRandom::new();
+        let _digest: [u8; digest::SHA256_OUTPUT_LEN] = rand::generate(&rng).unwrap().expose();
+        let _hex = Self::key_hex(_digest);
+        let key = Key::new(hmac::HMAC_SHA256, &_hex.as_bytes());
 
-        Self { key }
+        Self { _digest, _hex, key }
+    }
+
+    pub fn key_hex(digest: [u8; digest::SHA256_OUTPUT_LEN]) -> String {
+        hex::encode(digest)
+    }
+
+    pub fn verify(&self) -> bool {
+        todo!();
     }
 }
 
-const MOCK_API_CLIENT_ID: &'static str = "ae8f82186f9295cc0123057fd282f6";
-const MOCK_API_SECRET: &'static str = "0d69582c2728f646e54b1eb112efcf";
-const MOCK_API_TOKEN: &'static str = "b0f4d55ef52450a";
+impl fmt::Display for Secret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self._hex)
+    }
+}
 
-const CALLBACK_ROUTE: &'static str = "https://piss.fan/api/webhook-callback";
+const CALLBACK_ROUTE: &'static str = "https://api.piss.fan/webhook-global";
 const API_GQL_URL: &'static str = "https://gql.twitch.tv/gql";
 const API_HELIX_URL: &'static str = "https://api.twitch.tv/helix";
-
-const HMAC_PREFIX: &'static str = "sha256=";
-const TWITCH_MESSAGE_ID: &'static str = "Twitch-Eventsub-Message-Id";
-const TWITCH_MESSAGE_TIMESTAMP: &'static str = "Twitch-Eventsub-Message-Timestamp";
-const TWITCH_MESSAGE_SIGNATURE: &'static str = "Twitch-Eventsub-Message-Signature";
-const MESSAGE_TYPE: &'static str = "Twitch-Eventsub-Message-Type";
 
 pub async fn subscribe(
     broadcaster_login: &str,
     user_login: &str,
 ) -> anyhow::Result<ChannelChatMessagePayload> {
-    // retrieves user id for broadcaster and user from GQL API
-    //
-    // technically this is not TOS as we don't reverse engineering anything!
-    // also this query doesn't require authorization so like please don't ban me PLEASE
-    // pleaseplaap[lesepalspalep im begging IM 
-    // *gasps for air*
-    // KNEELING im clasping my hands together im looking up at you and there are tears in
-    // my eyes im just a guy IM JUSTa  a guy *moans* *sobs* *pukes*
     let broadcaster_id: String = get_user_id(broadcaster_login).await?;
     let user_id: String = get_user_id(user_login).await?;
 
     let subs_uri = format!("{}/eventsub/subscriptions", API_HELIX_URL);
-    
-
 
     todo!();
 }
@@ -76,8 +86,8 @@ pub async fn get_user_id(login: &str) -> anyhow::Result<String> {
     );
 
     let query = ChatChannelData::new(login);
-
     let client = reqwest::Client::new();
+
     let req = client.post(API_GQL_URL).json(&query).headers(headers);
     let res = req.send().await?;
     if res.status() != 200 {
@@ -98,6 +108,7 @@ pub async fn get_user_id(login: &str) -> anyhow::Result<String> {
     }
 }
 
+/// Serde-derivable struct representing the GQL query JSON body
 #[derive(Deserialize, Serialize)]
 pub struct ChatChannelData {
     pub operationName: String,
@@ -106,6 +117,23 @@ pub struct ChatChannelData {
 }
 
 impl ChatChannelData {
+    /// Retrieves a user id for the GQL API
+    ///
+    /// I'm too lazy at this point in time to set up a whole OAuth flow and I will resist doing
+    /// so until I can't avoid it any longer.
+    ///
+    /// # [dev.twitch.tv TOS]
+    ///
+    /// Technically this is not TOS as we don't reverse engineering anything!
+    /// Also this query doesn't require authorization so like surely this is free game please
+    /// don't ban me PLEASE pleaseplaap0olesepalspalep im begging IM
+    ///
+    /// *gasps for air*
+    ///
+    /// KNEELING im clasping my hands together im looking up at you and there are tears in
+    /// my eyes im just a guy IM JUSTa  a guy *moans* *sobs* *pukes*
+    ///
+    /// [dev.twitch.tv TOS]: https://legal.twitch.com/legal/developer-agreement/
     pub fn new(login: &str) -> Self {
         let variables = Variables {
             channelLogin: login.to_string(),

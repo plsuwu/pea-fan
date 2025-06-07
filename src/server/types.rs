@@ -203,12 +203,6 @@ pub struct Transport {
     secret: String,
 }
 
-#[derive(Debug)]
-pub struct Challenge {
-    challenge: String,
-
-}
-
 pub struct ChallengeSubscription {
     id: String,
     status: String,
