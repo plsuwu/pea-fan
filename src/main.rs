@@ -1,20 +1,18 @@
+use server::subscriber;
+
 mod args;
 mod socket;
+mod parser;
+mod server;
 
 extern crate chrono;
 
-use crate::socket::settings::CONNECTION_SETTINGS;
-use socket::client::Client;
-use tokio_tungstenite::tungstenite::Result;
-
 #[tokio::main]
-async fn main() -> Result<()> {
-    let settings_rw_lock = &*CONNECTION_SETTINGS;
+async fn main() {
+    let args = args::parse_cli_args();
 
-    let client = Client::new(settings_rw_lock).await?;
-    client.open(settings_rw_lock).await?;
+    // let broadcaster_id = subscriber::get_user_id(&args.broadcaster).await.unwrap();
+    // println!("{}", broadcaster_id);
 
-    client.loop_read().await;
-
-    Ok(())
+    server::webhook::server_main().await;
 }
