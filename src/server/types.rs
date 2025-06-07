@@ -37,24 +37,151 @@ impl ChannelChatMessageRequest {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ChannelChatMessagePayload {
-    subscription: Subscription,
-    event: ChannelChatMessageEvent,
+    pub subscription: Subscription,
+    pub event: ChannelChatMessageEvent,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChannelSubscriptionMessagePayload {
+    pub subscription: Subscription,
+    pub event: ChannelSubscriptionMessageEvent,
+}
+
+pub trait ChatMessageCommon {
+    fn user_id(&self) -> &str;
+    fn user_name(&self) -> &str;
+    fn user_login(&self) -> &str;
+    fn broadcaster_user_id(&self) -> &str;
+    fn broadcaster_user_name(&self) -> &str;
+    fn broadcaster_user_login(&self) -> &str;
+    fn message(&self) -> &Message;
+}
+
+macro_rules! impl_chat_common {
+    (
+        $struct:ty,
+        user_id: $user_id_field:ident,
+        user_name: $user_name_field:ident,
+        user_login: $user_login_field:ident,
+        broadcaster_user_id: $broadcaster_user_id_field:ident,
+        broadcaster_user_name: $broadcaster_user_name_field:ident,
+        broadcaster_user_login: $broadcaster_user_login_field:ident,
+        message: $message_field:ident,
+    ) => {
+        impl ChatMessageCommon for $struct {
+            fn user_id(&self) -> &str {
+                &self.$user_id_field
+            }
+
+            fn user_name(&self) -> &str {
+                &self.$user_name_field
+            }
+
+            fn user_login(&self) -> &str {
+                &self.$user_login_field
+            }
+
+            fn broadcaster_user_id(&self) -> &str {
+                &self.$broadcaster_user_id_field
+            }
+
+            fn broadcaster_user_name(&self) -> &str {
+                &self.$broadcaster_user_name_field
+            }
+
+            fn broadcaster_user_login(&self) -> &str {
+                &self.$broadcaster_user_login_field
+            }
+
+            fn message(&self) -> &Message {
+                &self.$message_field
+            }
+        }
+    };
+}
+
+impl_chat_common!(
+    ChannelSubscriptionMessageEvent,
+    user_id: user_id,
+    user_name: user_name,
+    user_login: user_login,
+    broadcaster_user_id: broadcaster_user_id,
+    broadcaster_user_name: broadcaster_user_name,
+    broadcaster_user_login: broadcaster_user_login,
+    message: message,
+);
+
+impl_chat_common!(
+    ChannelChatMessageEvent,
+    user_id: chatter_user_id,
+    user_name: chatter_user_name,
+    user_login: chatter_user_login,
+    broadcaster_user_id: broadcaster_user_id,
+    broadcaster_user_name: broadcaster_user_name,
+    broadcaster_user_login: broadcaster_user_login,
+    message: message,
+);
+
+macro_rules! delegate_common {
+    ($struct:ty, $field:ident) => {
+        impl ChatMessageCommon for $struct {
+            fn user_id(&self) -> &str {
+                self.$field.user_id()
+            }
+            fn user_name(&self) -> &str {
+                self.$field.user_name()
+            }
+            fn user_login(&self) -> &str {
+                self.$field.user_login()
+            }
+            fn broadcaster_user_id(&self) -> &str {
+                self.$field.broadcaster_user_id()
+            }
+            fn broadcaster_user_name(&self) -> &str {
+                self.$field.broadcaster_user_name()
+            }
+            fn broadcaster_user_login(&self) -> &str {
+                self.$field.broadcaster_user_login()
+            }
+            fn message(&self) -> &Message {
+                self.$field.message()
+            }
+        }
+    };
+}
+
+delegate_common!(ChannelChatMessagePayload, event);
+delegate_common!(ChannelSubscriptionMessagePayload, event);
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChannelSubscriptionMessageEvent {
+    pub user_id: String,
+    pub user_login: String,
+    pub user_name: String,
+    pub broadcaster_user_id: String,
+    pub broadcaster_user_login: String,
+    pub broadcaster_user_name: String,
+    pub tier: String,
+    pub message: Message,
+    pub cumulative_months: usize,
+    pub streak_months: Option<usize>,
+    pub duration_months: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ChannelChatMessageEvent {
-    broadcaster_user_id: String,
-    broadcaster_user_name: String,
-    broadcaster_user_login: String,
+    pub broadcaster_user_id: String,
+    pub broadcaster_user_name: String,
+    pub broadcaster_user_login: String,
 
-    chatter_user_id: String,
-    chatter_user_name: String,
-    chatter_user_login: String,
+    pub chatter_user_id: String,
+    pub chatter_user_name: String,
+    pub chatter_user_login: String,
 
-    message_id: String,
-    message: MessageEventMessage,
+    pub message_id: String,
+    pub message: Message,
     /// Type of the message
     ///
     /// # Possible values
@@ -65,52 +192,52 @@ pub struct ChannelChatMessageEvent {
     /// - "user_intro"
     /// - "power_ups_message_effect"
     /// - "power_ups_gigantified_emote"
-    message_type: String,
-    badges: Vec<Badges>,
-    cheer: Option<Cheer>,
-    color: String,
-    reply: Option<Reply>,
-    channel_points_custom_reward_id: Option<String>,
+    pub message_type: String,
+    pub badges: Vec<Badges>,
+    pub cheer: Option<Cheer>,
+    pub color: String,
+    pub reply: Option<Reply>,
+    pub channel_points_custom_reward_id: Option<String>,
 
-    source_broadcaster_user_id: Option<String>,
-    source_broadcaster_user_name: Option<String>,
-    source_broadcaster_user_login: Option<String>,
-    source_message_id: Option<String>,
-    source_badges: Option<Badges>,
-    is_source_only: Option<bool>,
+    pub source_broadcaster_user_id: Option<String>,
+    pub source_broadcaster_user_name: Option<String>,
+    pub source_broadcaster_user_login: Option<String>,
+    pub source_message_id: Option<String>,
+    pub source_badges: Option<Badges>,
+    pub is_source_only: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Reply {
-    parent_message_id: String,
-    parent_message_body: String,
-    parent_user_id: String,
-    parent_user_name: String,
-    parent_user_login: String,
-    thread_message_id: String,
-    thread_user_id: String,
-    thread_user_login: String,
+    pub parent_message_id: String,
+    pub parent_message_body: String,
+    pub parent_user_id: String,
+    pub parent_user_name: String,
+    pub parent_user_login: String,
+    pub thread_message_id: String,
+    pub thread_user_id: String,
+    pub thread_user_login: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Badges {
-    set_id: String,
-    id: String,
-    info: String,
+    pub set_id: String,
+    pub id: String,
+    pub info: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Cheer {
-    bits: usize,
+    pub bits: usize,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct MessageEventMessage {
-    text: String,
-    fragments: Vec<Fragments>,
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Message {
+    pub text: String,
+    pub fragments: Option<Vec<Fragments>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Fragments {
     /// Type of message fragment.
     ///
@@ -120,39 +247,39 @@ pub struct Fragments {
     /// - "cheermote"
     /// - "emote"
     /// - "mention"
-    r#type: String,
-    text: String,
-    cheermote: Option<Cheermote>,
-    emote: Option<Emote>,
-    mention: Option<Mention>,
+    pub r#type: String,
+    pub text: String,
+    pub cheermote: Option<Cheermote>,
+    pub emote: Option<Emote>,
+    pub mention: Option<Mention>,
 }
 
 /// Metadata pertaining to a cheermote
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Cheermote {
-    prefix: String,
-    bits: usize,
-    tier: usize,
+    pub prefix: String,
+    pub bits: usize,
+    pub tier: usize,
 }
 
 /// Metadata pertaining to an emote
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Emote {
-    id: String,
-    emote_set_id: String,
-    owner_id: String,
-    format: Vec<String>,
+    pub id: String,
+    pub emote_set_id: String,
+    pub owner_id: String,
+    pub format: Vec<String>,
 }
 
 /// Metadata pertaining to a mention
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Mention {
-    user_id: String,
-    user_name: String,
-    user_login: String,
+    pub user_id: String,
+    pub user_name: String,
+    pub user_login: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Condition {
     /// `Channel Chat Message` condition
     ChannelChatMessage {
@@ -169,47 +296,47 @@ pub enum Condition {
     },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Subscription {
     // is this the correct type??
     /// Client ID
-    id: String,
+    pub id: String,
     /// Notification's subscription type
-    r#type: String,
+    pub r#type: String,
     ///
-    version: String,
-    status: String,
-    cost: isize,
+    pub version: String,
+    pub status: String,
+    pub cost: isize,
     // condition: Condition,
-    created_at: String,
+    pub created_at: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Transport {
     /// Transport method.
     ///
     /// Should be set to "webhook".
-    method: String,
+    pub method: String,
     /// The callback URL where the notifications are sent. The URL must use the HTTPS protocol and port 443.
     ///
     /// > Redirects are NOT followed.
-    callback: String,
+    pub callback: String,
     /// Secret used to verify the signature.
     ///
     /// Secret must be:
     /// - ASCII string
     /// - at least 10 characters
     /// - at most 100 characters
-    secret: String,
+    pub secret: String,
 }
 
 pub struct ChallengeSubscription {
-    id: String,
-    status: String,
-    r#type: String,
-    version: String,
-    cost: String,
-    condition: Condition,
-    transport: Transport,
-    created_at: String,
+    pub id: String,
+    pub status: String,
+    pub r#type: String,
+    pub version: String,
+    pub cost: String,
+    pub condition: Condition,
+    pub transport: Transport,
+    pub created_at: String,
 }

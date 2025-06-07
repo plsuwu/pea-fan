@@ -1,62 +1,10 @@
 #![allow(non_snake_case, dead_code, unused_variables)]
 
-use super::types::{ChannelChatMessagePayload, ChannelChatMessageRequest};
+use super::types::ChannelChatMessagePayload;
 use anyhow::anyhow;
 use reqwest::header::HeaderMap;
-use ring::{
-    digest,
-    hmac::{self, Key},
-    rand,
-};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-use std::{
-    fmt,
-    sync::{LazyLock, RwLock},
-};
-
-pub static KEY_DIGEST: LazyLock<RwLock<Secret>> = LazyLock::new(|| RwLock::new(Secret::new()));
-
-/// Struct for HMAC key storage and generation methods.
-///
-/// Key is stored in-memory for the duration of the server's uptime; restarting the server should
-/// reset this key (this mechanism is, at present, by design).
-///
-/// # Security
-///
-/// As far as I am aware, `ring::rand::SystemRandom` is cryptographically secure by itself smile
-#[derive(Debug)]
-pub struct Secret {
-    pub key: Key,
-    _digest: [u8; digest::SHA256_OUTPUT_LEN],
-    pub _hex: String,
-}
-
-impl Secret {
-    pub fn new() -> Self {
-        let rng = rand::SystemRandom::new();
-        let _digest: [u8; digest::SHA256_OUTPUT_LEN] = rand::generate(&rng).unwrap().expose();
-        let _hex = Self::key_hex(_digest);
-        let key = Key::new(hmac::HMAC_SHA256, &_hex.as_bytes());
-
-        Self { _digest, _hex, key }
-    }
-
-    pub fn key_hex(digest: [u8; digest::SHA256_OUTPUT_LEN]) -> String {
-        hex::encode(digest)
-    }
-
-    pub fn verify(&self) -> bool {
-        todo!();
-    }
-}
-
-impl fmt::Display for Secret {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self._hex)
-    }
-}
 
 const CALLBACK_ROUTE: &'static str = "https://api.piss.fan/webhook-global";
 const API_GQL_URL: &'static str = "https://gql.twitch.tv/gql";

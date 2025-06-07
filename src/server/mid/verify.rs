@@ -7,7 +7,7 @@ use axum::{
 };
 use ring::hmac;
 
-use crate::server::subscriber::KEY_DIGEST;
+use crate::server::KEY_DIGEST;
 
 const HMAC_PREFIX: &'static str = "sha256=";
 const TWITCH_MESSAGE_ID: &'static str = "Twitch-Eventsub-Message-Id";
@@ -31,10 +31,7 @@ impl VerifiedBody {
     }
 }
 
-pub async fn verify_sender_ident(
-    mut request: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
+pub async fn verify_sender_ident(mut request: Request, next: Next) -> Result<Response, StatusCode> {
     // we need a copy of the headers as the body extraction directly
     // following this statment consumes the request's content
     let headers = request.headers().clone();
