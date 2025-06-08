@@ -1,5 +1,8 @@
+use std::process::exit;
+
 use args::parse_cli_args;
 use server::subscriber;
+use tokio::io;
 
 mod args;
 mod parser;
@@ -13,31 +16,50 @@ extern crate chrono;
 const CHANNELS: [&'static str; 2] = ["sleepiebug", "plss"];
 
 #[tokio::main]
-async fn main() {
-    let mut handles = Vec::new(); 
-
+async fn main() -> io::Result<()> {
     let args = parse_cli_args();
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let server_handle = tokio::task::spawn(async move {
+        server::serve(tx).await;
+    });
+
+    match rx.await {
+        Ok((bind_addr, key_opt)) => {
+            println!("[+] server listening on {}", bind_addr);
+            if let Some(key) = key_opt {
+                println!("[+] using key '{}'", key);
+            };
+        }
+
+        Err(_) => {
+            eprintln!("[x] Failed to start webhook server.");
+            exit(1);
+        }
+    }
+
+    let mut handles = Vec::new();
     for broadcaster in CHANNELS.iter() {
-        println!("[+] subscribing to stream event webhook: '{}'", &broadcaster);
+        println!(
+            "[+] subscribing to 'stream.online'/'stream.offline' event webhooks for '{}'",
+            &broadcaster
+        );
 
         let args_clone = args.clone();
         let handle = tokio::task::spawn(async move {
-            subscriber::sub_stream_event_multi(&broadcaster, &args_clone.token)
-                .await
-                .unwrap()
+            // subscriber::sub_stream_event_multi(&broadcaster, &args_clone.token)
+            //     .await
+            //     .unwrap()
         });
 
         handles.push(handle);
     }
-    
-    // we're sending the subscription requests before the webhook is started here but 
-    // i'm going to attempt to fix this momentarily...
-    tokio::task::spawn(async move {
-        let join_handle = futures_util::future::join_all(handles).await;
-        for result in join_handle {
-            println!("{:?}", result);
-        }
-    });
 
-    server::serve().await;
+    let join_handle = futures_util::future::join_all(handles).await;
+    for result in join_handle {
+        println!("{:?}", result);
+    }
+
+    server_handle.await?;
+    Ok(())
 }

@@ -5,40 +5,6 @@ const STREAM_ONLINE: &'static str = "stream.online";
 const STREAM_OFFLINE: &'static str = "stream.offline";
 const VERSION: &'static str = "1";
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ChannelChatMessageRequest {
-    pub r#type: String,
-    pub version: String,
-    pub condition: ConditionMultiUID,
-    pub transport: Transport,
-}
-
-#[allow(dead_code)]
-impl ChannelChatMessageRequest {
-    pub fn new(broadcaster_user_id: &str, user_id: &str, callback: &str, secret: &str) -> Self {
-        let broadcaster_user_id = broadcaster_user_id.to_string();
-        let user_id = user_id.to_string();
-
-        let condition = ConditionMultiUID {
-            broadcaster_user_id,
-            user_id,
-        };
-
-        let transport = Transport {
-            method: "webhook".to_string(),
-            callback: callback.to_string(),
-            secret: Some(secret.to_string()),
-        };
-
-        Self {
-            r#type: CHANNEL_CHAT_MESSAGE.to_string(),
-            version: VERSION.to_string(),
-            condition,
-            transport,
-        }
-    }
-}
-
 pub enum StreamGenericRequestType {
     Online,
     Offline,
@@ -90,6 +56,12 @@ pub struct StreamOnlinePayload {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct StreamOfflinePayload {
+    pub subscription: SubscriptionGenericData,
+    pub event: StreamOfflineEvent,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct StreamOnlineEvent {
     pub id: String,
     pub broadcaster_user_id: String,
@@ -110,6 +82,10 @@ pub trait StreamCommonEvent {
     fn broadcaster_id(&self) -> &str;
     fn broadcaster_name(&self) -> &str;
     fn broadcaster_login(&self) -> &str;
+}
+
+pub trait StreamCommonSubscription {
+    fn r#type(&self) -> &str;
 }
 
 macro_rules! impl_stream_event {
@@ -135,6 +111,30 @@ macro_rules! impl_stream_event {
     };
 }
 
+macro_rules! delegate_stream_common {
+    ($struct:ty, $event_field:ident, $subscript_field:ident) => {
+        impl StreamCommonEvent for $struct {
+            fn broadcaster_id(&self) -> &str {
+                self.$event_field.broadcaster_id()
+            }
+
+            fn broadcaster_name(&self) -> &str {
+                self.$event_field.broadcaster_name()
+            }
+
+            fn broadcaster_login(&self) -> &str {
+                self.$event_field.broadcaster_login()
+            }
+        }
+
+        impl StreamCommonSubscription for $struct {
+            fn r#type(&self) -> &str {
+                &self.$subscript_field.r#type
+            }
+        }
+    };
+}
+
 impl_stream_event!(
     StreamOnlineEvent,
     id: broadcaster_user_id,
@@ -148,6 +148,15 @@ impl_stream_event!(
     name: broadcaster_user_name,
     login: broadcaster_user_login
 );
+
+delegate_stream_common!(StreamOnlinePayload, event, subscription);
+delegate_stream_common!(StreamOfflinePayload, event, subscription);
+
+//
+// ---------------------------------------------------------------------------------------------------
+// --- idk how many of the structs below are actually still required (its definitely some of them) ---
+// ---------------------------------------------------------------------------------------------------
+//
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubscriptionGenericResponse {
@@ -434,12 +443,13 @@ pub struct Transport {
     ///
     /// Should be set to "webhook".
     pub method: String,
-    /// The callback URL where the notifications are sent. The URL must use the HTTPS protocol and port 443.
+    /// The callback URL where the notifications are sent. The URL must use the HTTPS
+    /// protocol and port 443.
     ///
-    /// > Redirects are NOT followed.
+    /// > Note that redirects are not followed.
     pub callback: String,
     /// Secret used to verify the signature.
-    /// 
+    ///
     /// Required during a request, not included in the body of a response.
     ///
     /// Secret must be:
@@ -459,4 +469,38 @@ pub struct SubscriptionGenericData {
     pub condition: ConditionBroadcasterUID,
     pub transport: Transport,
     pub created_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChannelChatMessageRequest {
+    pub r#type: String,
+    pub version: String,
+    pub condition: ConditionMultiUID,
+    pub transport: Transport,
+}
+
+#[allow(dead_code)]
+impl ChannelChatMessageRequest {
+    pub fn new(broadcaster_user_id: &str, user_id: &str, callback: &str, secret: &str) -> Self {
+        let broadcaster_user_id = broadcaster_user_id.to_string();
+        let user_id = user_id.to_string();
+
+        let condition = ConditionMultiUID {
+            broadcaster_user_id,
+            user_id,
+        };
+
+        let transport = Transport {
+            method: "webhook".to_string(),
+            callback: callback.to_string(),
+            secret: Some(secret.to_string()),
+        };
+
+        Self {
+            r#type: CHANNEL_CHAT_MESSAGE.to_string(),
+            version: VERSION.to_string(),
+            condition,
+            transport,
+        }
+    }
 }

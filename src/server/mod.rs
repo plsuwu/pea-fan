@@ -14,15 +14,15 @@ use ring::hmac::{self, Key};
 use ring::rand;
 use serde_json::Value;
 use std::fmt;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{LazyLock, RwLock};
+use tokio::sync::oneshot;
 use types::{
-    ChannelChatMessagePayload, ChannelSubscriptionMessagePayload, ChatMessageCommon,
-    StreamOnlinePayload,
+    StreamCommonEvent, StreamCommonSubscription, StreamOfflinePayload, StreamOnlinePayload,
 };
 
-const REQUIRED_STRING: &'static str = "piss";
 const TWITCH_MESSAGE_TYPE_HEADER: &'static str = "Twitch-Eventsub-Message-Type";
-const SERVER_PORT: &'static str = "3000";
+const SERVER_PORT: u16 = 3000;
 
 // We could probably wrap this with a sync primitive such that we can just call e.g `KEY_DIGEST.get_hex()`
 // or `KEY_DIGEST.get_key()` to return a copy of/reference to the data we want
@@ -102,18 +102,18 @@ impl Into<&str> for WebhookMessageType {
 }
 
 /// Server listener
-pub async fn serve() {
+pub async fn serve(tx: oneshot::Sender<(SocketAddr, Option<String>)>) {
     let app = Router::new()
         .route("/", get(root))
         .route("/webhook-global", post(webhook_handler))
         .route_layer(middleware::from_fn(verify::verify_sender_ident))
-        .route("/active-sockets", post(activity));
+        .route("/active-sockets", post(activity))
+        .route("/health", get(|| async { "OK" }));
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", SERVER_PORT))
-        .await
-        .unwrap();
+    let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), SERVER_PORT);
+    let listener = tokio::net::TcpListener::bind(bind_addr).await.unwrap();
 
-    print_debug();
+    _ = tx.send((bind_addr, get_debug()));
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -121,8 +121,9 @@ pub async fn root() -> &'static str {
     "://"
 }
 
-pub async fn activity(headers: HeaderMap) /* -> ... */ {
-
+#[allow(unused_variables)]
+pub async fn activity(headers: HeaderMap) -> &'static str {
+    "unimplemented :("
 }
 
 /// Handles webhook callbacks on the `<ROOT_URL>:<PORT>/webhook-global` endpoint
@@ -133,8 +134,8 @@ pub async fn webhook_handler(headers: HeaderMap, body: VerifiedBody) -> Result<B
         .and_then(|v| v.to_str().ok())
         .ok_or(StatusCode::BAD_REQUEST)?;
 
-    println!("type: {}", msg_type);
-    println!("content: {:#?}", notification);
+    // println!("type: {}", msg_type);
+    // println!("content: {:#?}", notification);
 
     let webhook_msg_type = TryInto::<WebhookMessageType>::try_into(msg_type)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -153,26 +154,10 @@ pub async fn webhook_handler(headers: HeaderMap, body: VerifiedBody) -> Result<B
     }
 }
 
-/// Returns the challenge string from the remote verification request
-pub fn get_challenge_res(body: Value) -> Option<String> {
-    let challenge_str = body["challenge"].as_str();
-    if let Some(string) = challenge_str {
-        Some(string.to_owned())
-    } else {
-        None
-    }
-}
-
 pub fn read_notification(body: Value) -> Result<String, serde_json::Error> {
     match &body["subscription"]["type"].as_str() {
-        Some("stream.online") => stream_event_notify(body),
-        Some("stream.offline") => stream_event_notify(body),
-
-        // these require fucking broadcaster authorization (oh my god)
-        // Some("channel.chat.message") => parse_message::<ChannelChatMessagePayload>(body),
-        // Some("channel.subscription.message") => {
-        //     parse_message::<ChannelSubscriptionMessagePayload>(body)
-        // }
+        Some("stream.online") => stream_event_notify::<StreamOnlinePayload>(body),
+        Some("stream.offline") => stream_event_notify::<StreamOfflinePayload>(body),
 
         // shouldn't hit this arm as we're only going to be notified for
         // events on topics we're subscribed to
@@ -180,30 +165,42 @@ pub fn read_notification(body: Value) -> Result<String, serde_json::Error> {
     }
 }
 
-fn stream_event_notify(body: serde_json::Value) -> Result<String, serde_json::Error> {
-    let payload: StreamOnlinePayload = serde_json::from_value(body)?;
-    let broadcaster = payload.event.broadcaster_user_id;
+fn stream_event_notify<T>(body: serde_json::Value) -> Result<String, serde_json::Error>
+where
+    T: StreamCommonEvent + StreamCommonSubscription + serde::de::DeserializeOwned,
+{
+    let payload: T = serde_json::from_value(body)?;
+    let id = payload.broadcaster_id();
+    let login = payload.broadcaster_login();
 
-    // open websocket to broadcaster either here ...
+    println!("[+] recv '{}' event for '{}'.", payload.r#type(), login);
 
-    Ok(broadcaster.to_string())
-    // ... ^^^ or with the returned data
+    // open websocket to broadcaster either here, or ...
+
+    Ok(id.to_string())
+    // ... with the data returned above.
 }
 
 /// Log server port and secret key string to stdout
 ///
 /// Intended for debugging; this would be automatically sent on subscription to a topic in
 /// production.
-fn print_debug() {
-    println!(
-        "[+] Starting global webhook API running on port {}.",
-        SERVER_PORT
-    );
-
-    // Remove these statements in prod??
+fn get_debug() -> Option<String> {
     let digest_lock = &*KEY_DIGEST;
     if let Ok(digest) = digest_lock.read() {
-        println!("[+] (DEBUG): Using secret '{}'", digest);
+        Some(digest._hex.clone())
+    } else {
+        None
+    }
+}
+
+/// Returns the challenge string from the remote verification request
+pub fn get_challenge_res(body: Value) -> Option<String> {
+    let challenge_str = body["challenge"].as_str();
+    if let Some(string) = challenge_str {
+        Some(string.to_owned())
+    } else {
+        None
     }
 }
 
