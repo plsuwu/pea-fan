@@ -1,7 +1,11 @@
-use std::process::exit;
-
 use args::parse_cli_args;
+use parser::{lexer, test_parser_function};
 use server::subscriber;
+use socket::{client::Client, settings::ConnectionSettings};
+use std::{
+    process::exit,
+    sync::{Arc, RwLock},
+};
 use tokio::io;
 
 mod args;
@@ -18,6 +22,12 @@ const CHANNELS: [&'static str; 2] = ["sleepiebug", "plss"];
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let args = parse_cli_args();
+    // let mut irc_handles = Vec::new();
+
+    // let irc_join_handle = futures_util::future::join_all(irc_handles).await;
+    // for res in irc_join_handle {
+    //     println!("{:?}", res);
+    // }
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     let server_handle = tokio::task::spawn(async move {
@@ -47,9 +57,9 @@ async fn main() -> io::Result<()> {
 
         let args_clone = args.clone();
         let handle = tokio::task::spawn(async move {
-            // subscriber::sub_stream_event_multi(&broadcaster, &args_clone.token)
-            //     .await
-            //     .unwrap()
+            subscriber::sub_stream_event_multi(&broadcaster, &args_clone.app_token)
+                .await
+                .unwrap()
         });
 
         handles.push(handle);

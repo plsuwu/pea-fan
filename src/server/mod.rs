@@ -2,8 +2,11 @@ pub mod midware;
 pub mod subscriber;
 pub mod types;
 
+use crate::args::parse_cli_args;
 use crate::server::midware::verify;
 use crate::server::midware::verify::VerifiedBody;
+use crate::socket::client::Client;
+use crate::socket::settings::ConnectionSettings;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, StatusCode};
@@ -13,19 +16,60 @@ use ring::digest;
 use ring::hmac::{self, Key};
 use ring::rand;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::{LazyLock, RwLock};
+use std::sync::{Arc, LazyLock, Mutex, RwLock};
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use types::{
     StreamCommonEvent, StreamCommonSubscription, StreamOfflinePayload, StreamOnlinePayload,
 };
+
+// static IRC_HANDLES: LazyLock<IrcHandlesMutex> = LazyLock::new(|| IrcHandlesMutex::new());
+
+#[derive(Debug)]
+pub struct IrcConnection {
+    handle: JoinHandle<()>,
+    cancellation_token: CancellationToken,
+}
+
+#[derive(Debug)]
+pub struct IrcHandles {
+    connections: HashMap<String, IrcConnection>,
+}
+
+impl IrcHandles {
+    pub fn new() -> IrcHandles {
+        IrcHandles {
+            connections: HashMap::new(),
+        }
+    }
+
+    pub fn is_active(&self, channel: &str) -> bool {
+        if let Some(conn) = self.connections.get(channel) {
+            !conn.handle.is_finished()
+        } else {
+            false
+        }
+    }
+
+    pub fn cleanup_complete(&mut self) {
+        self.connections
+            .retain(|_chan, conn| !conn.handle.is_finished());
+    }
+}
+
+static IRC_HANDLES: LazyLock<Arc<Mutex<IrcHandles>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(IrcHandles::new())));
 
 const TWITCH_MESSAGE_TYPE_HEADER: &'static str = "Twitch-Eventsub-Message-Type";
 const SERVER_PORT: u16 = 3000;
 
 // We could probably wrap this with a sync primitive such that we can just call e.g `KEY_DIGEST.get_hex()`
-// or `KEY_DIGEST.get_key()` to return a copy of/reference to the data we want
+// or `KEY_DIGEST.get_key()` from whatever thread in order to return a copy of/reference to the data
+// we want
 pub static KEY_DIGEST: LazyLock<RwLock<Secret>> = LazyLock::new(|| RwLock::new(Secret::new()));
 
 /// Struct for HMAC key storage and generation methods.
@@ -170,15 +214,17 @@ where
     T: StreamCommonEvent + StreamCommonSubscription + serde::de::DeserializeOwned,
 {
     let payload: T = serde_json::from_value(body)?;
-    let id = payload.broadcaster_id();
-    let login = payload.broadcaster_login();
+    let channel = payload.broadcaster_login();
 
-    println!("[+] recv '{}' event for '{}'.", payload.r#type(), login);
+    println!("[+] recv '{}' event for '{}'.", payload.r#type(), channel);
 
-    // open websocket to broadcaster either here, or ...
+    if payload.r#type() == "stream.online" {
+        _ = open_websocket(channel);
+    } else {
+        _ = close_websocket(channel);
+    }
 
-    Ok(id.to_string())
-    // ... with the data returned above.
+    Ok(channel.to_string())
 }
 
 /// Log server port and secret key string to stdout
@@ -193,6 +239,88 @@ fn get_debug() -> Option<String> {
         None
     }
 }
+
+pub async fn close_websocket(channel: &str) -> anyhow::Result<()> {
+    Ok(())
+}
+
+pub async fn open_websocket(channel: &str) -> anyhow::Result<()> {
+    let mut irc_handles_guard = IRC_HANDLES.lock().unwrap();
+    irc_handles_guard.cleanup_complete();
+
+    if irc_handles_guard.is_active(channel) {
+        println!("[x] socket handle ('{}') is already open.", channel);
+        return Ok(());
+    }
+
+    let args = parse_cli_args();
+    let conn_settings = Arc::new(ConnectionSettings::new(
+        &args.user_token,
+        &args.login,
+        channel,
+    ));
+
+    let cancellation_token = CancellationToken::new();
+    let cancel_token_clone_runner = cancellation_token.clone();
+    let cancel_token_clone_reader = cancellation_token.clone();
+
+    let channel_name = channel.to_string();
+    let irc_handle = tokio::task::spawn(async move {
+        tokio::select! {
+            result = run_websocket_conn(conn_settings, cancel_token_clone_runner.clone()) => {
+                match result {
+                    Ok(()) => println!("[+] websocket '{}' completed normally", channel_name),
+                    Err(e) => println!("[x] websocket '{}' failed: {}", channel_name, e),
+                }
+            }
+
+            _ = cancel_token_clone_reader.cancelled() => {
+                println!("[+] websocket '{}' cancelled gracefully.", channel_name);
+            }
+        }
+    });
+
+    let connection = IrcConnection {
+        handle: irc_handle,
+        cancellation_token,
+    };
+
+    irc_handles_guard
+        .connections
+        .insert(channel.to_string(), connection);
+    println!("[+] opened websocket connection '{}'", channel);
+
+    Ok(())
+}
+
+pub async fn run_websocket_conn(
+    conn_settings: Arc<ConnectionSettings>,
+    cancel_token: CancellationToken,
+) -> anyhow::Result<()> {
+    let socket = Client::new(&conn_settings).await?;
+    socket.open(&conn_settings).await?;
+
+    socket.loop_read(cancel_token).await;
+
+    Ok(())
+}
+//
+//     // let args_clone = args.clone();
+//     // let conn_settings = Arc::new(ConnectionSettings::new(
+//     //     &args_clone.user_token,
+//     //     &args_clone.login,
+//     //     br,
+//     // ));
+//     //
+//     // let irc_handle = tokio::task::spawn(async move {
+//     //     let socket = Client::new(&conn_settings).await.unwrap();
+//     //     socket.open(&conn_settings).await.unwrap();
+//     //
+//     //     socket.loop_read().await;
+//     // });
+//     //
+//     // irc_handles.push(irc_handle);
+// }
 
 /// Returns the challenge string from the remote verification request
 pub fn get_challenge_res(body: Value) -> Option<String> {

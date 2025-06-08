@@ -1084,6 +1084,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-tungstenite",
+ "tokio-util",
  "tower",
  "tower-http",
 ]

@@ -10,10 +10,13 @@ pub struct Cli {
     #[arg(short, long)]
     pub login: String,
 
-    /// IRC oauth (this might be implemented via a bot idk)
+    /// Webhook OAuth (app access token)
     #[arg(short, long)]
-    pub token: String,
+    pub app_token: String,
 
+    /// User OAuth (user access token)
+    #[arg(short, long)]
+    pub user_token: String,
     // /// TTV broadcaster login/username
     // #[arg(short, long)]
     // pub broadcaster: String,
@@ -24,15 +27,20 @@ pub fn parse_cli_args() -> Arc<Cli> {
 
     // debug printer
     println!("[+] COMMAND LINE: {:?}", args);
-
-    match args.token.len() {
-        TWITCH_OAUTH_LENGTH => return args,
-        _ => {
-            panic!(
-                "[x] EXPECTED OAUTH TOKEN LENGTH OF {} (got {})",
-                TWITCH_OAUTH_LENGTH,
-                args.token.len()
-            );
+    
+    let args_clone = args.clone();
+    for token in [&args_clone.app_token, &args_clone.user_token].iter() {
+        match token.len() {
+            TWITCH_OAUTH_LENGTH => continue,
+            _ => {
+                panic!(
+                    "[x] EXPECTED OAUTH TOKEN LENGTH OF {} (got {})",
+                    TWITCH_OAUTH_LENGTH,
+                    token.len()
+                );
+            }
         }
     }
+
+    args
 }

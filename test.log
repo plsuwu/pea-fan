@@ -1,0 +1,1081 @@
+[+] COMMAND LINE: Cli { login: "plss", app_token: "rnrol27b1dn2mx7czo38kekncc77u4", user_token: "y6axo8bmvy7ewx3v33imj8vzji6t11" }
+[+] server listening on 0.0.0.0:3000
+[+] using key '218d81b18027ea8d7a0df418a58830256d6cb968f2840e62c21a00d05c86473a'
+[+] subscribing to 'stream.online'/'stream.offline' event webhooks for 'sleepiebug'
+[+] subscribing to 'stream.online'/'stream.offline' event webhooks for 'plss'
+Ok(())
+Ok(())
+[2025-06-09[06:58:42]] SENT: Text(Utf8Bytes(b"CAP REQ :twitch.tv/tags twitch.tv/commands"))
+[2025-06-09[06:58:42]] SENT: Text(Utf8Bytes(b"PASS oauth:y6axo8bmvy7ewx3v33imj8vzji6t11"))
+[2025-06-09[06:58:42]] SENT: Text(Utf8Bytes(b"NICK plss"))
+[2025-06-09[06:58:42]] SENT: Text(Utf8Bytes(b"USER plss 8 * :plss"))
+[2025-06-09[06:58:42]] SENT: Text(Utf8Bytes(b"JOIN #sleepiebug"))
+[2025-06-09[06:58:42]] SENT: Text(Utf8Bytes(b"CAP REQ :twitch.tv/tags twitch.tv/commands"))
+[2025-06-09[06:58:42]] SENT: Text(Utf8Bytes(b"PASS oauth:y6axo8bmvy7ewx3v33imj8vzji6t11"))
+[2025-06-09[06:58:42]] SENT: Text(Utf8Bytes(b"NICK plss"))
+[2025-06-09[06:58:42]] SENT: Text(Utf8Bytes(b"USER plss 8 * :plss"))
+[2025-06-09[06:58:42]] SENT: Text(Utf8Bytes(b"JOIN #plss"))
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {},
+    source: Some(
+        IrcSource {
+            nick: "tmi.twitch.tv",
+            user: None,
+            host: None,
+        },
+    ),
+    command: "CAP",
+    params: [
+        "*",
+        "ACK",
+        "twitch.tv/tags twitch.tv/commands",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {},
+    source: Some(
+        IrcSource {
+            nick: "tmi.twitch.tv",
+            user: None,
+            host: None,
+        },
+    ),
+    command: "CAP",
+    params: [
+        "*",
+        "ACK",
+        "twitch.tv/tags twitch.tv/commands",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {},
+    source: Some(
+        IrcSource {
+            nick: "tmi.twitch.tv",
+            user: None,
+            host: None,
+        },
+    ),
+    command: "001",
+    params: [
+        "plss",
+        "Welcome, GLHF!\r\n:tmi.twitch.tv 002 plss :Your host is tmi.twitch.tv\r\n:tmi.twitch.tv 003 plss :This server is rather new\r\n:tmi.twitch.tv 004 plss :-\r\n:tmi.twitch.tv 375 plss :-\r\n:tmi.twitch.tv 372 plss :You are in a maze of twisty passages, all alike.\r\n:tmi.twitch.tv 376 plss :>\r\n@badge-info=;badges=twitch-recap-2023/1;color=#FFBEDF;display-name=plss;emote-sets=0,793,8231,19194,876326,935873,1232221,300374282,300380967,301464307,302029931,302512232,302792003,303148195,323827706,326691955,334292379,344011590,345474279,366226437,387726113,390658648,392630734,409842248,415514593,416564655,418871744,427477847,435300334,440880357,441442142,454806117,459526139,460760505,468360508,470888728,477339272,484906151,496680382,537206155,1306162089,1911289880,15a031d7-8783-468d-99f2-f5832a08d7c0,35b067de-37af-4430-99b0-6591201aa8c7,398cca87-aea0-4fd7-b29d-0613ab67320a,3c5be0d3-3eb7-4e96-93e2-44ac38b40819,5263b216-dab4-47e5-bc72-94fa093f6906,560c6a32-134b-4340-8185-a3e99e87237b,7c63ed2d-8e7e-4525-85a4-51e0b78ad0e3,7d68dda4-5170-442a-8dd8-9e5eb1ed8d27,acccd20c-25a2-497f-8265-59b890b61d62,bc112c6f-a202-43c2-b144-2c93e20cc5a2,bd70e005-1bb7-4879-b910-67779c22ccf9,c64918b8-0ebd-41c9-b153-300ca3491aa8,c9a93654-bae4-439e-ac62-0d69ecad1786,d31f1a6c-72ee-4aab-9bd3-7bf7f1d037bc,d92eb0a5-4f2b-43f6-892d-bc398567a0e1,e3ac0383-f23b-4dcf-ad65-d5a7ee1b26cb,ebe796ee-3c56-472c-922a-af70aeeff96d,ed963b8b-9b40-4d60-ba5b-f68985586441;user-id=103033809;user-type= :tmi.twitch.tv GLOBALUSERSTATE",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {},
+    source: Some(
+        IrcSource {
+            nick: "tmi.twitch.tv",
+            user: None,
+            host: None,
+        },
+    ),
+    command: "001",
+    params: [
+        "plss",
+        "Welcome, GLHF!\r\n:tmi.twitch.tv 002 plss :Your host is tmi.twitch.tv\r\n:tmi.twitch.tv 003 plss :This server is rather new\r\n:tmi.twitch.tv 004 plss :-\r\n:tmi.twitch.tv 375 plss :-\r\n:tmi.twitch.tv 372 plss :You are in a maze of twisty passages, all alike.\r\n:tmi.twitch.tv 376 plss :>\r\n@badge-info=;badges=twitch-recap-2023/1;color=#FFBEDF;display-name=plss;emote-sets=0,793,8231,19194,876326,935873,1232221,300374282,300380967,301464307,302029931,302512232,302792003,303148195,323827706,326691955,334292379,344011590,345474279,366226437,387726113,390658648,392630734,409842248,415514593,416564655,418871744,427477847,435300334,440880357,441442142,454806117,459526139,460760505,468360508,470888728,477339272,484906151,496680382,537206155,1306162089,1911289880,15a031d7-8783-468d-99f2-f5832a08d7c0,35b067de-37af-4430-99b0-6591201aa8c7,398cca87-aea0-4fd7-b29d-0613ab67320a,3c5be0d3-3eb7-4e96-93e2-44ac38b40819,5263b216-dab4-47e5-bc72-94fa093f6906,560c6a32-134b-4340-8185-a3e99e87237b,7c63ed2d-8e7e-4525-85a4-51e0b78ad0e3,7d68dda4-5170-442a-8dd8-9e5eb1ed8d27,acccd20c-25a2-497f-8265-59b890b61d62,bc112c6f-a202-43c2-b144-2c93e20cc5a2,bd70e005-1bb7-4879-b910-67779c22ccf9,c64918b8-0ebd-41c9-b153-300ca3491aa8,c9a93654-bae4-439e-ac62-0d69ecad1786,d31f1a6c-72ee-4aab-9bd3-7bf7f1d037bc,d92eb0a5-4f2b-43f6-892d-bc398567a0e1,e3ac0383-f23b-4dcf-ad65-d5a7ee1b26cb,ebe796ee-3c56-472c-922a-af70aeeff96d,ed963b8b-9b40-4d60-ba5b-f68985586441;user-id=103033809;user-type= :tmi.twitch.tv GLOBALUSERSTATE",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {},
+    source: Some(
+        IrcSource {
+            nick: "plss",
+            user: Some(
+                "plss",
+            ),
+            host: Some(
+                "plss.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "JOIN",
+    params: [
+        "#sleepiebug",
+        "plss.tmi.twitch.tv 353 plss = #sleepiebug :plss\r\n:plss.tmi.twitch.tv 366 plss #sleepiebug :End of /NAMES list",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "user-type": "",
+        "subscriber": "1",
+        "badge-info": "subscriber/8",
+        "mod": "0",
+        "emote-sets": "0,793,8231,19194,876326,935873,1232221,300374282,300380967,301464307,302029931,302512232,302792003,303148195,323827706,326691955,334292379,344011590,345474279,366226437,387726113,390658648,392630734,409842248,415514593,416564655,418871744,427477847,435300334,440880357,441442142,454806117,459526139,460760505,468360508,470888728,477339272,484906151,496680382,537206155,1306162089,1911289880,15a031d7-8783-468d-99f2-f5832a08d7c0,35b067de-37af-4430-99b0-6591201aa8c7,398cca87-aea0-4fd7-b29d-0613ab67320a,3c5be0d3-3eb7-4e96-93e2-44ac38b40819,5263b216-dab4-47e5-bc72-94fa093f6906,560c6a32-134b-4340-8185-a3e99e87237b,7c63ed2d-8e7e-4525-85a4-51e0b78ad0e3,7d68dda4-5170-442a-8dd8-9e5eb1ed8d27,acccd20c-25a2-497f-8265-59b890b61d62,bc112c6f-a202-43c2-b144-2c93e20cc5a2,bd70e005-1bb7-4879-b910-67779c22ccf9,bd70e005-1bb7-4879-b910-67779c22ccf9,c64918b8-0ebd-41c9-b153-300ca3491aa8,c9a93654-bae4-439e-ac62-0d69ecad1786,d31f1a6c-72ee-4aab-9bd3-7bf7f1d037bc,d92eb0a5-4f2b-43f6-892d-bc398567a0e1,e3ac0383-f23b-4dcf-ad65-d5a7ee1b26cb,ebe796ee-3c56-472c-922a-af70aeeff96d,ed963b8b-9b40-4d60-ba5b-f68985586441",
+        "color": "#FFBEDF",
+        "display-name": "plss",
+        "badges": "vip/1,subscriber/6,twitch-recap-2023/1",
+    },
+    source: Some(
+        IrcSource {
+            nick: "tmi.twitch.tv",
+            user: None,
+            host: None,
+        },
+    ),
+    command: "USERSTATE",
+    params: [
+        "#sleepiebug",
+        "@emote-only=0;followers-only=-1;r9k=0;room-id=610533290;slow=0;subs-only=0",
+        "tmi.twitch.tv ROOMSTATE #sleepiebug",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {},
+    source: Some(
+        IrcSource {
+            nick: "plss",
+            user: Some(
+                "plss",
+            ),
+            host: Some(
+                "plss.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "JOIN",
+    params: [
+        "#plss",
+        "plss.tmi.twitch.tv 353 plss = #plss :plss\r\n:plss.tmi.twitch.tv 366 plss #plss :End of /NAMES list",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "display-name": "plss",
+        "badge-info": "",
+        "badges": "broadcaster/1,twitch-recap-2023/1",
+        "user-type": "",
+        "emote-sets": "0,793,8231,19194,876326,935873,1232221,300374282,300380967,301464307,302029931,302512232,302792003,303148195,323827706,326691955,334292379,344011590,345474279,366226437,387726113,390658648,392630734,409842248,415514593,416564655,418871744,427477847,435300334,440880357,441442142,454806117,459526139,460760505,468360508,470888728,477339272,484906151,496680382,537206155,1306162089,1911289880,15a031d7-8783-468d-99f2-f5832a08d7c0,35b067de-37af-4430-99b0-6591201aa8c7,398cca87-aea0-4fd7-b29d-0613ab67320a,3c5be0d3-3eb7-4e96-93e2-44ac38b40819,5263b216-dab4-47e5-bc72-94fa093f6906,560c6a32-134b-4340-8185-a3e99e87237b,7c63ed2d-8e7e-4525-85a4-51e0b78ad0e3,7d68dda4-5170-442a-8dd8-9e5eb1ed8d27,acccd20c-25a2-497f-8265-59b890b61d62,bc112c6f-a202-43c2-b144-2c93e20cc5a2,bd70e005-1bb7-4879-b910-67779c22ccf9,c64918b8-0ebd-41c9-b153-300ca3491aa8,c9a93654-bae4-439e-ac62-0d69ecad1786,d31f1a6c-72ee-4aab-9bd3-7bf7f1d037bc,d92eb0a5-4f2b-43f6-892d-bc398567a0e1,e3ac0383-f23b-4dcf-ad65-d5a7ee1b26cb,ebe796ee-3c56-472c-922a-af70aeeff96d,ed963b8b-9b40-4d60-ba5b-f68985586441",
+        "color": "#FFBEDF",
+        "subscriber": "0",
+        "mod": "0",
+    },
+    source: Some(
+        IrcSource {
+            nick: "tmi.twitch.tv",
+            user: None,
+            host: None,
+        },
+    ),
+    command: "USERSTATE",
+    params: [
+        "#plss",
+        "@emote-only=0;followers-only=-1;r9k=0;room-id=103033809;slow=0;subs-only=0",
+        "tmi.twitch.tv ROOMSTATE #plss",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "emotes": "",
+        "returning-chatter": "0",
+        "flags": "",
+        "first-msg": "0",
+        "id": "35db2c14-f13f-4b77-b812-a3d1499388a2",
+        "client-nonce": "d5b9ccbc51d18fc8a9bb0104e58f2af2",
+        "room-id": "610533290",
+        "display-name": "nyel_void",
+        "badges": "vip/1,founder/0,bits/1",
+        "badge-info": "founder/17",
+        "user-type": "",
+        "color": "#0BC000",
+        "mod": "0",
+        "user-id": "208804280",
+        "vip": "1",
+        "turbo": "0",
+        "subscriber": "1",
+        "tmi-sent-ts": "1749416326736",
+    },
+    source: Some(
+        IrcSource {
+            nick: "nyel_void",
+            user: Some(
+                "nyel_void",
+            ),
+            host: Some(
+                "nyel_void.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "i just got back and youre already leaving aaaa",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "user-type": "",
+        "color": "#7100FF",
+        "id": "7d247cd6-f4b6-4477-8519-a2abaf1f5e4b",
+        "emotes": "emotesv2_811df459b13c4b11a6dbe066c87f544f:0-13,15-28,30-43,45-58",
+        "turbo": "0",
+        "subscriber": "1",
+        "badge-info": "subscriber/9",
+        "emote-only": "1",
+        "mod": "0",
+        "display-name": "ik_sentrik",
+        "returning-chatter": "0",
+        "flags": "",
+        "vip": "1",
+        "badges": "vip/1,subscriber/9,bits/5000",
+        "user-id": "481617816",
+        "room-id": "610533290",
+        "first-msg": "0",
+        "tmi-sent-ts": "1749416327881",
+    },
+    source: Some(
+        IrcSource {
+            nick: "ik_sentrik",
+            user: Some(
+                "ik_sentrik",
+            ),
+            host: Some(
+                "ik_sentrik.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "wwparaOMEGALUL wwparaOMEGALUL wwparaOMEGALUL wwparaOMEGALUL",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "mod": "0",
+        "turbo": "0",
+        "first-msg": "0",
+        "badge-info": "subscriber/8",
+        "badges": "vip/1,subscriber/6,twitch-recap-2023/1",
+        "room-id": "610533290",
+        "flags": "",
+        "id": "dd0f4aca-3cc0-43ae-8020-7ff406d8a52a",
+        "display-name": "plss",
+        "vip": "1",
+        "color": "#FFBEDF",
+        "tmi-sent-ts": "1749416331228",
+        "subscriber": "1",
+        "user-type": "",
+        "emotes": "",
+        "returning-chatter": "0",
+        "user-id": "103033809",
+        "client-nonce": "9c9859d3b9cd3605ea331f020793b841",
+    },
+    source: Some(
+        IrcSource {
+            nick: "plss",
+            user: Some(
+                "plss",
+            ),
+            host: Some(
+                "plss.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "HOLY",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "mod": "0",
+        "client-nonce": "e8c227177ec2f51e2b36ff28b20da6d9",
+        "display-name": "KAP_out",
+        "turbo": "0",
+        "subscriber": "1",
+        "returning-chatter": "0",
+        "flags": "",
+        "id": "d399f65d-19d7-40f4-bb41-ed6109d450e5",
+        "user-id": "59623722",
+        "user-type": "",
+        "room-id": "610533290",
+        "color": "#00FF7F",
+        "tmi-sent-ts": "1749416332652",
+        "first-msg": "0",
+        "emotes": "emotesv2_2aef8615121843c8827e4d9690bfd36e:0-9,21-30,42-51,63-72,84-93",
+        "badges": "subscriber/9,sub-gifter/1",
+        "badge-info": "subscriber/9",
+    },
+    source: Some(
+        IrcSource {
+            nick: "kap_out",
+            user: Some(
+                "kap_out",
+            ),
+            host: Some(
+                "kap_out.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "sleepieRat BURP RAID sleepieRat BURP RAID sleepieRat BURP RAID sleepieRat BURP RAID sleepieRat",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "mod": "0",
+        "color": "#9FD7D9",
+        "reply-thread-parent-msg-id": "35db2c14-f13f-4b77-b812-a3d1499388a2",
+        "display-name": "sleepiebug",
+        "room-id": "610533290",
+        "client-nonce": "ae02c57a4be59279fac2cf4a10716819",
+        "id": "3a24ae12-00f8-41ff-8e73-d4dd25b845dd",
+        "flags": "",
+        "reply-parent-msg-id": "35db2c14-f13f-4b77-b812-a3d1499388a2",
+        "reply-parent-user-login": "nyel_void",
+        "subscriber": "1",
+        "tmi-sent-ts": "1749416332784",
+        "reply-parent-msg-body": "i\\sjust\\sgot\\sback\\sand\\syoure\\salready\\sleaving\\saaaa",
+        "turbo": "0",
+        "reply-parent-display-name": "nyel_void",
+        "user-id": "610533290",
+        "badge-info": "subscriber/54",
+        "reply-thread-parent-display-name": "nyel_void",
+        "reply-thread-parent-user-id": "208804280",
+        "reply-thread-parent-user-login": "nyel_void",
+        "user-type": "",
+        "reply-parent-user-id": "208804280",
+        "emotes": "434:11-12",
+        "badges": "broadcaster/1,subscriber/3009",
+        "returning-chatter": "0",
+        "first-msg": "0",
+    },
+    source: Some(
+        IrcSource {
+            nick: "sleepiebug",
+            user: Some(
+                "sleepiebug",
+            ),
+            host: Some(
+                "sleepiebug.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "@nyel_void :(",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "emotes": "",
+        "badges": "vip/1,subscriber/6,twitch-recap-2023/1",
+        "color": "#FFBEDF",
+        "flags": "5-11:P.6",
+        "mod": "0",
+        "display-name": "plss",
+        "badge-info": "subscriber/8",
+        "id": "173cf5b6-b34b-406f-afb4-ba24c603f48c",
+        "vip": "1",
+        "tmi-sent-ts": "1749416335387",
+        "user-id": "103033809",
+        "first-msg": "0",
+        "user-type": "",
+        "room-id": "610533290",
+        "client-nonce": "cf7593b46c74e2fe36b63f1a4dd42682",
+        "returning-chatter": "0",
+        "turbo": "0",
+        "subscriber": "1",
+    },
+    source: Some(
+        IrcSource {
+            nick: "plss",
+            user: Some(
+                "plss",
+            ),
+            host: Some(
+                "plss.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "HUGE FUCKING FISH",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "emotes": "",
+        "room-id": "610533290",
+        "first-msg": "0",
+        "turbo": "0",
+        "user-type": "",
+        "badges": "subscriber/9,sub-gifter/1",
+        "display-name": "KAP_out",
+        "color": "#00FF7F",
+        "badge-info": "subscriber/9",
+        "subscriber": "1",
+        "id": "c9482aec-1758-409b-9dae-23b3bc7e7af6",
+        "mod": "0",
+        "returning-chatter": "0",
+        "tmi-sent-ts": "1749416337327",
+        "flags": "",
+        "user-id": "59623722",
+    },
+    source: Some(
+        IrcSource {
+            nick: "kap_out",
+            user: Some(
+                "kap_out",
+            ),
+            host: Some(
+                "kap_out.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "!fish",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "color": "#2E8B57",
+        "user-type": "",
+        "first-msg": "0",
+        "mod": "0",
+        "returning-chatter": "0",
+        "room-id": "610533290",
+        "user-id": "523893771",
+        "tmi-sent-ts": "1749416337650",
+        "badge-info": "",
+        "display-name": "leafybusiness",
+        "badges": "twitch-recap-2024/1",
+        "flags": "",
+        "turbo": "0",
+        "emotes": "emotesv2_66b18b182d3d4ee08069735d573cd06c:6-17",
+        "id": "9b16a92b-0cbc-4338-b2a4-6e3d6769002b",
+        "subscriber": "0",
+    },
+    source: Some(
+        IrcSource {
+            nick: "leafybusiness",
+            user: Some(
+                "leafybusiness",
+            ),
+            host: Some(
+                "leafybusiness.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "Byeee sleepieCheer",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "first-msg": "0",
+        "subscriber": "1",
+        "returning-chatter": "0",
+        "tmi-sent-ts": "1749416338680",
+        "vip": "1",
+        "flags": "",
+        "client-nonce": "be149773ef06938dca3cf39b3bc3e887",
+        "badge-info": "subscriber/8",
+        "badges": "vip/1,subscriber/2006,purple-pixel-heart---together-for-good-24/1",
+        "room-id": "610533290",
+        "display-name": "tini",
+        "emotes": "555555584:4-5",
+        "id": "b3ebb1af-0659-4667-9cbe-50ba06427ca3",
+        "user-id": "122338258",
+        "user-type": "",
+        "mod": "0",
+        "turbo": "0",
+        "color": "#CBB8FF",
+    },
+    source: Some(
+        IrcSource {
+            nick: "tini",
+            user: Some(
+                "tini",
+            ),
+            host: Some(
+                "tini.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "bye <3",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "first-msg": "0",
+        "badges": "broadcaster/1,subscriber/3009",
+        "mod": "0",
+        "room-id": "610533290",
+        "emotes": "",
+        "id": "19be6b73-cf20-46c5-8bb5-60f264aaa77a",
+        "client-nonce": "aef84e8896601fce916adc1a59dc9f7e",
+        "turbo": "0",
+        "badge-info": "subscriber/54",
+        "user-id": "610533290",
+        "tmi-sent-ts": "1749416338790",
+        "display-name": "sleepiebug",
+        "color": "#9FD7D9",
+        "returning-chatter": "0",
+        "user-type": "",
+        "subscriber": "1",
+        "flags": "",
+    },
+    source: Some(
+        IrcSource {
+            nick: "sleepiebug",
+            user: Some(
+                "sleepiebug",
+            ),
+            host: Some(
+                "sleepiebug.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "LOL",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "color": "#FFBEDF",
+        "id": "cd14047d-a3ff-40ca-83f5-70e4b2329364",
+        "badge-info": "subscriber/8",
+        "returning-chatter": "0",
+        "user-type": "",
+        "display-name": "plss",
+        "vip": "1",
+        "room-id": "610533290",
+        "flags": "",
+        "emotes": "",
+        "turbo": "0",
+        "client-nonce": "f7ac38506026fb39071281c31b225383",
+        "first-msg": "0",
+        "user-id": "103033809",
+        "mod": "0",
+        "badges": "vip/1,subscriber/6,twitch-recap-2023/1",
+        "subscriber": "1",
+        "tmi-sent-ts": "1749416343688",
+    },
+    source: Some(
+        IrcSource {
+            nick: "plss",
+            user: Some(
+                "plss",
+            ),
+            host: Some(
+                "plss.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "THAT WAS CRAZY",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "subscriber": "0",
+        "turbo": "0",
+        "emotes": "",
+        "id": "e03fdcc5-c218-46e2-bef6-d9ba62130814",
+        "mod": "0",
+        "display-name": "dazzawesome",
+        "user-type": "",
+        "badge-info": "",
+        "flags": "",
+        "badges": "twitch-recap-2024/1",
+        "first-msg": "0",
+        "returning-chatter": "0",
+        "room-id": "610533290",
+        "tmi-sent-ts": "1749416345691",
+        "user-id": "813785257",
+        "color": "#FF7F50",
+    },
+    source: Some(
+        IrcSource {
+            nick: "dazzawesome",
+            user: Some(
+                "dazzawesome",
+            ),
+            host: Some(
+                "dazzawesome.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "thanks for the stream",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "display-name": "makuraee_",
+        "mod": "0",
+        "subscriber": "1",
+        "client-nonce": "0a75db74ebf447d43192f7195c394a33",
+        "flags": "",
+        "id": "86ff9874-e9dc-418b-97ee-2dea51d1b3d8",
+        "badge-info": "subscriber/2",
+        "emotes": "emotesv2_1d6a537593bd41a1b1d32b767ee23b1d:14-25",
+        "color": "#DAA520",
+        "user-type": "",
+        "first-msg": "0",
+        "badges": "subscriber/2,no_audio/1",
+        "turbo": "0",
+        "user-id": "1282881427",
+        "room-id": "610533290",
+        "tmi-sent-ts": "1749416346786",
+        "returning-chatter": "0",
+    },
+    source: Some(
+        IrcSource {
+            nick: "makuraee_",
+            user: Some(
+                "makuraee_",
+            ),
+            host: Some(
+                "makuraee_.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "she missed me saltaeSadSit",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "client-nonce": "f6599bfe7090fd919a5eecd53755de16",
+        "badge-info": "subscriber/8",
+        "emotes": "",
+        "room-id": "610533290",
+        "tmi-sent-ts": "1749416347838",
+        "mod": "0",
+        "turbo": "0",
+        "id": "ac02784d-c59c-4ff7-9cae-ecc734fa9f55",
+        "user-id": "103033809",
+        "user-type": "",
+        "returning-chatter": "0",
+        "vip": "1",
+        "color": "#FFBEDF",
+        "flags": "",
+        "subscriber": "1",
+        "first-msg": "0",
+        "badges": "vip/1,subscriber/6,twitch-recap-2023/1",
+        "display-name": "plss",
+    },
+    source: Some(
+        IrcSource {
+            nick: "plss",
+            user: Some(
+                "plss",
+            ),
+            host: Some(
+                "plss.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "hi tini bye tiini",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "display-name": "makuraee_",
+        "subscriber": "1",
+        "flags": "",
+        "user-id": "1282881427",
+        "returning-chatter": "0",
+        "user-type": "",
+        "badges": "subscriber/2,no_audio/1",
+        "id": "9a987a94-8a03-4b41-b2f5-2f7a90f7256a",
+        "mod": "0",
+        "turbo": "0",
+        "first-msg": "0",
+        "emotes": "",
+        "client-nonce": "e48bb4f05c4769b0e2bd5d613f6e0970",
+        "color": "#DAA520",
+        "room-id": "610533290",
+        "tmi-sent-ts": "1749416350345",
+        "badge-info": "subscriber/2",
+    },
+    source: Some(
+        IrcSource {
+            nick: "makuraee_",
+            user: Some(
+                "makuraee_",
+            ),
+            host: Some(
+                "makuraee_.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "k bye",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "room-id": "610533290",
+        "user-id": "610533290",
+        "color": "#9FD7D9",
+        "emotes": "",
+        "tmi-sent-ts": "1749416353554",
+        "user-type": "",
+        "reply-thread-parent-user-id": "1282881427",
+        "client-nonce": "4851032c24adb5f948ad90bad841c04f",
+        "mod": "0",
+        "reply-parent-user-id": "1282881427",
+        "flags": "",
+        "id": "99591806-950e-4313-85e1-52bb4864a311",
+        "badge-info": "subscriber/54",
+        "reply-thread-parent-msg-id": "86ff9874-e9dc-418b-97ee-2dea51d1b3d8",
+        "reply-thread-parent-user-login": "makuraee_",
+        "reply-parent-user-login": "makuraee_",
+        "reply-parent-display-name": "makuraee_",
+        "reply-thread-parent-display-name": "makuraee_",
+        "first-msg": "0",
+        "subscriber": "1",
+        "turbo": "0",
+        "reply-parent-msg-id": "86ff9874-e9dc-418b-97ee-2dea51d1b3d8",
+        "reply-parent-msg-body": "she\\smissed\\sme\\ssaltaeSadSit",
+        "display-name": "sleepiebug",
+        "badges": "broadcaster/1,subscriber/3009",
+        "returning-chatter": "0",
+    },
+    source: Some(
+        IrcSource {
+            nick: "sleepiebug",
+            user: Some(
+                "sleepiebug",
+            ),
+            host: Some(
+                "sleepiebug.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "@makuraee_ ily bye ty",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "badges": "vip/1,subscriber/2006,purple-pixel-heart---together-for-good-24/1",
+        "vip": "1",
+        "color": "#CBB8FF",
+        "user-id": "122338258",
+        "flags": "",
+        "emotes": "",
+        "client-nonce": "b8488b8dd60f58db2e0e4728475caffb",
+        "returning-chatter": "0",
+        "display-name": "tini",
+        "mod": "0",
+        "room-id": "610533290",
+        "user-type": "",
+        "id": "5333383b-8122-41d6-bfaf-ebf9742a8cf4",
+        "subscriber": "1",
+        "badge-info": "subscriber/8",
+        "first-msg": "0",
+        "tmi-sent-ts": "1749416354864",
+        "turbo": "0",
+    },
+    source: Some(
+        IrcSource {
+            nick: "tini",
+            user: Some(
+                "tini",
+            ),
+            host: Some(
+                "tini.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "bye plss bye",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "display-name": "makuraee_",
+        "tmi-sent-ts": "1749416358216",
+        "flags": "",
+        "emotes": "emotesv2_357943dffe7848838da5e592a0e4a1f9:0-13,15-28",
+        "mod": "0",
+        "room-id": "610533290",
+        "color": "#DAA520",
+        "first-msg": "0",
+        "id": "b59c654e-cd17-4b20-8867-c7bbb18c574f",
+        "emote-only": "1",
+        "badges": "subscriber/2,no_audio/1",
+        "badge-info": "subscriber/2",
+        "turbo": "0",
+        "returning-chatter": "0",
+        "subscriber": "1",
+        "client-nonce": "c84587a2fdd6055498b6826a36c049a4",
+        "user-id": "1282881427",
+        "user-type": "",
+    },
+    source: Some(
+        IrcSource {
+            nick: "makuraee_",
+            user: Some(
+                "makuraee_",
+            ),
+            host: Some(
+                "makuraee_.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "saltaeHeartrun saltaeHeartrun",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "mod": "0",
+        "user-type": "",
+        "color": "",
+        "emotes": "",
+        "badges": "subscriber/0",
+        "returning-chatter": "0",
+        "client-nonce": "c22fa54ba9834ed17b524a16af2d6818",
+        "display-name": "mirelorn",
+        "tmi-sent-ts": "1749416361795",
+        "id": "0b45d197-e11b-473b-9ba9-b804e4905820",
+        "first-msg": "0",
+        "turbo": "0",
+        "room-id": "610533290",
+        "flags": "",
+        "badge-info": "subscriber/1",
+        "subscriber": "1",
+        "user-id": "419022072",
+    },
+    source: Some(
+        IrcSource {
+            nick: "mirelorn",
+            user: Some(
+                "mirelorn",
+            ),
+            host: Some(
+                "mirelorn.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "Got back in time to catch the schedule. Thanks much, catch you all sometime",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "first-msg": "0",
+        "display-name": "makuraee_",
+        "flags": "",
+        "reply-parent-user-login": "sleepiebug",
+        "reply-thread-parent-msg-id": "86ff9874-e9dc-418b-97ee-2dea51d1b3d8",
+        "reply-thread-parent-user-login": "makuraee_",
+        "id": "ea292f22-34eb-40d2-9446-2e3daa6a3ae5",
+        "reply-parent-user-id": "610533290",
+        "room-id": "610533290",
+        "returning-chatter": "0",
+        "reply-thread-parent-user-id": "1282881427",
+        "tmi-sent-ts": "1749416369201",
+        "color": "#DAA520",
+        "user-id": "1282881427",
+        "reply-thread-parent-display-name": "makuraee_",
+        "client-nonce": "abafb179630920b42fd1ff18552abe8f",
+        "badges": "subscriber/2,no_audio/1",
+        "badge-info": "subscriber/2",
+        "emotes": "emotesv2_a98b7ac0ce6d4c5fa55e2790e027005c:12-21,23-32",
+        "subscriber": "1",
+        "reply-parent-display-name": "sleepiebug",
+        "turbo": "0",
+        "user-type": "",
+        "reply-parent-msg-id": "99591806-950e-4313-85e1-52bb4864a311",
+        "mod": "0",
+        "reply-parent-msg-body": "@makuraee_\\sily\\sbye\\sty",
+    },
+    source: Some(
+        IrcSource {
+            nick: "makuraee_",
+            user: Some(
+                "makuraee_",
+            ),
+            host: Some(
+                "makuraee_.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "@sleepiebug cchikoLOVE cchikoLOVE",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "subscriber": "1",
+        "room-id": "610533290",
+        "first-msg": "0",
+        "emote-only": "1",
+        "user-id": "610533290",
+        "emotes": "emotesv2_7c53f0963c5043b6a0161a7a1af63188:0-10",
+        "id": "9f7fdb40-b6cb-450c-941b-14472d7f6886",
+        "color": "#9FD7D9",
+        "mod": "0",
+        "tmi-sent-ts": "1749416370299",
+        "turbo": "0",
+        "returning-chatter": "0",
+        "user-type": "",
+        "badges": "broadcaster/1,subscriber/3009",
+        "flags": "",
+        "display-name": "sleepiebug",
+        "badge-info": "subscriber/54",
+        "client-nonce": "148733ba3caeb810bca6e142200186d4",
+    },
+    source: Some(
+        IrcSource {
+            nick: "sleepiebug",
+            user: Some(
+                "sleepiebug",
+            ),
+            host: Some(
+                "sleepiebug.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "sleepieLove",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "first-msg": "0",
+        "display-name": "Sery_Bot",
+        "badges": "moderator/1,share-the-love/1",
+        "returning-chatter": "0",
+        "user-id": "402337290",
+        "user-type": "mod",
+        "id": "14b9d834-c4da-4a4c-abe7-3fd04949e418",
+        "badge-info": "",
+        "turbo": "0",
+        "emotes": "emotesv2_a4648bf8dbbd4b8380c59c8c761427c1:117-128/emotesv2_35a346bf76aa4fd69b430f97cdadbafc:106-115",
+        "subscriber": "0",
+        "flags": "",
+        "room-id": "610533290",
+        "mod": "1",
+        "tmi-sent-ts": "1749416379176",
+        "color": "#8A2BE2",
+    },
+    source: Some(
+        IrcSource {
+            nick: "sery_bot",
+            user: Some(
+                "sery_bot",
+            ),
+            host: Some(
+                "sery_bot.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "sleepiebug has sent the raid over to parasi! Join us over at https://twitch.tv/parasi and show some love! seryboLove seryboArrive",
+    ],
+}
+[+] Parsed incoming notification from IRC WS:
+[+] IrcMessage {
+    tags: {
+        "subscriber": "1",
+        "color": "#00FF7F",
+        "returning-chatter": "0",
+        "turbo": "0",
+        "flags": "",
+        "badges": "subscriber/9,sub-gifter/1",
+        "badge-info": "subscriber/9",
+        "first-msg": "0",
+        "id": "ba457430-64e2-4753-b675-c7f535beda91",
+        "room-id": "610533290",
+        "emotes": "",
+        "display-name": "KAP_out",
+        "mod": "0",
+        "user-id": "59623722",
+        "user-type": "",
+        "tmi-sent-ts": "1749416379370",
+    },
+    source: Some(
+        IrcSource {
+            nick: "kap_out",
+            user: Some(
+                "kap_out",
+            ),
+            host: Some(
+                "kap_out.tmi.twitch.tv",
+            ),
+        },
+    ),
+    command: "PRIVMSG",
+    params: [
+        "#sleepiebug",
+        "!fish",
+    ],
+}

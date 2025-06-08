@@ -7,12 +7,15 @@ use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Result;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
+use tokio_util::sync::CancellationToken;
 
-use super::settings::ConnectionSettings;
+use crate::parser::parser;
+use crate::socket::settings::ConnectionSettings;
 
 pub type Writer = Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>;
 pub type Reader = Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>;
 
+#[derive(Debug, Clone)]
 pub struct Client {
     pub writer: Writer,
     pub reader: Reader,
@@ -23,10 +26,10 @@ impl Client {
     ///
     /// I am unsure if this actually CREATES a connection? But the `open` method actually sends
     /// the required auth messages.
-    pub async fn new(conn: &RwLock<ConnectionSettings>) -> Result<Self> {
-        let url = &conn.read().unwrap().url;
+    pub async fn new(conn: &Arc<ConnectionSettings>) -> Result<Self> {
+        let url = &conn.url;
 
-        let (stream, _) = connect_async(url).await?;
+        let (stream, _) = connect_async(*url).await?;
 
         let (w, r) = stream.split();
 
@@ -35,23 +38,50 @@ impl Client {
 
         Ok(Self { reader, writer })
     }
-    
+
     /// Sends the Twitch IRC authentication commands to the broadcaster chat
-    pub async fn open(&self, conn: &RwLock<ConnectionSettings>) -> Result<()> {
-        for cmd in &conn.read().unwrap().ws_auth_commands {
+    pub async fn open(&self, conn: &Arc<ConnectionSettings>) -> Result<()> {
+        for cmd in &conn.ws_authentication {
             self.write(cmd).await?;
         }
 
         Ok(())
     }
-    
+
     /// Loops over the input reader for this client, checking for incoming IRC messages
-    pub async fn loop_read(&self) {
+    pub async fn loop_read(&self, cancel_token: CancellationToken) {
         let reader_clone = self.reader.clone();
+
         loop {
-            if let Some(incoming) = Self::read(&reader_clone).await {
-                let raw = incoming.to_string();
-                println!("{:?}", raw);
+            tokio::select! {
+                incoming_res = Self::read(&reader_clone) => {
+                    if let Some(incoming) = incoming_res {
+                        let raw_data = incoming.to_string();
+                        let parser = parser::IrcParser::new();
+                        match parser.parse_message(&raw_data) {
+                            Ok(parsed) => {
+                                println!("[+] parsed incoming notification from irc ws:");
+                                println!("[+] {:#?}", parsed);
+                            }
+
+                            Err(e) => {
+                                println!("[x] failed to parse irc notification: {:?}", e);
+
+                                // could break here depending on error??
+                                continue;
+                            }
+                        }
+
+                    } else {
+                        println!("[x] irc conn appears closed.");
+                        break;
+                    }
+                }
+
+                _ = cancel_token.cancelled() => {
+                    println!("[+] irc read loop cancelled gracefully.");
+                    break;
+                }
             }
         }
     }
