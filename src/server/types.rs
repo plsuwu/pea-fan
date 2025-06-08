@@ -1,31 +1,33 @@
 use serde::{Deserialize, Serialize};
 
 const CHANNEL_CHAT_MESSAGE: &'static str = "channel.chat.message";
+const STREAM_ONLINE: &'static str = "stream.online";
+const STREAM_OFFLINE: &'static str = "stream.offline";
 const VERSION: &'static str = "1";
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ChannelChatMessageRequest {
     pub r#type: String,
     pub version: String,
-    pub condition: Condition,
+    pub condition: ConditionMultiUID,
     pub transport: Transport,
 }
 
+#[allow(dead_code)]
 impl ChannelChatMessageRequest {
     pub fn new(broadcaster_user_id: &str, user_id: &str, callback: &str, secret: &str) -> Self {
         let broadcaster_user_id = broadcaster_user_id.to_string();
         let user_id = user_id.to_string();
 
-        let condition: Condition = {
-            Condition::ChannelChatMessage {
-                broadcaster_user_id,
-                user_id,
-            }
+        let condition = ConditionMultiUID {
+            broadcaster_user_id,
+            user_id,
         };
+
         let transport = Transport {
             method: "webhook".to_string(),
             callback: callback.to_string(),
-            secret: secret.to_string(),
+            secret: Some(secret.to_string()),
         };
 
         Self {
@@ -35,6 +37,124 @@ impl ChannelChatMessageRequest {
             transport,
         }
     }
+}
+
+pub enum StreamGenericRequestType {
+    Online,
+    Offline,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StreamGenericRequest {
+    pub r#type: String,
+    pub version: String,
+    pub condition: ConditionBroadcasterUID,
+    pub transport: Transport,
+}
+
+impl StreamGenericRequest {
+    pub fn new(
+        broadcaster_user_id: &str,
+        callback: &str,
+        secret: &str,
+        r#type: StreamGenericRequestType,
+    ) -> Self {
+        let broadcaster_user_id = broadcaster_user_id.to_string();
+        let condition = ConditionBroadcasterUID {
+            broadcaster_user_id,
+        };
+        let transport = Transport {
+            method: "webhook".to_string(),
+            callback: callback.to_string(),
+            secret: Some(secret.to_owned()),
+        };
+
+        let notify_type = match r#type {
+            StreamGenericRequestType::Online => STREAM_ONLINE.to_string(),
+            StreamGenericRequestType::Offline => STREAM_OFFLINE.to_string(),
+        };
+
+        Self {
+            r#type: notify_type,
+            version: VERSION.to_string(),
+            condition,
+            transport,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StreamOnlinePayload {
+    pub subscription: SubscriptionGenericData,
+    pub event: StreamOnlineEvent,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StreamOnlineEvent {
+    pub id: String,
+    pub broadcaster_user_id: String,
+    pub broadcaster_user_login: String,
+    pub broadcaster_user_name: String,
+    pub r#type: String,
+    pub started_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StreamOfflineEvent {
+    pub broadcaster_user_id: String,
+    pub broadcaster_user_login: String,
+    pub broadcaster_user_name: String,
+}
+
+pub trait StreamCommonEvent {
+    fn broadcaster_id(&self) -> &str;
+    fn broadcaster_name(&self) -> &str;
+    fn broadcaster_login(&self) -> &str;
+}
+
+macro_rules! impl_stream_event {
+    (
+        $struct:ty,
+        id: $id:ident,
+        name: $name:ident,
+        login: $login:ident
+    ) => {
+        impl StreamCommonEvent for $struct {
+            fn broadcaster_id(&self) -> &str {
+                &self.$id
+            }
+
+            fn broadcaster_name(&self) -> &str {
+                &self.$name
+            }
+
+            fn broadcaster_login(&self) -> &str {
+                &self.$login
+            }
+        }
+    };
+}
+
+impl_stream_event!(
+    StreamOnlineEvent,
+    id: broadcaster_user_id,
+    name: broadcaster_user_name,
+    login: broadcaster_user_login
+);
+
+impl_stream_event!(
+    StreamOfflineEvent,
+    id: broadcaster_user_id,
+    name: broadcaster_user_name,
+    login: broadcaster_user_login
+);
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SubscriptionGenericResponse {
+    pub data: Vec<SubscriptionGenericData>,
+    pub total: usize,
+    pub total_cost: usize,
+    pub max_total_cost: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -280,20 +400,17 @@ pub struct Mention {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum Condition {
-    /// `Channel Chat Message` condition
-    ChannelChatMessage {
-        /// User ID of the channel for which to receive chat message events for
-        broadcaster_user_id: String,
-        /// User ID to read chat as
-        user_id: String,
-    },
+pub struct ConditionMultiUID {
+    /// User ID of the channel for which to receive chat message events for
+    broadcaster_user_id: String,
+    /// User ID to read chat as
+    user_id: String,
+}
 
-    /// `Channel Subscribe` condition
-    ChannelSubscribe {
-        /// User ID of the channel for which to receive subscribe notifications
-        broadcaster_user_id: String,
-    },
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ConditionBroadcasterUID {
+    /// User ID of the channel for which to receive chat message events for
+    broadcaster_user_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -322,21 +439,24 @@ pub struct Transport {
     /// > Redirects are NOT followed.
     pub callback: String,
     /// Secret used to verify the signature.
+    /// 
+    /// Required during a request, not included in the body of a response.
     ///
     /// Secret must be:
     /// - ASCII string
     /// - at least 10 characters
     /// - at most 100 characters
-    pub secret: String,
+    pub secret: Option<String>,
 }
 
-pub struct ChallengeSubscription {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SubscriptionGenericData {
     pub id: String,
     pub status: String,
     pub r#type: String,
     pub version: String,
-    pub cost: String,
-    pub condition: Condition,
+    pub cost: usize,
+    pub condition: ConditionBroadcasterUID,
     pub transport: Transport,
     pub created_at: String,
 }

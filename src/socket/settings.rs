@@ -14,10 +14,12 @@ const IRC_CMD_NICK: &'static str = "NICK";
 const IRC_CMD_USER: &'static str = "USER"; // -> concat("[login] 8 * [login]")
 const IRC_CMD_JOIN: &'static str = "JOIN #"; // -> concat("[broadcaster_login]")
 
+const BROADCASTER: &'static str = "plss";
+
 // currently facilitates a single connection to a broadcaster - needs to be reworked slightly
 // if we want to track multiple broadcasters.
-pub static CONNECTION_SETTINGS: LazyLock<RwLock<ConnectionSettings>> =
-    LazyLock::new(|| RwLock::new(ConnectionSettings::new()));
+pub static CONNECTION_SETTINGS: LazyLock<RwLock<Vec<ConnectionSettings>>> =
+    LazyLock::new(|| RwLock::new(vec![ConnectionSettings::new(BROADCASTER)]));
 
 /// Websocket OAuth and related connection settings.
 #[derive(Debug, Clone)]
@@ -32,20 +34,22 @@ pub struct ConnectionSettings {
 }
 
 impl ConnectionSettings {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(broadcaster: &str) -> Self {
         let args = args::parse_cli_args();
 
-        let pass = format!("{}{}", IRC_CMD_PASS, args.oauth_token);
-        let nick = format!("{} {}", IRC_CMD_NICK, args.login);
+        let args_clone = args.clone();
+
+        let pass = format!("{}{}", IRC_CMD_PASS, args_clone.token);
+        let nick = format!("{} {}", IRC_CMD_NICK, args_clone.login);
         let user = format!("{} {} 8 * {}", IRC_CMD_USER, args.login, args.login);
-        let join = format!("{}{}", IRC_CMD_JOIN, args.broadcaster);
+        let join = format!("{}{}", IRC_CMD_JOIN, broadcaster);
 
         let ws_auth_commands: [String; 5] = [IRC_CMD_CAP_REQ.to_string(), pass, nick, user, join];
 
         Self {
             url: IRC_URL.to_string(),
-            login: args.login,
-            token: args.oauth_token,
+            login: args.login.clone(),
+            token: args.token.clone(),
             ws_auth_commands,
         }
     }

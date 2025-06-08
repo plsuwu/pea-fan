@@ -1,9 +1,9 @@
-pub mod mid;
+pub mod midware;
 pub mod subscriber;
 pub mod types;
 
-use crate::server::mid::verify;
-use crate::server::mid::verify::VerifiedBody;
+use crate::server::midware::verify;
+use crate::server::midware::verify::VerifiedBody;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, StatusCode};
@@ -15,14 +15,17 @@ use ring::rand;
 use serde_json::Value;
 use std::fmt;
 use std::sync::{LazyLock, RwLock};
-use types::{ChannelChatMessagePayload, ChannelSubscriptionMessagePayload, ChatMessageCommon};
+use types::{
+    ChannelChatMessagePayload, ChannelSubscriptionMessagePayload, ChatMessageCommon,
+    StreamOnlinePayload,
+};
 
 const REQUIRED_STRING: &'static str = "piss";
-// const REQUIRED_STRING: &'static str = "from";
-
 const TWITCH_MESSAGE_TYPE_HEADER: &'static str = "Twitch-Eventsub-Message-Type";
 const SERVER_PORT: &'static str = "3000";
 
+// We could probably wrap this with a sync primitive such that we can just call e.g `KEY_DIGEST.get_hex()`
+// or `KEY_DIGEST.get_key()` to return a copy of/reference to the data we want
 pub static KEY_DIGEST: LazyLock<RwLock<Secret>> = LazyLock::new(|| RwLock::new(Secret::new()));
 
 /// Struct for HMAC key storage and generation methods.
@@ -32,7 +35,8 @@ pub static KEY_DIGEST: LazyLock<RwLock<Secret>> = LazyLock::new(|| RwLock::new(S
 ///
 /// # Security
 ///
-/// As far as I am aware, `ring::rand::SystemRandom` is cryptographically secure by itself smile
+/// In a vacuum, `ring::rand::SystemRandom` is cryptographically secure (as far as I am aware
+/// smile).
 #[derive(Debug)]
 pub struct Secret {
     pub key: Key,
@@ -73,18 +77,18 @@ impl WebhookMessageType {
         }
     }
 
-    pub fn parse_from_str(rx: &str) -> Result<Self, &'static str> {
+    pub fn parse_from_str(rx: &str) -> Result<Self, String> {
         match rx {
             "webhook_callback_verification" => Ok(Self::Verify),
             "notification" => Ok(Self::Notify),
             "revocation" => Ok(Self::Revoke),
-            _ => Err("Invalid messasge type header"),
+            _ => Err(format!("Received an invalid type header: {:?}", &rx)),
         }
     }
 }
 
 impl TryFrom<&str> for WebhookMessageType {
-    type Error = &'static str;
+    type Error = String;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         WebhookMessageType::parse_from_str(&value.to_string())
@@ -102,7 +106,8 @@ pub async fn serve() {
     let app = Router::new()
         .route("/", get(root))
         .route("/webhook-global", post(webhook_handler))
-        .route_layer(middleware::from_fn(verify::verify_sender_ident));
+        .route_layer(middleware::from_fn(verify::verify_sender_ident))
+        .route("/active-sockets", post(activity));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", SERVER_PORT))
         .await
@@ -114,6 +119,10 @@ pub async fn serve() {
 
 pub async fn root() -> &'static str {
     "://"
+}
+
+pub async fn activity(headers: HeaderMap) /* -> ... */ {
+
 }
 
 /// Handles webhook callbacks on the `<ROOT_URL>:<PORT>/webhook-global` endpoint
@@ -156,10 +165,14 @@ pub fn get_challenge_res(body: Value) -> Option<String> {
 
 pub fn read_notification(body: Value) -> Result<String, serde_json::Error> {
     match &body["subscription"]["type"].as_str() {
-        Some("channel.chat.message") => parse_message::<ChannelChatMessagePayload>(body),
-        Some("channel.subscription.message") => {
-            parse_message::<ChannelSubscriptionMessagePayload>(body)
-        }
+        Some("stream.online") => stream_event_notify(body),
+        Some("stream.offline") => stream_event_notify(body),
+
+        // these require fucking broadcaster authorization (oh my god)
+        // Some("channel.chat.message") => parse_message::<ChannelChatMessagePayload>(body),
+        // Some("channel.subscription.message") => {
+        //     parse_message::<ChannelSubscriptionMessagePayload>(body)
+        // }
 
         // shouldn't hit this arm as we're only going to be notified for
         // events on topics we're subscribed to
@@ -167,24 +180,14 @@ pub fn read_notification(body: Value) -> Result<String, serde_json::Error> {
     }
 }
 
-fn parse_message<T>(body: serde_json::Value) -> Result<String, serde_json::Error>
-where
-    T: ChatMessageCommon + serde::de::DeserializeOwned,
-{
-    let payload: T = serde_json::from_value(body)?;
-    let message = &payload.message().text;
-    if message.contains(REQUIRED_STRING) {
-        let _broadcaster = payload.broadcaster_user_login();
-        let chatter = payload.user_login();
+fn stream_event_notify(body: serde_json::Value) -> Result<String, serde_json::Error> {
+    let payload: StreamOnlinePayload = serde_json::from_value(body)?;
+    let broadcaster = payload.event.broadcaster_user_id;
 
-        println!("user:    \t'{}'", chatter);
-        println!("message: \t'{}'", message);
+    // open websocket to broadcaster either here ...
 
-        // do redis stuff
-        // ...
-    }
-
-    Ok("".to_string())
+    Ok(broadcaster.to_string())
+    // ... ^^^ or with the returned data
 }
 
 /// Log server port and secret key string to stdout
@@ -203,3 +206,28 @@ fn print_debug() {
         println!("[+] (DEBUG): Using secret '{}'", digest);
     }
 }
+
+//
+//
+//
+//
+
+// fn parse_message<T>(body: serde_json::Value) -> Result<String, serde_json::Error>
+// where
+//     T: ChatMessageCommon + serde::de::DeserializeOwned,
+// {
+//     let payload: T = serde_json::from_value(body)?;
+//     let message = &payload.message().text;
+//     if message.contains(REQUIRED_STRING) {
+//         let _broadcaster = payload.broadcaster_user_login();
+//         let chatter = payload.user_login();
+//
+//         println!("user:    \t'{}'", chatter);
+//         println!("message: \t'{}'", message);
+//
+//         // do redis stuff
+//         // ...
+//     }
+//
+//     Ok("".to_string())
+// }

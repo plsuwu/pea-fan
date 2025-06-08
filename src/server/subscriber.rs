@@ -1,8 +1,9 @@
 #![allow(non_snake_case, dead_code, unused_variables)]
 
-use super::types::ChannelChatMessagePayload;
+use super::types::{StreamGenericRequest, StreamGenericRequestType, SubscriptionGenericResponse};
+use crate::server::KEY_DIGEST;
 use anyhow::anyhow;
-use reqwest::header::HeaderMap;
+use reqwest::header::{AUTHORIZATION, HeaderMap};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -10,28 +11,119 @@ const CALLBACK_ROUTE: &'static str = "https://api.piss.fan/webhook-global";
 const API_GQL_URL: &'static str = "https://gql.twitch.tv/gql";
 const API_HELIX_URL: &'static str = "https://api.twitch.tv/helix";
 
-pub async fn subscribe(
-    broadcaster_login: &str,
-    user_login: &str,
-) -> anyhow::Result<ChannelChatMessagePayload> {
-    let broadcaster_id: String = get_user_id(broadcaster_login).await?;
-    let user_id: String = get_user_id(user_login).await?;
+const BROWSER_CLIENT_ID: &'static str = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+const TESTING_CLIENT_ID: &'static str = "7jz14ixoeglm6aq8eott8196p4g5ox";
 
-    let subs_uri = format!("{}/eventsub/subscriptions", API_HELIX_URL);
+pub async fn sub_stream_event_multi(broadcaster_login: &str, token: &str) -> anyhow::Result<()> {
 
-    todo!();
+    let key = (&*KEY_DIGEST).read().unwrap()._hex.clone();
+    
+    subscribe_stream_event(broadcaster_login, token, StreamGenericRequestType::Online, &key).await?;
+    subscribe_stream_event(broadcaster_login, token, StreamGenericRequestType::Offline, &key).await?;
+
+    Ok(())
 }
 
-pub async fn verify_signature() {
-    todo!();
+pub async fn subscribe_stream_event(
+    broadcaster_login: &str,
+    token: &str,
+    notify_type: StreamGenericRequestType,
+    key: &str,
+) -> anyhow::Result<SubscriptionGenericResponse> {
+    // This is a reasonably cheap clone (24 bytes I believe?) so I think in terms of efficiency
+    // this is fine for now.
+    let broadcaster_user_id: String = get_user_id(broadcaster_login).await?;
+
+    let request_body = StreamGenericRequest::new(
+        &broadcaster_user_id,
+        &CALLBACK_ROUTE,
+        key,
+        notify_type,
+    );
+
+    let headers = build_headers(token)?;
+    let subs_uri = format!("{}/eventsub/subscriptions", API_HELIX_URL);
+    let client = reqwest::Client::new();
+    let req = client.post(subs_uri).json(&request_body).headers(headers);
+
+    let res = req.send().await?;
+    if res.status() != 200 && res.status() != 202 {
+        // return the error information
+        let err: Value = serde_json::from_str(&res.text().await?)?;
+        Err(anyhow!(format!(
+            "Status of request (`stream.online`) not 200 | OK: {:#?}",
+            err
+        )))
+    } else {
+        // return the OK information
+        let unserialized_body: Value = serde_json::from_str(&res.text().await?)?;
+        println!("{:#?}", unserialized_body);
+
+        Ok(serde_json::from_value(unserialized_body)?)
+    }
+}
+
+// :((
+// pub async fn subscribe_chat_messages(
+//     broadcaster_login: &str,
+//     user_login: &str,
+//     token: &str,
+// ) -> anyhow::Result<SubscriptionGenericResponse> {
+//     let key_lock = (&*KEY_DIGEST).read().unwrap()._hex.clone();
+//
+//     let broadcaster_id: String = get_user_id(broadcaster_login).await?;
+//     let user_id: String = get_user_id(user_login).await?;
+//     let request_chat =
+//         ChannelChatMessageRequest::new(&broadcaster_id, &user_id, CALLBACK_ROUTE, &key_lock);
+//
+//     println!("req_body: {:#?}", serde_json::to_string(&request_chat));
+//
+//     let headers = build_headers(token)?;
+//
+//     let subs_uri = format!("{}/eventsub/subscriptions", API_HELIX_URL);
+//     let client = reqwest::Client::new();
+//     let req = client.post(subs_uri).json(&request_chat).headers(headers);
+//     println!("req: {:#?}", req);
+//
+//     let res = req.send().await?;
+//     if res.status() != 200 {
+//         let err: Value = serde_json::from_str(&res.text().await?)?;
+//         return Err(anyhow!(format!(
+//             "Status of request (subscription) was not 200/OK: {:#?}",
+//             err
+//         )));
+//     }
+//
+//     let pre_conv: Value = serde_json::from_str(&res.text().await?)?;
+//     println!("{:#?}", pre_conv);
+//
+//     let body: SubscriptionGenericResponse = serde_json::from_value(pre_conv)?;
+//
+//     Ok(body)
+// }
+
+// async fn get_app_token() -> anyhow::Result<String> {
+//
+// }
+
+// pub async fn verify_signature() {
+//     todo!();
+// }
+
+fn build_headers(token: &str) -> anyhow::Result<HeaderMap> {
+    let mut headers = HeaderMap::new();
+    headers.insert("client-id", TESTING_CLIENT_ID.try_into().unwrap());
+    headers.insert(
+        AUTHORIZATION,
+        format!("Bearer {}", token).try_into().unwrap(),
+    );
+
+    Ok(headers)
 }
 
 pub async fn get_user_id(login: &str) -> anyhow::Result<String> {
     let mut headers = HeaderMap::new();
-    headers.insert(
-        "client-id",
-        "kimne78kx3ncx6brgo4mv6wki5h1ko".try_into().unwrap(),
-    );
+    headers.insert("client-id", BROWSER_CLIENT_ID.try_into().unwrap());
 
     let query = ChatChannelData::new(login);
     let client = reqwest::Client::new();
@@ -57,7 +149,7 @@ pub async fn get_user_id(login: &str) -> anyhow::Result<String> {
 }
 
 /// Serde-derivable struct representing the GQL query JSON body
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct ChatChannelData {
     pub operationName: String,
     pub variables: Variables,
@@ -103,18 +195,18 @@ impl ChatChannelData {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Extensions {
     persistedQuery: PersistedQuery,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct PersistedQuery {
     version: usize,
     sha256Hash: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Variables {
     channelLogin: String,
 }
