@@ -1,7 +1,7 @@
 use chrono::prelude::*;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Result;
@@ -9,7 +9,7 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use tokio_util::sync::CancellationToken;
 
-use crate::parser::parser;
+use crate::parser::parser::{self, IrcMessage, IrcParser};
 use crate::socket::settings::ConnectionSettings;
 
 pub type Writer = Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>;
@@ -19,7 +19,14 @@ pub type Reader = Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream
 pub struct Client {
     pub writer: Writer,
     pub reader: Reader,
+    channel: String,
 }
+
+const KEEPALIVE_RESPONSE: &'static str = "PONG :tmi.twitch.tv";
+
+const IRC_COMMAND_PING: &'static str = "PING";
+const IRC_COMMAND_CHAT: &'static str = "PRIVMSG";
+const IRC_COMMAND_JOIN: &'static str = "JOIN";
 
 impl Client {
     /// Creates the RW streams for the given URL
@@ -36,7 +43,11 @@ impl Client {
         let writer = Arc::new(Mutex::new(w));
         let reader = Arc::new(Mutex::new(r));
 
-        Ok(Self { reader, writer })
+        Ok(Self {
+            reader,
+            writer,
+            channel: conn.channel.to_string(),
+        })
     }
 
     /// Sends the Twitch IRC authentication commands to the broadcaster chat
@@ -58,10 +69,9 @@ impl Client {
                     if let Some(incoming) = incoming_res {
                         let raw_data = incoming.to_string();
                         let parser = parser::IrcParser::new();
-                        match parser.parse_message(&raw_data) {
+                        match parser.parse_socket_data(&raw_data) {
                             Ok(parsed) => {
-                                println!("[+] parsed incoming notification from irc ws:");
-                                println!("[+] {:#?}", parsed);
+                                self.action_irc(&parsed, &parser).await;
                             }
 
                             Err(e) => {
@@ -79,10 +89,52 @@ impl Client {
                 }
 
                 _ = cancel_token.cancelled() => {
-                    println!("[+] irc read loop cancelled gracefully.");
+                    println!("[{}] irc read loop cancelled gracefully, leaving channel...", get_current_time());
+
+                    // do we care if this thread panics?? idk.
+                    self.write(&format!("PART #{}", self.channel)).await.unwrap();
                     break;
                 }
             }
+        }
+    }
+
+    pub async fn action_irc<'a>(&self, data: &IrcMessage<'a>, parser: &IrcParser) {
+        match data.command {
+            IRC_COMMAND_PING => {
+                println!("[{}] rx KEEPALIVE", get_current_time());
+                match Self::write(self, KEEPALIVE_RESPONSE).await {
+                    Err(e) => println!("[{}] tx KEEPALIVE err: {:?}", get_current_time(), e),
+                    _ => (),
+                }
+            }
+
+            IRC_COMMAND_JOIN => println!(
+                "[{}] JOIN: '{}'",
+                get_current_time(),
+                parser
+                    .get_channel(&data)
+                    .unwrap_or("INVALID_CHANNEL_RESULT"),
+            ),
+
+            IRC_COMMAND_CHAT => {
+                if let Ok(chat) = parser.get_chat(&data) {
+                    let chatter = chat.display_name;
+                    let channel = chat.channel;
+                    let message = chat.message;
+
+                    println!(
+                        "[{}] in [{}] PRIVMSG::{}: '{}'",
+                        get_current_time(),
+                        channel,
+                        chatter,
+                        message,
+                    );
+                } else {
+                    eprintln!("[x] err parsing chat msg: {:?}", data);
+                }
+            }
+            _ => (),
         }
     }
 
@@ -105,7 +157,7 @@ impl Client {
 
     fn print(data: &Message) {
         let curr = get_current_time();
-        println!("[{}] SENT: {:?}", curr, data);
+        println!("[{}] SENT: {:?}", curr, data.to_text().unwrap_or("FAILED_TEXT_CONV"));
     }
 }
 
@@ -114,5 +166,5 @@ impl Client {
 /// Format: `YYYY-MM-DD[HH:MM:SS]`
 pub fn get_current_time() -> String {
     let curr = Local::now();
-    curr.format("%Y-%m-%d[%H:%M:%S]").to_string()
+    curr.format("%Y-%m-%d@%H:%M:%S").to_string()
 }

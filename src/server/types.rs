@@ -10,7 +10,7 @@ pub enum StreamGenericRequestType {
     Offline,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StreamGenericRequest {
     pub r#type: String,
     pub version: String,
@@ -49,19 +49,19 @@ impl StreamGenericRequest {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StreamOnlinePayload {
     pub subscription: SubscriptionGenericData,
     pub event: StreamOnlineEvent,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StreamOfflinePayload {
     pub subscription: SubscriptionGenericData,
     pub event: StreamOfflineEvent,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StreamOnlineEvent {
     pub id: String,
     pub broadcaster_user_id: String,
@@ -71,7 +71,7 @@ pub struct StreamOnlineEvent {
     pub started_at: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StreamOfflineEvent {
     pub broadcaster_user_id: String,
     pub broadcaster_user_login: String,
@@ -158,7 +158,7 @@ delegate_stream_common!(StreamOfflinePayload, event, subscription);
 // ---------------------------------------------------------------------------------------------------
 //
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SubscriptionGenericResponse {
     pub data: Vec<SubscriptionGenericData>,
     pub total: usize,
@@ -166,13 +166,13 @@ pub struct SubscriptionGenericResponse {
     pub max_total_cost: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChannelChatMessagePayload {
     pub subscription: Subscription,
     pub event: ChannelChatMessageEvent,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChannelSubscriptionMessagePayload {
     pub subscription: Subscription,
     pub event: ChannelSubscriptionMessageEvent,
@@ -284,7 +284,7 @@ macro_rules! delegate_common {
 delegate_common!(ChannelChatMessagePayload, event);
 delegate_common!(ChannelSubscriptionMessagePayload, event);
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChannelSubscriptionMessageEvent {
     pub user_id: String,
     pub user_login: String,
@@ -299,7 +299,7 @@ pub struct ChannelSubscriptionMessageEvent {
     pub duration_months: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChannelChatMessageEvent {
     pub broadcaster_user_id: String,
     pub broadcaster_user_name: String,
@@ -336,7 +336,7 @@ pub struct ChannelChatMessageEvent {
     pub is_source_only: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Reply {
     pub parent_message_id: String,
     pub parent_message_body: String,
@@ -348,25 +348,25 @@ pub struct Reply {
     pub thread_user_login: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Badges {
     pub set_id: String,
     pub id: String,
     pub info: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Cheer {
     pub bits: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Message {
     pub text: String,
     pub fragments: Option<Vec<Fragments>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Fragments {
     /// Type of message fragment.
     ///
@@ -384,7 +384,7 @@ pub struct Fragments {
 }
 
 /// Metadata pertaining to a cheermote
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Cheermote {
     pub prefix: String,
     pub bits: usize,
@@ -392,7 +392,7 @@ pub struct Cheermote {
 }
 
 /// Metadata pertaining to an emote
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Emote {
     pub id: String,
     pub emote_set_id: String,
@@ -401,14 +401,14 @@ pub struct Emote {
 }
 
 /// Metadata pertaining to a mention
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Mention {
     pub user_id: String,
     pub user_name: String,
     pub user_login: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ConditionMultiUID {
     /// User ID of the channel for which to receive chat message events for
     broadcaster_user_id: String,
@@ -416,13 +416,13 @@ pub struct ConditionMultiUID {
     user_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ConditionBroadcasterUID {
     /// User ID of the channel for which to receive chat message events for
     broadcaster_user_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Subscription {
     // is this the correct type??
     /// Client ID
@@ -437,7 +437,7 @@ pub struct Subscription {
     pub created_at: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Transport {
     /// Transport method.
     ///
@@ -459,7 +459,7 @@ pub struct Transport {
     pub secret: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SubscriptionGenericData {
     pub id: String,
     pub status: String,
@@ -471,7 +471,7 @@ pub struct SubscriptionGenericData {
     pub created_at: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChannelChatMessageRequest {
     pub r#type: String,
     pub version: String,

@@ -8,45 +8,74 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 const CALLBACK_ROUTE: &'static str = "https://api.piss.fan/webhook-global";
-const API_GQL_URL: &'static str = "https://gql.twitch.tv/gql";
-const API_HELIX_URL: &'static str = "https://api.twitch.tv/helix";
 
+const API_GQL_URL: &'static str = "https://gql.twitch.tv/gql";
 const BROWSER_CLIENT_ID: &'static str = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+
+const API_HELIX_URL: &'static str = "https://api.twitch.tv/helix";
 const TESTING_CLIENT_ID: &'static str = "7jz14ixoeglm6aq8eott8196p4g5ox";
 
+/// Subcribes to the required stream webhook events
+///
+/// Makes a subscribe request to the twitch API for both `stream.online` and `stream.offline` events
+/// for a given broadcaster `broadcaster_login`.
 pub async fn sub_stream_event_multi(broadcaster_login: &str, token: &str) -> anyhow::Result<()> {
-
+    // Current server session's secret key instance
+    //
+    // This should be constant for the lifetime of the server listener and changes
+    // on application restart
     let key = (&*KEY_DIGEST).read().unwrap()._hex.clone();
-    
-    subscribe_stream_event(broadcaster_login, token, StreamGenericRequestType::Online, &key).await?;
-    subscribe_stream_event(broadcaster_login, token, StreamGenericRequestType::Offline, &key).await?;
+
+    // `stream.online` subscription
+    subscribe_stream_event(
+        broadcaster_login,
+        token,
+        StreamGenericRequestType::Online,
+        &key,
+    )
+    .await?;
+
+    // `stream.offline` subscription
+    subscribe_stream_event(
+        broadcaster_login,
+        token,
+        StreamGenericRequestType::Offline,
+        &key,
+    )
+    .await?;
 
     Ok(())
 }
 
+/// Subscribes to a single (supported) stream event instance
+///
+/// # Stream events
+///
+/// The `StreamGenericRequestType` enum describes the webhook `type` field to request
+/// notifications for.
+///
+/// This will one of:
+/// - `StreamGenericRequestType::Online` (`stream.online`),
+/// - `StreamGenericRequestType::Offline` (`stream.offline`),
 pub async fn subscribe_stream_event(
     broadcaster_login: &str,
     token: &str,
     notify_type: StreamGenericRequestType,
     key: &str,
 ) -> anyhow::Result<SubscriptionGenericResponse> {
-    // This is a reasonably cheap clone (24 bytes I believe?) so I think in terms of efficiency
-    // this is fine for now.
-    let broadcaster_user_id: String = get_user_id(broadcaster_login).await?;
-
-    let request_body = StreamGenericRequest::new(
-        &broadcaster_user_id,
-        &CALLBACK_ROUTE,
-        key,
-        notify_type,
-    );
-
-    let headers = build_headers(token)?;
-    let subs_uri = format!("{}/eventsub/subscriptions", API_HELIX_URL);
     let client = reqwest::Client::new();
-    let req = client.post(subs_uri).json(&request_body).headers(headers);
+    let subs_uri = format!("{}/eventsub/subscriptions", API_HELIX_URL);
+    let headers = build_headers(token)?;
 
+    let broadcaster_user_id: String = get_user_id(broadcaster_login).await?;
+    let request_body =
+        StreamGenericRequest::new(&broadcaster_user_id, &CALLBACK_ROUTE, key, notify_type);
+
+    // this was split into two because its easier to debug but realistically we could combine this
+    // into a single let binding
+    let req = client.post(subs_uri).json(&request_body).headers(headers);
     let res = req.send().await?;
+
     if res.status() != 200 && res.status() != 202 {
         // return the error information
         let err: Value = serde_json::from_str(&res.text().await?)?;
@@ -55,7 +84,7 @@ pub async fn subscribe_stream_event(
             err
         )))
     } else {
-        // return the OK information
+        // return the successfully retrieved information
         let unserialized_body: Value = serde_json::from_str(&res.text().await?)?;
         println!("{:#?}", unserialized_body);
 

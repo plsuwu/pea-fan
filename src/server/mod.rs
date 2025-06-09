@@ -27,7 +27,11 @@ use types::{
     StreamCommonEvent, StreamCommonSubscription, StreamOfflinePayload, StreamOnlinePayload,
 };
 
-// static IRC_HANDLES: LazyLock<IrcHandlesMutex> = LazyLock::new(|| IrcHandlesMutex::new());
+/**
+ *   N.B:
+ *
+ *      Some of this could (and probably should) be pulled out for organization purposes
+ * */
 
 #[derive(Debug)]
 pub struct IrcConnection {
@@ -209,19 +213,42 @@ pub fn read_notification(body: Value) -> Result<String, serde_json::Error> {
     }
 }
 
+/// Safe deserialization of a subscription notification
+///
+/// `StreamCommonEvent` and `StreamCommonSubscription` trait implementations facilitate access
+/// to required fields on nested in `event` and `subscription` parent fields via methods.
 fn stream_event_notify<T>(body: serde_json::Value) -> Result<String, serde_json::Error>
 where
-    T: StreamCommonEvent + StreamCommonSubscription + serde::de::DeserializeOwned,
+    T: StreamCommonEvent + StreamCommonSubscription + serde::de::DeserializeOwned + Clone + 'static,
 {
     let payload: T = serde_json::from_value(body)?;
-    let channel = payload.broadcaster_login();
+    let channel = if payload.broadcaster_login() == "testBroadcaster" {
+        "plss".to_string()
+    } else {
+        payload.broadcaster_login().to_string()
+    };
 
     println!("[+] recv '{}' event for '{}'.", payload.r#type(), channel);
 
+    let channel_clone = channel.clone();
     if payload.r#type() == "stream.online" {
-        _ = open_websocket(channel);
+        tokio::task::spawn(async move {
+            if let Err(e) = open_websocket(&channel_clone).await {
+                eprintln!(
+                    "[x] failed to open websocket for '{}': '{:?}'",
+                    channel_clone, e
+                )
+            }
+        });
     } else {
-        _ = close_websocket(channel);
+        tokio::task::spawn(async move {
+            if let Err(e) = close_websocket(&channel_clone).await {
+                eprintln!(
+                    "[x] failed to open websocket for '{}': '{:?}'",
+                    channel_clone, e
+                )
+            }
+        });
     }
 
     Ok(channel.to_string())
@@ -238,10 +265,6 @@ fn get_debug() -> Option<String> {
     } else {
         None
     }
-}
-
-pub async fn close_websocket(channel: &str) -> anyhow::Result<()> {
-    Ok(())
 }
 
 pub async fn open_websocket(channel: &str) -> anyhow::Result<()> {
@@ -293,34 +316,63 @@ pub async fn open_websocket(channel: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub async fn close_websocket(channel: &str) -> anyhow::Result<bool> {
+    // The compiler does not let us do this by simply acquiring the IRC_HANDLES lock, cancelling the
+    // cancellation token, and calling `drop(irc_handles_guard)`; it doesn't appear to recognise
+    // that `drop` is discarding the reference by itself.
+    //
+    // We get around this by acquiring the lock on IRC_HANDLES in a separate lexical scope,
+    // cancelling the cancellation token, and finally binding the handle to a variable outside 
+    // the scope.
+    //
+    // See the following:
+    //  - https://users.rust-lang.org/t/future-is-not-send-as-this-value-is-used-across-an-await/92580
+    let mut connection_handle = None;
+    {
+        let mut irc_handles_guard = IRC_HANDLES.lock().unwrap();
+        let conn = irc_handles_guard.connections.remove(channel);
+        if let Some(c) = conn {
+            c.cancellation_token.cancel();
+            connection_handle = Some(c.handle);
+        }
+    }
+    if let Some(handle) = connection_handle {
+        let timeout = tokio::time::timeout(std::time::Duration::from_secs(5), handle);
+        match timeout.await {
+            Ok(Ok(())) => {
+                // graceful closure without error
+                println!("[+] websocket task '{}' closure ok", channel);
+                Ok(true)
+            }
+            Ok(Err(e)) => {
+                // error in nested handler (still consider this 'successfully' closed)
+                println!("[x] websocket task '{}' panicked: {:?}", channel, e);
+                Ok(true)
+            }
+            Err(_) => {
+                // timeout (force-closed, so still technically successful)
+                println!("[x] timeout during websocket task '{}' closure", channel);
+                Ok(true)
+            }
+        }
+    } else {
+        println!("[x] no active websocket task for '{}'", channel);
+        Ok(false)
+    }
+}
+
 pub async fn run_websocket_conn(
     conn_settings: Arc<ConnectionSettings>,
     cancel_token: CancellationToken,
 ) -> anyhow::Result<()> {
+    //
     let socket = Client::new(&conn_settings).await?;
-    socket.open(&conn_settings).await?;
 
+    socket.open(&conn_settings).await?;
     socket.loop_read(cancel_token).await;
 
     Ok(())
 }
-//
-//     // let args_clone = args.clone();
-//     // let conn_settings = Arc::new(ConnectionSettings::new(
-//     //     &args_clone.user_token,
-//     //     &args_clone.login,
-//     //     br,
-//     // ));
-//     //
-//     // let irc_handle = tokio::task::spawn(async move {
-//     //     let socket = Client::new(&conn_settings).await.unwrap();
-//     //     socket.open(&conn_settings).await.unwrap();
-//     //
-//     //     socket.loop_read().await;
-//     // });
-//     //
-//     // irc_handles.push(irc_handle);
-// }
 
 /// Returns the challenge string from the remote verification request
 pub fn get_challenge_res(body: Value) -> Option<String> {
@@ -331,28 +383,3 @@ pub fn get_challenge_res(body: Value) -> Option<String> {
         None
     }
 }
-
-//
-//
-//
-//
-
-// fn parse_message<T>(body: serde_json::Value) -> Result<String, serde_json::Error>
-// where
-//     T: ChatMessageCommon + serde::de::DeserializeOwned,
-// {
-//     let payload: T = serde_json::from_value(body)?;
-//     let message = &payload.message().text;
-//     if message.contains(REQUIRED_STRING) {
-//         let _broadcaster = payload.broadcaster_user_login();
-//         let chatter = payload.user_login();
-//
-//         println!("user:    \t'{}'", chatter);
-//         println!("message: \t'{}'", message);
-//
-//         // do redis stuff
-//         // ...
-//     }
-//
-//     Ok("".to_string())
-// }
