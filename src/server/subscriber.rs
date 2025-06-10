@@ -1,13 +1,20 @@
 #![allow(non_snake_case, dead_code, unused_variables)]
 
-use super::types::{StreamGenericRequest, StreamGenericRequestType, SubscriptionGenericResponse};
-use crate::server::KEY_DIGEST;
+use super::types::{
+    StreamGenericRequest, StreamGenericRequestType, SubscriptionGenericData,
+    SubscriptionGenericResponse,
+};
+use crate::{server::KEY_DIGEST, socket::client::get_current_time};
 use anyhow::anyhow;
-use reqwest::header::{AUTHORIZATION, HeaderMap};
+use reqwest::{
+    Client, StatusCode,
+    header::{AUTHORIZATION, HeaderMap},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-const CALLBACK_ROUTE: &'static str = "https://api.piss.fan/webhook-global";
+// const CALLBACK_ROUTE: &'static str = "https://api.piss.fan/webhook-global";
+const CALLBACK_ROUTE: &'static str = "https://pls.ngrok.io/webhook-global";
 
 const API_GQL_URL: &'static str = "https://gql.twitch.tv/gql";
 const BROWSER_CLIENT_ID: &'static str = "kimne78kx3ncx6brgo4mv6wki5h1ko";
@@ -25,10 +32,11 @@ pub async fn sub_stream_event_multi(broadcaster_login: &str, token: &str) -> any
     // This should be constant for the lifetime of the server listener and changes
     // on application restart
     let key = (&*KEY_DIGEST).read().unwrap()._hex.clone();
+    let broadcaster_user_id: String = get_user_id(broadcaster_login).await?;
 
     // `stream.online` subscription
     subscribe_stream_event(
-        broadcaster_login,
+        &broadcaster_user_id,
         token,
         StreamGenericRequestType::Online,
         &key,
@@ -37,7 +45,7 @@ pub async fn sub_stream_event_multi(broadcaster_login: &str, token: &str) -> any
 
     // `stream.offline` subscription
     subscribe_stream_event(
-        broadcaster_login,
+        &broadcaster_user_id,
         token,
         StreamGenericRequestType::Offline,
         &key,
@@ -58,7 +66,7 @@ pub async fn sub_stream_event_multi(broadcaster_login: &str, token: &str) -> any
 /// - `StreamGenericRequestType::Online` (`stream.online`),
 /// - `StreamGenericRequestType::Offline` (`stream.offline`),
 pub async fn subscribe_stream_event(
-    broadcaster_login: &str,
+    broadcaster_user_id: &str,
     token: &str,
     notify_type: StreamGenericRequestType,
     key: &str,
@@ -67,7 +75,6 @@ pub async fn subscribe_stream_event(
     let subs_uri = format!("{}/eventsub/subscriptions", API_HELIX_URL);
     let headers = build_headers(token)?;
 
-    let broadcaster_user_id: String = get_user_id(broadcaster_login).await?;
     let request_body =
         StreamGenericRequest::new(&broadcaster_user_id, &CALLBACK_ROUTE, key, notify_type);
 
@@ -77,19 +84,74 @@ pub async fn subscribe_stream_event(
     let res = req.send().await?;
 
     if res.status() != 200 && res.status() != 202 {
-        // return the error information
-        let err: Value = serde_json::from_str(&res.text().await?)?;
-        Err(anyhow!(format!(
-            "Status of request (`stream.online`) not 200 | OK: {:#?}",
-            err
-        )))
+        match res.status() {
+            // StatusCode::CONFLICT => {
+            //     // revoke and retry ??
+            // },
+            _ => {
+                let err: Value = serde_json::from_str(&res.text().await?)?;
+                Err(anyhow!(format!(
+                    "Status of request (`stream.online/.offline`) not 200 | OK: {:#?}",
+                    err
+                )))
+            }
+        }
     } else {
         // return the successfully retrieved information
         let unserialized_body: Value = serde_json::from_str(&res.text().await?)?;
-        println!("{:#?}", unserialized_body);
+        let status = unserialized_body["subscription"]["status"].clone();
+        let subscription_type = unserialized_body["subscription"]["type"].clone();
+        let broadcaster_id =
+            unserialized_body["subscription"]["condition"]["broadcaster_id"].clone();
+
+        println!(
+            "[{}] recv new: STATUS '{}' -> {} (for uid '{}')",
+            get_current_time(),
+            status,
+            subscription_type,
+            broadcaster_id
+        );
 
         Ok(serde_json::from_value(unserialized_body)?)
     }
+}
+
+pub async fn delete_subscription_multi(subscription_id: &str, token: &str) -> anyhow::Result<()> {
+    let headers = build_headers(token)?;
+    let client = Client::new();
+    let subs_uri = format!(
+        "{}/eventsub/subscriptions?id={}",
+        API_HELIX_URL, subscription_id
+    );
+
+    let res = client.delete(subs_uri).headers(headers).send().await;
+    match res {
+        Ok(r) => println!("[+] subscription '{}' deleted ok", subscription_id),
+        Err(e) => eprintln!("[x] error during subscription deletion: {:?}", e),
+    }
+
+    Ok(())
+}
+
+pub async fn get_active_hooks(token: &str) -> Option<Vec<Value>> {
+    let client = reqwest::Client::new();
+    let subs_uri = format!("{}/eventsub/subscriptions?status=enabled", API_HELIX_URL);
+
+    let headers = build_headers(token).unwrap();
+
+    let req = client.get(subs_uri).headers(headers);
+    let res = req.send().await.unwrap();
+
+    let mut deserialized: Value = serde_json::from_str(&res.text().await.unwrap()).unwrap();
+    if let Some(active_count) = deserialized["total"].take().as_u64() {
+        let maybe_data: Result<Vec<Value>, serde_json::Error> =
+            serde_json::from_value(deserialized["data"].clone());
+        if let Ok(data_array) = maybe_data {
+            return Some(data_array);
+        }
+    }
+
+    None
 }
 
 // :((

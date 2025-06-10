@@ -2,19 +2,23 @@ pub mod midware;
 pub mod subscriber;
 pub mod types;
 
+use crate::CHANNELS;
 use crate::args::parse_cli_args;
+use crate::db::redis::redis_pool;
 use crate::server::midware::verify;
 use crate::server::midware::verify::VerifiedBody;
 use crate::socket::client::Client;
 use crate::socket::settings::ConnectionSettings;
-use axum::Router;
 use axum::body::Body;
+use axum::extract::Query;
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware;
 use axum::routing::{get, post};
+use axum::{Json, Router};
 use ring::digest;
 use ring::hmac::{self, Key};
 use ring::rand;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt;
@@ -152,16 +156,18 @@ impl Into<&str> for WebhookMessageType {
 /// Server listener
 pub async fn serve(tx: oneshot::Sender<(SocketAddr, Option<String>)>) {
     let app = Router::new()
-        .route("/", get(root))
         .route("/webhook-global", post(webhook_handler))
         .route_layer(middleware::from_fn(verify::verify_sender_ident))
+        .route("/", get(root))
         .route("/active-sockets", post(activity))
+        .route("/ceilings/channel", get(get_channel))
+        .route("/ceilings/user", get(get_user))
         .route("/health", get(|| async { "OK" }));
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), SERVER_PORT);
     let listener = tokio::net::TcpListener::bind(bind_addr).await.unwrap();
 
-    _ = tx.send((bind_addr, get_debug())); 
+    _ = tx.send((bind_addr, get_debug()));
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -172,6 +178,53 @@ pub async fn root() -> &'static str {
 #[allow(unused_variables)]
 pub async fn activity(headers: HeaderMap) -> &'static str {
     "unimplemented :("
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GetChannelQueryParams {
+    name: String,
+}
+
+#[derive(Deserialize)]
+pub struct GetUserQueryParams {
+    name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RedisQueryResponse {
+    pub err: bool,
+    pub err_msg: &'static str,
+    pub total: String,
+    pub leaderboard: Vec<(String, isize)>,
+}
+
+pub async fn get_channel(Query(query): Query<GetChannelQueryParams>) -> Json<RedisQueryResponse> {
+    if !CHANNELS.contains(&query.name.as_str()) {
+        Json(RedisQueryResponse {
+            err: true,
+            err_msg: "NOT_TRACKED",
+            total: "0".to_string(),
+            leaderboard: Vec::new(),
+        })
+    } else {
+        let redis = redis_pool().await.unwrap();
+        let res = redis.get_channel_data(&query.name).await.unwrap();
+
+        Json(res)
+    }
+}
+
+pub async fn get_user(Query(query): Query<GetUserQueryParams>) -> Json<RedisQueryResponse> {
+    let redis = redis_pool().await.unwrap();
+    match redis.get_user_data(&query.name).await {
+        Err(_) => Json(RedisQueryResponse {
+            err: true,
+            err_msg: "NOT_TRACKED",
+            total: "0".to_string(),
+            leaderboard: Vec::new(),
+        }),
+        Ok(val) => Json(val),
+    }
 }
 
 /// Handles webhook callbacks on the `<ROOT_URL>:<PORT>/webhook-global` endpoint
@@ -223,7 +276,7 @@ where
 {
     let payload: T = serde_json::from_value(body)?;
     let channel = if payload.broadcaster_login() == "testBroadcaster" {
-        "plss".to_string()
+        "sleepiebug".to_string()
     } else {
         payload.broadcaster_login().to_string()
     };
@@ -322,7 +375,7 @@ pub async fn close_websocket(channel: &str) -> anyhow::Result<bool> {
     // that `drop` is discarding the reference by itself.
     //
     // We get around this by acquiring the lock on IRC_HANDLES in a separate lexical scope,
-    // cancelling the cancellation token, and finally binding the handle to a variable outside 
+    // cancelling the cancellation token, and finally binding the handle to a variable outside
     // the scope.
     //
     // [This issue] seems to indicate the compiler could be made to recognize the drop's move
@@ -367,11 +420,10 @@ pub async fn run_websocket_conn(
     conn_settings: Arc<ConnectionSettings>,
     cancel_token: CancellationToken,
 ) -> anyhow::Result<()> {
-    //
     let socket = Client::new(&conn_settings).await?;
 
     socket.open(&conn_settings).await?;
-    socket.loop_read(cancel_token).await;
+    socket.loop_read(cancel_token).await?;
 
     Ok(())
 }
