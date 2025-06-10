@@ -6,29 +6,30 @@ use std::{
     process::exit,
     sync::{Arc, RwLock},
 };
-use tokio::{io, time::{sleep, Sleep}};
+use tokio::{
+    io,
+    time::{Sleep, sleep},
+};
 
 mod args;
 mod parser;
+mod db;
 mod server;
 mod socket;
 
 extern crate chrono;
 // let args = args::parse_cli_args();
 
-const CHANNELS: [&'static str; 5] = ["cchiko_", "sleepiebug", "womfyy", "snoozy", "vacu0usly"];
 // const CHANNELS: [&'static str; 2] = ["sleepiebug", "plss"];
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
     // parser::test_parser_function();
-    let args = parse_cli_args();
+    // let args = parse_cli_args();
     
     // let test_socket_handle = open_websocket("plss");
     // sleep(tokio::time::Duration::from_secs(10)).await;
     // let close_test_socket = close_websocket("plss").await;
-
-
 
     // let mut irc_handles = Vec::new();
     //
@@ -75,8 +76,6 @@ async fn main() -> io::Result<()> {
     //     handles.push(handle);
     // }
     //
-    
-
 
     // let result = test_socket_handle.await.unwrap();
     // println!("{:?}", result);

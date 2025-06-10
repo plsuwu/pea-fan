@@ -18,6 +18,7 @@ const TWITCH_MESSAGE_TYPE: &'static str = "Twitch-Eventsub-Message-Type";
 #[derive(Clone)]
 pub struct VerifiedBody(pub Bytes);
 
+#[allow(dead_code)]
 impl VerifiedBody {
     pub fn as_bytes(&self) -> &Bytes {
         &self.0

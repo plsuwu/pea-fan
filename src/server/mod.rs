@@ -161,7 +161,7 @@ pub async fn serve(tx: oneshot::Sender<(SocketAddr, Option<String>)>) {
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), SERVER_PORT);
     let listener = tokio::net::TcpListener::bind(bind_addr).await.unwrap();
 
-    _ = tx.send((bind_addr, get_debug()));
+    _ = tx.send((bind_addr, get_debug())); 
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -325,8 +325,10 @@ pub async fn close_websocket(channel: &str) -> anyhow::Result<bool> {
     // cancelling the cancellation token, and finally binding the handle to a variable outside 
     // the scope.
     //
-    // See the following:
-    //  - https://users.rust-lang.org/t/future-is-not-send-as-this-value-is-used-across-an-await/92580
+    // [This issue] seems to indicate the compiler could be made to recognize the drop's move
+    // semantics with `-Zdrop-tracking` but the language server errors are also kind of annoying
+    //
+    // [This issue]: https://github.com/rust-lang/rust/issues/87309
     let mut connection_handle = None;
     {
         let mut irc_handles_guard = IRC_HANDLES.lock().unwrap();

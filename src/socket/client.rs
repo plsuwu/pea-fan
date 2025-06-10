@@ -9,21 +9,25 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use tokio_util::sync::CancellationToken;
 
+use crate::db::redis::redis_pool;
 use crate::parser::parser::{self, IrcMessage, IrcParser};
 use crate::socket::settings::ConnectionSettings;
 
 pub type Writer = Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>;
 pub type Reader = Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Client {
     pub writer: Writer,
     pub reader: Reader,
     channel: String,
 }
 
+const NEEDLE: &'static str = "piss";
 const KEEPALIVE_RESPONSE: &'static str = "PONG :tmi.twitch.tv";
 
+// Should expand on these cases we're handling - this is going to be a long-running process,
+// after all...
 const IRC_COMMAND_PING: &'static str = "PING";
 const IRC_COMMAND_CHAT: &'static str = "PRIVMSG";
 const IRC_COMMAND_JOIN: &'static str = "JOIN";
@@ -37,7 +41,6 @@ impl Client {
         let url = &conn.url;
 
         let (stream, _) = connect_async(*url).await?;
-
         let (w, r) = stream.split();
 
         let writer = Arc::new(Mutex::new(w));
@@ -46,7 +49,7 @@ impl Client {
         Ok(Self {
             reader,
             writer,
-            channel: conn.channel.to_string(),
+            channel: conn.channel.clone(),
         })
     }
 
@@ -60,46 +63,57 @@ impl Client {
     }
 
     /// Loops over the input reader for this client, checking for incoming IRC messages
-    pub async fn loop_read(&self, cancel_token: CancellationToken) {
+    pub async fn loop_read(&self, cancel_token: CancellationToken) -> anyhow::Result<()> {
         let reader_clone = self.reader.clone();
 
         loop {
             tokio::select! {
                 incoming_res = Self::read(&reader_clone) => {
+
                     if let Some(incoming) = incoming_res {
                         let raw_data = incoming.to_string();
                         let parser = parser::IrcParser::new();
+
+                        // check parsed success/failure and handle accordingly
                         match parser.parse_socket_data(&raw_data) {
                             Ok(parsed) => {
-                                self.action_irc(&parsed, &parser).await;
+                                self.action_irc(&parsed, &parser).await?;
                             }
-
                             Err(e) => {
                                 println!("[x] failed to parse irc notification: {:?}", e);
-
-                                // could break here depending on error??
                                 continue;
                             }
                         }
 
                     } else {
+                        // attempted to perform some action on a connection that was not open
                         println!("[x] irc conn appears closed.");
                         break;
                     }
                 }
 
+                // received a cancel signal in the token
                 _ = cancel_token.cancelled() => {
-                    println!("[{}] irc read loop cancelled gracefully, leaving channel...", get_current_time());
+                    println!("[{}] irc read loop cancellation initiated - sending `PART` command.", get_current_time());
+                    match self.write(&format!("PART #{}", self.channel)).await {
+                        Err(e) => eprintln!("[{}] failed to send `PART` command to '{}': {:?}", get_current_time(), self.channel, e),
+                            _ => (),
+                    }
 
-                    // do we care if this thread panics?? idk.
-                    self.write(&format!("PART #{}", self.channel)).await.unwrap();
                     break;
                 }
             }
         }
+
+        Ok(())
     }
 
-    pub async fn action_irc<'a>(&self, data: &IrcMessage<'a>, parser: &IrcParser) {
+    /// Determine the type of message sent and process it accordingly
+    pub async fn action_irc<'a>(
+        &self,
+        data: &IrcMessage<'a>,
+        parser: &IrcParser,
+    ) -> anyhow::Result<()> {
         match data.command {
             IRC_COMMAND_PING => {
                 println!("[{}] rx KEEPALIVE", get_current_time());
@@ -119,25 +133,34 @@ impl Client {
 
             IRC_COMMAND_CHAT => {
                 if let Ok(chat) = parser.get_chat(&data) {
-                    let chatter = chat.display_name;
-                    let channel = chat.channel;
                     let message = chat.message;
+                    if message.to_lowercase().contains(NEEDLE) {
+                        let chatter = chat.display_name;
+                        let channel = chat.channel;
+                        println!(
+                            "[{}] in [{}] PRIVMSG::{}: '{}'",
+                            get_current_time(),
+                            channel,
+                            chatter,
+                            message,
+                        );
 
-                    println!(
-                        "[{}] in [{}] PRIVMSG::{}: '{}'",
-                        get_current_time(),
-                        channel,
-                        chatter,
-                        message,
-                    );
+                        let pool = redis_pool().await?;
+                        pool.increment(channel, chatter).await?;
+                    }
                 } else {
                     eprintln!("[x] err parsing chat msg: {:?}", data);
                 }
             }
+
+            // we may want to handle more cases here
             _ => (),
         }
+
+        Ok(())
     }
 
+    /// Send a message outbound to the socket
     pub async fn write(&self, data: &str) -> Result<()> {
         let msg = Message::text(data.to_string());
         Self::print(&msg);
@@ -145,6 +168,7 @@ impl Client {
         Ok(self.writer.lock().await.send(msg).await?)
     }
 
+    /// Read an incoming message from the socket
     pub async fn read(reader: &Reader) -> Option<Message> {
         let mut lock = reader.lock().await;
 
@@ -155,9 +179,14 @@ impl Client {
         None
     }
 
+    /// Debug print helper function - used to log a `Message` struct
     fn print(data: &Message) {
         let curr = get_current_time();
-        println!("[{}] SENT: {:?}", curr, data.to_text().unwrap_or("FAILED_TEXT_CONV"));
+        println!(
+            "[{}] SENT: {:?}",
+            curr,
+            data.to_text().unwrap_or("FAILED_TEXT_CONV")
+        );
     }
 }
 

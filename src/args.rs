@@ -26,7 +26,7 @@ pub fn parse_cli_args() -> Arc<Cli> {
     let args = Arc::new(Cli::parse());
 
     // debug printer
-    println!("[+] COMMAND LINE: {:?}", args);
+    // println!("[+] COMMAND LINE: {:?}", args);
     
     let args_clone = args.clone();
     for token in [&args_clone.app_token, &args_clone.user_token].iter() {

@@ -18,6 +18,7 @@ pub struct IrcSource<'a> {
     pub host: Option<&'a str>,
 }
 
+#[allow(dead_code)]
 /// Specific data to extract from messages sent with the `PRIVMSG` command
 #[derive(Debug, Clone)]
 pub struct ChatData<'a> {
@@ -38,9 +39,26 @@ pub enum ParseError {
     NotPrivmsg,
 }
 
-/// Main parser struct.
+/// Basic parser implementation structure.
 ///
-/// > Stateless
+/// This structure is stateless; this implementation uses a stateful lexer/tokenizer which splits
+/// input into tokens to create the AST - this parser ultimately provides the higher-order
+/// abstractions for AST comprehension.
+///
+/// # Explanation for the names of methods
+///
+/// - `parse_socket_data` is the main 'parsing' method; this is called to create and return the
+/// IrcMessage AST representation of an IRC message. This method takes a raw &str as its argument.
+/// - `get_*`-prefixed methods are for retrieving certain elements of a parsed IRC message. These
+/// methods take an IrcMessage isntance as their argument.
+/// - `read_*`-prefixed methods are intended for lexer-based calls. These methods take a Lexer
+/// instance as their argument.
+///
+/// # Note - a TODO, perhaps
+///
+/// This structure is intentionally left empty for a greater degree of flexibility, though it might
+/// greatly simplify usage if regularly-utilized structures (e.g `IrcMessage` and `Lexer`) were
+/// provided as fields on the struct...
 pub struct IrcParser;
 
 impl IrcParser {
@@ -48,14 +66,15 @@ impl IrcParser {
         Self
     }
 
-    /// Parses a raw incoming data from a twitch IRC message into its constituents (an AST, if you
-    /// will).
+    /// Handles the initial removal of 'unnecessary' newline characters
     pub fn parse_socket_data<'a>(&'a self, input: &'a str) -> Result<IrcMessage<'a>, ParseError> {
         let input = input.trim_end_matches('\n').trim_end_matches('\r');
         let mut lexer = Lexer::new(input);
         self.read_notification(&mut lexer)
     }
 
+    /// Given the output from a `self.parse_socket_data()` call, transforms an `IrcMessage` AST
+    /// into a `ChatData` struct.
     pub fn get_chat<'a>(&'a self, message: &IrcMessage<'a>) -> Result<ChatData<'a>, ParseError> {
         if message.command != "PRIVMSG" {
             return Err(ParseError::NotPrivmsg);
@@ -82,10 +101,12 @@ impl IrcParser {
         })
     }
 
+    /// Retrieves the channel field from an `IrcMessage` struct
     pub fn get_channel<'a>(&'a self, message: &IrcMessage<'a>) -> Result<&'a str, ParseError> {
         Ok(message.params.get(0).ok_or(ParseError::InvalidFormat)?)
     }
 
+    /// Reads the notification metadata into an `IrcMessage` AST struct
     pub fn read_notification<'a>(
         &'a self,
         lexer: &mut Lexer<'a>,
@@ -149,10 +170,7 @@ impl IrcParser {
         let nick = &source_str[..nick_end];
 
         if nick_end == source_str.len() {
-            // ONLY `nick` present; no `user@host`.
-            //
-            // I don't think this function is called on websocket messages that this would apply to
-            // but its just in case.
+            // ONLY `nick` (or similarly-positioned field) is present
             return Ok(IrcSource {
                 nick,
                 user: None,

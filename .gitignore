@@ -1,2 +1,6 @@
 /target
 /**/*-old.rs
+
+/appendonlydir
+dump.rdb
+
