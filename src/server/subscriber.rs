@@ -99,10 +99,12 @@ pub async fn subscribe_stream_event(
     } else {
         // return the successfully retrieved information
         let unserialized_body: Value = serde_json::from_str(&res.text().await?)?;
-        let status = unserialized_body["subscription"]["status"].clone();
-        let subscription_type = unserialized_body["subscription"]["type"].clone();
-        let broadcaster_id =
-            unserialized_body["subscription"]["condition"]["broadcaster_id"].clone();
+
+        let status = &unserialized_body["data"][0]["status"].as_str().unwrap();
+        let subscription_type = &unserialized_body["data"][0]["type"].as_str().unwrap();
+        let broadcaster_id = &unserialized_body["data"][0]["condition"]["broadcaster_user_id"]
+            .as_str()
+            .unwrap();
 
         println!(
             "[{}] recv new: STATUS '{}' -> {} (for uid '{}')",

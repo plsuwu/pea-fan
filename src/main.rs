@@ -1,19 +1,7 @@
 use args::parse_cli_args;
-use parser::{lexer, test_parser_function};
-use server::{
-    close_websocket, open_websocket,
-    subscriber::{self, get_active_hooks, get_user_id},
-};
-use socket::{client::Client, settings::ConnectionSettings};
-use std::{
-    collections::HashMap,
-    process::exit,
-    sync::{Arc, RwLock},
-};
-use tokio::{
-    io,
-    time::{Sleep, sleep},
-};
+use server::subscriber::{self, get_active_hooks};
+use std::process::exit;
+use tokio::io;
 
 mod args;
 mod db;
@@ -24,36 +12,25 @@ mod socket;
 extern crate chrono;
 // let args = args::parse_cli_args();
 
-// pub const CHANNELS: [&'static str; 12] = [
-//     "cchiko_",
-//     "sleepiebug",
-//     "womfyy",
-//     "snoozy",
-//     "vacu0usly",
-//     "parasi",
-//     "liljuju",
-//     "kyoharuvt",
-//     "myramors",
-//     "lcolonq",
-//     "batatvideogames",
-//     "myrmidon",
-// ];
-
-pub const CHANNELS: [&'static str; 1] = [
-    // "cchiko_",
+pub const CHANNELS: [&'static str; 13] = [
+    "cchiko_",
     "sleepiebug",
-//     // "womfyy",
-//     // "snoozy",
-//     // "vacu0usly",
-//     // "parasi",
-//     // "liljuju",
-//     // "kyoharuvt",
-//     // "myramors",
-//     // "lcolonq",
-//     // "batatvideogames",
-    // "myrmidon",
+    "myrmidon",
+    "lcolonq",
+    "liljuju",
+    "parasi",
+    "snoozy",
+    "vacu0usly",
+    "womfyy",
+    "kyoharuvt",
+    "myramors",
+    "batatvideogames",
+    "chocojax",
 ];
-// const CHANNELS: [&'static str; 2] = ["sleepiebug", "plss"];
+
+// pub const CHANNELS: [&'static str; 1] = [
+//     "sleepiebug",
+// ];
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -77,7 +54,7 @@ async fn main() -> io::Result<()> {
             exit(1);
         }
     }
-    
+
     // nuke all active subscriptions on startup - kind of 'resets' our subscription state;
     // we realistically shouldn't have to do this very often.
     if let Some(active_subscriptions) = get_active_hooks(&args.app_token).await {

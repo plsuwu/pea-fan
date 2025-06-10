@@ -180,12 +180,13 @@ impl Client {
     }
 
     /// Debug print helper function - used to log a `Message` struct
+    #[allow(dead_code, unused_variables)]
     fn print(data: &Message) {
-        let curr = get_current_time();
-        let text = data.to_text().unwrap_or("FAILED_TEXT_CONV");
-        if !text.contains("PASS oauth:") {
-            println!("[{}] SENT: {:?}", curr, text);
-        }
+        // let curr = get_current_time();
+        // let text = data.to_text().unwrap_or("FAILED_TEXT_CONV");
+        // if !text.contains("PASS oauth:") {
+        //     println!("[{}] SENT: {:?}", curr, text);
+        // }
     }
 }
 
