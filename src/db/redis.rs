@@ -10,7 +10,13 @@ use crate::server::RedisQueryResponse;
 
 pub type RedisPoolResult<T> = Result<T, redis::RedisError>;
 
+#[cfg(not(feature = "production"))]
 const REDIS_URL: &'static str = "redis://127.0.0.1:6380";
+
+#[cfg(feature = "production")]
+const REDIS_URL: &'static str = "redis://leaderboard_store:6380";
+
+
 static REDIS_CONNECTION_POOL: LazyLock<OnceCell<RedisPool>> = LazyLock::new(OnceCell::new);
 
 pub async fn redis_pool() -> RedisPoolResult<&'static RedisPool> {

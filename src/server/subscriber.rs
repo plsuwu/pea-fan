@@ -9,13 +9,15 @@ use reqwest::header::{AUTHORIZATION, HeaderMap};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-// const CALLBACK_ROUTE: &'static str = "https://api.piss.fan/webhook-global";
+#[cfg(feature = "production")]
+const CALLBACK_ROUTE: &'static str = "https://api.piss.fan/webhook-global";
+
+#[cfg(not(feature = "production"))]
 const CALLBACK_ROUTE: &'static str = "https://pls.ngrok.io/webhook-global";
 
 const API_GQL_URL: &'static str = "https://gql.twitch.tv/gql";
-const BROWSER_CLIENT_ID: &'static str = "kimne78kx3ncx6brgo4mv6wki5h1ko";
-
 const API_HELIX_URL: &'static str = "https://api.twitch.tv/helix";
+const BROWSER_CLIENT_ID: &'static str = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 const TESTING_CLIENT_ID: &'static str = "7jz14ixoeglm6aq8eott8196p4g5ox";
 
 /// Subcribes to the required stream webhook events
