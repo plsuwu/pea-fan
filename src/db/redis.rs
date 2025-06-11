@@ -1,11 +1,9 @@
 extern crate redis;
-use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use redis::{AsyncCommands, AsyncConnectionConfig, Value, from_redis_value};
 use redis::{Client, aio::ConnectionManager};
+use redis::{Value, from_redis_value};
 use serde::{Deserialize, Serialize};
-use tokio::runtime::Handle;
 use tokio::sync::OnceCell;
 
 use crate::server::RedisQueryResponse;
@@ -71,17 +69,27 @@ impl RedisPool {
         pipe.get(chan_total);
         pipe.zrevrange_withscores(chan_leaderboard, 0, 5);
 
-        let res_outer: Vec<Value> = pipe.query_async(&mut conn).await?;
-        let total: String = from_redis_value(&res_outer[0])?;
-        let leaderboard_vec: Vec<String> = from_redis_value(&res_outer[1])?;
-        let leaderboard = Self::pair_score_with_user(leaderboard_vec);
+        let query_result: Vec<Value> = pipe.query_async(&mut conn).await?;
+        let maybe_leaderboard: Result<Vec<String>, _> = from_redis_value(&query_result[1]);
+        match maybe_leaderboard {
+            Ok(leaderboard_vec) => {
+                let total: String = from_redis_value(&query_result[0])?;
+                let leaderboard = Self::pair_score_with_user(leaderboard_vec);
 
-        Ok(RedisQueryResponse {
-            total,
-            err_msg: "",
-            leaderboard,
-            err: false,
-        })
+                Ok(RedisQueryResponse {
+                    total,
+                    err_msg: "".to_string(),
+                    leaderboard,
+                    err: false,
+                })
+            }
+            Err(e) => Ok(RedisQueryResponse {
+                total: "0".to_string(),
+                err_msg: format!("PARSE_ERR({})", e),
+                leaderboard: vec![("".to_string(), 0)],
+                err: true,
+            }),
+        }
     }
 
     pub async fn get_user_data(&self, user: &str) -> RedisPoolResult<RedisQueryResponse> {
@@ -103,7 +111,7 @@ impl RedisPool {
 
         Ok(RedisQueryResponse {
             total,
-            err_msg: "",
+            err_msg: "".to_string(),
             leaderboard,
             err: false,
         })

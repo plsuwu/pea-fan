@@ -419,7 +419,7 @@ pub struct ConditionMultiUID {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ConditionBroadcasterUID {
     /// User ID of the channel for which to receive chat message events for
-    broadcaster_user_id: String,
+    pub broadcaster_user_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -435,6 +435,12 @@ pub struct Subscription {
     pub cost: isize,
     // condition: Condition,
     pub created_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ChallengeRequest {
+    pub challenge: String,
+    pub subscription: SubscriptionGenericData, 
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -466,6 +472,11 @@ pub struct SubscriptionGenericData {
     pub r#type: String,
     pub version: String,
     pub cost: usize,
+
+    /// Note that this doesn't handle for the case where we need to provide a `user_id` string.
+    ///
+    /// We don't CURRENTLY need it but this should be kept in mind if we transition functionality
+    /// away from IRC over websockets for reading chat
     pub condition: ConditionBroadcasterUID,
     pub transport: Transport,
     pub created_at: String,

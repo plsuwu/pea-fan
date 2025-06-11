@@ -24,11 +24,13 @@ use std::collections::HashMap;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, LazyLock, Mutex, RwLock};
+use subscriber::{get_user_data, stream_online};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use types::{
-    StreamCommonEvent, StreamCommonSubscription, StreamOfflinePayload, StreamOnlinePayload,
+    ChallengeRequest, StreamCommonEvent, StreamCommonSubscription, StreamOfflinePayload,
+    StreamOnlinePayload,
 };
 
 /**
@@ -53,6 +55,28 @@ impl IrcHandles {
         IrcHandles {
             connections: HashMap::new(),
         }
+    }
+
+    pub fn get_connection_state(&self) -> Vec<(String, bool)> {
+        self.connections
+            .iter()
+            .map(|(chan, conn)| (chan.clone(), !conn.handle.is_finished()))
+            .collect()
+    }
+
+    pub fn get_connection_summary(&self) -> (Vec<String>, Vec<String>) {
+        let mut active = Vec::new();
+        let mut inactive = Vec::new();
+
+        for (channel, conn) in &self.connections {
+            if conn.handle.is_finished() {
+                inactive.push(channel.clone());
+            } else {
+                active.push(channel.clone());
+            }
+        }
+
+        (active, inactive)
     }
 
     pub fn is_active(&self, channel: &str) -> bool {
@@ -158,11 +182,15 @@ pub async fn serve(tx: oneshot::Sender<(SocketAddr, Option<String>)>) {
     let app = Router::new()
         .route("/webhook-global", post(webhook_handler))
         .route_layer(middleware::from_fn(verify::verify_sender_ident))
-        .route("/", get(root))
-        .route("/active-sockets", post(activity))
+        // .route("/", get(root))
+        .route(
+            "/",
+            get(|| async { "root endpoint has no content yet, leave me be or i will scream" }),
+        )
+        .route("/active-sockets", get(activity))
         .route("/ceilings/channel", get(get_channel))
         .route("/ceilings/user", get(get_user))
-        .route("/health", get(|| async { "OK" }));
+        .route("/checkhealth", get(|| async { "SERVER_OK" }));
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), SERVER_PORT);
     let listener = tokio::net::TcpListener::bind(bind_addr).await.unwrap();
@@ -171,13 +199,33 @@ pub async fn serve(tx: oneshot::Sender<(SocketAddr, Option<String>)>) {
     axum::serve(listener, app).await.unwrap();
 }
 
-pub async fn root() -> &'static str {
-    "://"
+#[derive(Serialize, Deserialize)]
+pub struct RootSitemap {
+    endpoints: Vec<String>,
 }
 
-#[allow(unused_variables)]
-pub async fn activity(headers: HeaderMap) -> &'static str {
-    "unimplemented :("
+// pub async fn root() -> Json<RootSitemap> {
+// }
+
+#[derive(Serialize, Deserialize)]
+pub struct ActivitySummary {
+    active_count: usize,
+    active_broadcasters: Vec<String>,
+}
+
+// #[allow(unused_variables)]
+pub async fn activity() -> Json<ActivitySummary> {
+    let handles_guard = IRC_HANDLES.lock().unwrap();
+    let (active, _) = handles_guard.get_connection_summary();
+
+    println!("active: {:#?}", active);
+
+    let summary = ActivitySummary {
+        active_count: active.len(),
+        active_broadcasters: active,
+    };
+
+    Json(summary)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -193,7 +241,7 @@ pub struct GetUserQueryParams {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RedisQueryResponse {
     pub err: bool,
-    pub err_msg: &'static str,
+    pub err_msg: String,
     pub total: String,
     pub leaderboard: Vec<(String, isize)>,
 }
@@ -202,15 +250,28 @@ pub async fn get_channel(Query(query): Query<GetChannelQueryParams>) -> Json<Red
     if !CHANNELS.contains(&query.name.as_str()) {
         Json(RedisQueryResponse {
             err: true,
-            err_msg: "NOT_TRACKED",
+            err_msg: "NOT_TRACKED".to_string(),
             total: "0".to_string(),
             leaderboard: Vec::new(),
         })
     } else {
         let redis = redis_pool().await.unwrap();
-        let res = redis.get_channel_data(&query.name).await.unwrap();
+        let res = redis.get_channel_data(&query.name).await;
+        match res {
+            Ok(r) => Json(r),
+            Err(e) => {
+                println!("[x] got error from redis: {:?}", e);
 
-        Json(res)
+                // needs proper handling (e.g if a tracked chanel has no data)
+                // but asdljk;ffasjdkl;jlfk;dsjl;kf for now
+                Json(RedisQueryResponse {
+                    err: true,
+                    err_msg: format!("REDIS_ERROR({})", e),
+                    total: "0".to_string(),
+                    leaderboard: Vec::new(),
+                })
+            }
+        }
     }
 }
 
@@ -219,7 +280,7 @@ pub async fn get_user(Query(query): Query<GetUserQueryParams>) -> Json<RedisQuer
     match redis.get_user_data(&query.name).await {
         Err(_) => Json(RedisQueryResponse {
             err: true,
-            err_msg: "NOT_TRACKED",
+            err_msg: "NOT_TRACKED".to_string(),
             total: "0".to_string(),
             leaderboard: Vec::new(),
         }),
@@ -242,14 +303,67 @@ pub async fn webhook_handler(headers: HeaderMap, body: VerifiedBody) -> Result<B
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     match webhook_msg_type {
-        WebhookMessageType::Verify => Ok(get_challenge_res(notification)
-            .unwrap_or("".to_string())
-            .into()),
+        WebhookMessageType::Verify => {
+            //
+            // notification is a challenge request, verify to confirm the webhook
+            //
+            // (big ugly routine - maybe pull this out but i want to finish the functionality
+            // for now!!)
+            //
+            let deserialization_result: serde_json::Result<ChallengeRequest> =
+                serde_json::from_value(notification);
+            if let Ok(challenge_req) = deserialization_result {
+                let broadcaster_id = challenge_req
+                    .subscription
+                    .condition
+                    .broadcaster_user_id
+                    .clone();
+                let broadcaster_data = get_user_data(&parse_cli_args().app_token, &broadcaster_id)
+                    .await
+                    .unwrap();
+                if challenge_req.subscription.r#type == "stream.offline" {
+                    // if we're receiving this websocket event, we can probe to see if the
+                    // broadcaster is live and open a socket if required.
+                    let is_streaming =
+                        stream_online(&parse_cli_args().app_token, &broadcaster_id).await;
+
+                    match is_streaming {
+                        Ok(true) => {
+                            tokio::task::spawn(async move {
+                                if let Err(e) = open_websocket(&broadcaster_data.login).await {
+                                    eprintln!(
+                                        "[x] failed to open websocket for '{}': '{:?}'",
+                                        &broadcaster_id, e
+                                    )
+                                }
+                            });
+                        }
+                        Err(e) => {
+                            println!(
+                                "[x] failed to retrieve broadcaster '{}' online state: {:?}",
+                                broadcaster_data.login, e
+                            );
+                        }
+                        _ => (),
+                    }
+                }
+
+                println!(
+                    "[+] responding to challenge for '{}-{}' with '{}'",
+                    broadcaster_data.id, challenge_req.subscription.r#type, challenge_req.challenge
+                );
+
+                Ok(challenge_req.challenge.into())
+            } else {
+                Ok("".to_string().into())
+            }
+        }
 
         WebhookMessageType::Notify => Ok(read_notification(notification).unwrap().into()),
-
         WebhookMessageType::Revoke => {
-            println!("");
+            // idk what to do with this yet but we can cross this bridge when we come to it i
+            // think
+            println!("[x] received a 'revoke' type token: {:#?}", notification);
             Ok("".into())
         }
     }
@@ -426,14 +540,4 @@ pub async fn run_websocket_conn(
     socket.loop_read(cancel_token).await?;
 
     Ok(())
-}
-
-/// Returns the challenge string from the remote verification request
-pub fn get_challenge_res(body: Value) -> Option<String> {
-    let challenge_str = body["challenge"].as_str();
-    if let Some(string) = challenge_str {
-        Some(string.to_owned())
-    } else {
-        None
-    }
 }

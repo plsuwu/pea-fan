@@ -1,15 +1,11 @@
 #![allow(non_snake_case, dead_code, unused_variables)]
 
-use super::types::{
-    StreamGenericRequest, StreamGenericRequestType, SubscriptionGenericData,
-    SubscriptionGenericResponse,
-};
-use crate::{server::KEY_DIGEST, socket::client::get_current_time};
+use super::types::{StreamGenericRequest, StreamGenericRequestType, SubscriptionGenericResponse};
+use crate::server::KEY_DIGEST;
+use crate::socket::client::get_current_time;
 use anyhow::anyhow;
-use reqwest::{
-    Client, StatusCode,
-    header::{AUTHORIZATION, HeaderMap},
-};
+use reqwest::Client;
+use reqwest::header::{AUTHORIZATION, HeaderMap};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -203,6 +199,74 @@ pub async fn get_active_hooks(token: &str) -> Option<Vec<Value>> {
 //     todo!();
 // }
 
+// let broadcaster_login = get_user_data(token, broadcaster_id).await?.login;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StreamsQueryData {
+    pub id: String,
+    pub user_id: String,
+    pub user_login: String,
+    pub user_name: String,
+    pub game_id: String,
+    pub game_name: String,
+    pub r#type: String,
+    pub title: String,
+    pub viewer_count: usize,
+    pub started_at: String,
+    pub language: String,
+    pub thumbnail_url: String,
+
+    /// Deprecated field, will always be empty
+    pub tag_ids: Vec<String>,
+    pub tags: Vec<String>,
+    pub is_mature: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PaginationData {
+    pub cursor: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StreamsQueryResponse {
+    pub data: Vec<StreamsQueryData>,
+    pub pagination: PaginationData,
+}
+
+pub async fn stream_online(token: &str, broadcaster_id: &str) -> anyhow::Result<bool> {
+    let client = reqwest::Client::new();
+    let headers = build_headers(token)?;
+    let uri = format!("{}/streams?user_id={}", API_HELIX_URL, broadcaster_id);
+
+    let res = client.get(uri).headers(headers).send().await?;
+    if res.status() != 200 {
+        return Err(anyhow!(format!(
+            "Status of request was not 200/OK: {:#?}",
+            res
+        )));
+    }
+
+    let maybe_data: serde_json::Result<StreamsQueryResponse> =
+        serde_json::from_str(&(res.text().await?));
+
+    match maybe_data {
+        Ok(data) => {
+            if data.data.len() > 0 && data.data[0].r#type == "live" {
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        }
+        Err(e) => {
+            eprintln!(
+                "[x] failed to parse streams query response for '{}': {:?}",
+                broadcaster_id, e
+            );
+            Err(anyhow!(e))
+        }
+    }
+}
+
 fn build_headers(token: &str) -> anyhow::Result<HeaderMap> {
     let mut headers = HeaderMap::new();
     headers.insert("client-id", TESTING_CLIENT_ID.try_into().unwrap());
@@ -239,6 +303,43 @@ pub async fn get_user_id(login: &str) -> anyhow::Result<String> {
             body
         )));
     }
+}
+
+pub async fn get_user_data(token: &str, user_id: &str) -> anyhow::Result<UsersQueryData> {
+    let headers = build_headers(token)?;
+    let uri = format!("{}/users?id={}", API_HELIX_URL, user_id);
+
+    let client = reqwest::Client::new();
+    let res = client.get(uri).headers(headers).send().await?;
+
+    if res.status() != 200 {
+        return Err(anyhow!(format!(
+            "Status of request was not 200/OK: {:#?}",
+            res
+        )));
+    }
+
+    let body: HelixUsersQuery = serde_json::from_str(&res.text().await?)?;
+    Ok(body.data[0].clone())
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct HelixUsersQuery {
+    pub data: Vec<UsersQueryData>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct UsersQueryData {
+    pub id: String,
+    pub login: String,
+    pub display_name: String,
+    pub r#type: String,
+    pub broadcaster_type: String,
+    pub description: String,
+    pub profile_image_url: String,
+    pub offline_image_url: String,
+    pub view_count: usize,
+    pub created_at: String,
 }
 
 /// Serde-derivable struct representing the GQL query JSON body
