@@ -1095,6 +1095,7 @@ dependencies = [
  "clap",
  "futures-util",
  "hex",
+ "http",
  "rand",
  "redis",
  "reqwest",

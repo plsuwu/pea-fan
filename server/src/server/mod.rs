@@ -15,6 +15,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::middleware;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use http::{Method, Request, Response, header};
 use ring::digest;
 use ring::hmac::{self, Key};
 use ring::rand;
@@ -28,6 +29,7 @@ use subscriber::{get_user_data, stream_online};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use tower_http::cors::{Any, CorsLayer};
 use types::{
     ChallengeRequest, StreamCommonEvent, StreamCommonSubscription, StreamOfflinePayload,
     StreamOnlinePayload,
@@ -179,6 +181,10 @@ impl Into<&str> for WebhookMessageType {
 
 /// Server listener
 pub async fn serve(tx: oneshot::Sender<(SocketAddr, Option<String>)>) {
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_origin(Any);
+
     let app = Router::new()
         .route("/webhook-global", post(webhook_handler))
         .route_layer(middleware::from_fn(verify::verify_sender_ident))
@@ -191,8 +197,7 @@ pub async fn serve(tx: oneshot::Sender<(SocketAddr, Option<String>)>) {
         .route("/ceilings/channel", get(get_channel))
         .route("/ceilings/user", get(get_user))
         .route("/checkhealth", get(|| async { "SERVER_OK" }))
-        .layer(Cors
-        ;
+        .layer(cors);
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), SERVER_PORT);
     let listener = tokio::net::TcpListener::bind(bind_addr).await.unwrap();
