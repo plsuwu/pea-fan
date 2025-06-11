@@ -1,20 +1,20 @@
 import type { PageLoad } from './$types';
 
-const API_URL = "https://api.piss.fan/ceilings/channel";
+const API_URL = 'https://api.piss.fan/ceilings/channel';
 
 type LeaderboardEntry = [String, number];
 
 interface ChannelResponse {
-    err: boolean,
-    err_msg: string,
-    total: string,
-    leaderboard: Array<LeaderboardEntry>
+	err: boolean;
+	err_msg: string;
+	total: string;
+	leaderboard: Array<LeaderboardEntry>;
 }
 
-export const load: PageLoad = async ({ params }) => {
+export const load: PageLoad = async () => {
 	const fans = [
-		'cchiko_',
 		'sleepiebug',
+		'cchiko_',
 		'myrmidon',
 		'lcolonq',
 		'liljuju',
@@ -27,20 +27,17 @@ export const load: PageLoad = async ({ params }) => {
 		'batatvideogames',
 		'chocojax'
 	];
-    
-    const scores = fans.map(async (fan) => {
-        const uri = `${API_URL}?name=${fan}`;
-        const res = await fetch(uri, {
-            method: 'GET',
-        });
 
-        const body: ChannelResponse = await res.json();
-        if (body.err === true) {
-            return null;
-        }
-    });
+	const uri = `${API_URL}?name=${fans[0]}`;
+
+	const req = await fetch(uri, {
+		method: 'GET'
+	});
+
+	const body = await req.json();
 
 	return {
-		fans
+		body,
+		broadcaster: fans[0]
 	};
 };
