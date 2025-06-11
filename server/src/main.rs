@@ -15,7 +15,7 @@ extern crate chrono;
 pub const CHANNELS: [&'static str; 13] = [
     "cchiko_",
     "sleepiebug",
-    "myrmidon",
+    "myrmidonvt",
     "lcolonq",
     "liljuju",
     "parasi",
