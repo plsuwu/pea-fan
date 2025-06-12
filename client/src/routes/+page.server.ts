@@ -52,7 +52,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 const getActive = async (): Promise<ActiveSocketResponse> => {
-	const uri = `${API_HOSTNAME}/${API_OPEN_WS}`;
+	const uri = `https://${API_HOSTNAME}/${API_OPEN_WS}`;
 	const res = await fetch(uri, {
 		method: 'GET'
 	});
