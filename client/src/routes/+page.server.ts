@@ -104,23 +104,3 @@ const getUserIdFromLogin = async (login: string) => {
 	const { data } = await res.json();
 	return await data.channel.id;
 };
-
-// pub fn new(login: &str) -> Self {
-//     let variables = Variables {
-//         channelLogin: login.to_string(),
-//     };
-//
-//     let extensions = Extensions {
-//         persistedQuery: PersistedQuery {
-//             version: 1,
-//             sha256Hash: "fa66abee26833eb414516b617bc3b051664e57ecc816704fce0b91344cae6ecd"
-//                 .to_string(),
-//         },
-//     };
-//
-//     Self {
-//         operationName: "Chat_ChannelData".to_string(),
-//         variables,
-//         extensions,
-//     }
-// }
