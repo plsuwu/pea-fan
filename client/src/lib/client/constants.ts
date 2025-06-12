@@ -14,13 +14,11 @@ export interface ActiveSocketResponse {
 export const CHANNELS = [
 	'sleepiebug',
 	'parasi',
-	'unipiu',
 	'cchiko_',
 	'liljuju',
 	'vacu0usly',
 
 	'bexvalentine',
-	'rena_chuu',
 
 	'snoozy',
 	'womfyy',
@@ -28,7 +26,6 @@ export const CHANNELS = [
 
 	'batatvideogames',
 	'myrmidonvt',
-	'kokopimento',
 	'myramors',
 	'sheriff_baiken',
 

@@ -28,7 +28,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				}
 
 				const channelData = await getChannelData(channel);
-                channelStatus.total = channelData.total ?? 0;
+                channelStatus.total = channelData.total;
 				return channelStatus;
 			})
 		);
@@ -100,7 +100,6 @@ const getUserIdFromLogin = async (login: string) => {
 		body: JSON.stringify(body)
 	});
 
-	// console.log(await res.json());
 	const { data } = await res.json();
 	return await data.channel.id;
 };
