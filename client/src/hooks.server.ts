@@ -22,7 +22,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.locals.channel = subdomain;
 		return resolve(event);
 	} else {
-		const redirectUrl = `${ROOT_HOSTNAME}${event.url.pathname}${event.url.search}`;
+		const redirectUrl = `https://${ROOT_HOSTNAME}${event.url.pathname}${event.url.search}`;
 		redirect(302, redirectUrl);
 	}
 };

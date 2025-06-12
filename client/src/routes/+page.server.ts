@@ -28,7 +28,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				}
 
 				const channelData = await getChannelData(channel);
-                channelStatus.total = channelData.total;
+                channelStatus.total = channelData.total ?? 0;
 				return channelStatus;
 			})
 		);
