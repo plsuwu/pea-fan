@@ -2,7 +2,7 @@ pub mod midware;
 pub mod subscriber;
 pub mod types;
 
-use crate::CHANNELS;
+use crate::{TrackedChannels, CHANNELS};
 use crate::args::parse_cli_args;
 use crate::db::redis::redis_pool;
 use crate::server::midware::verify;
@@ -194,6 +194,7 @@ pub async fn serve(tx: oneshot::Sender<(SocketAddr, Option<String>)>) {
             get(|| async { "root endpoint has no content yet, leave me be or i will scream" }),
         )
         .route("/active-sockets", get(activity))
+        .route("/channels", get(get_tracked_channels))
         .route("/ceilings/channel", get(get_channel))
         .route("/ceilings/user", get(get_user))
         .route("/checkhealth", get(|| async { "SERVER_OK" }))
@@ -251,6 +252,10 @@ pub struct RedisQueryResponse {
     pub err_msg: String,
     pub total: String,
     pub leaderboard: Vec<(String, isize)>,
+}
+
+pub async fn get_tracked_channels() -> Json<TrackedChannels> {
+    Json(CHANNELS)
 }
 
 pub async fn get_channel(Query(query): Query<GetChannelQueryParams>) -> Json<RedisQueryResponse> {

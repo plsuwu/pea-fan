@@ -12,19 +12,32 @@ mod socket;
 extern crate chrono;
 // let args = args::parse_cli_args();
 
-pub const CHANNELS: [&'static str; 13] = [
-    "cchiko_",
+pub const TRACKED_CHANNELS_COUNT: usize = 18;
+pub type TrackedChannels = [&'static str; TRACKED_CHANNELS_COUNT];
+
+pub const CHANNELS: TrackedChannels = [
     "sleepiebug",
-    "myrmidonvt",
-    "lcolonq",
-    "liljuju",
     "parasi",
-    "snoozy",
+    "unipiu",
+    "cchiko_",
+    "liljuju",
     "vacu0usly",
+
+    "bexvalentine",
+    "rena_chuu",
+
+    "snoozy",
     "womfyy",
     "kyoharuvt",
-    "myramors",
+
     "batatvideogames",
+    "myrmidonvt",
+    "kokopimento",
+    "myramors",
+    "sheriff_baiken",
+
+
+    "lcolonq",
     "chocojax",
 ];
 

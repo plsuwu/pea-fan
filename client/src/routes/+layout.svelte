@@ -4,6 +4,6 @@
 	let { children } = $props();
 </script>
 
-<div class="h-screen w-screen flex flex-row items-center justify-center -my-48">
+<div class="h-screen w-screen flex flex-row justify-center">
 	{@render children()}
 </div>
