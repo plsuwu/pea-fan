@@ -52,7 +52,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 const getActive = async (): Promise<ActiveSocketResponse> => {
-	const uri = `${API_URL}/${API_OPEN_WS}`;
+	const uri = `${API_HOSTNAME}/${API_OPEN_WS}`;
 	const res = await fetch(uri, {
 		method: 'GET'
 	});
@@ -62,7 +62,7 @@ const getActive = async (): Promise<ActiveSocketResponse> => {
 };
 
 const getChannelData = async (channel: string) => {
-	const uri = `https://${API_HOSTNAME}/ceilings/channel?name=${channel}`;
+	const uri = `http://${API_HOSTNAME}/ceilings/channel?name=${channel}`;
 	const res = await fetch(uri, {
 		method: 'GET'
 	});
