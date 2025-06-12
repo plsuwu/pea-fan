@@ -62,7 +62,7 @@ const getActive = async (): Promise<ActiveSocketResponse> => {
 };
 
 const getChannelData = async (channel: string) => {
-	const uri = `http://${API_HOSTNAME}/ceilings/channel?name=${channel}`;
+	const uri = `https://${API_HOSTNAME}/ceilings/channel?name=${channel}`;
 	const res = await fetch(uri, {
 		method: 'GET'
 	});
