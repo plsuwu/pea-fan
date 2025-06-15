@@ -71,7 +71,7 @@ pub async fn handle_verify(notification: Value) -> Result<Body, StatusCode> {
 
 pub async fn handle_open_on_rx_offline(broadcaster_id: &str, broadcaster_login: &str) {
     let token = get_cli_args();
-    match check_stream_state(&token.user_token, broadcaster_id).await {
+    match check_stream_state(&token.app_token, broadcaster_id).await {
         Ok(true) => spawn_websocket(broadcaster_login),
         Err(e) => {
             println!(
