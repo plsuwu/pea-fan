@@ -1,3 +1,8 @@
+use super::super::constants::{IRC_COMMAND_CHAT, IRC_COMMAND_JOIN, IRC_COMMAND_PING};
+use super::super::constants::{KEEPALIVE_RESPONSE, NEEDLE};
+use crate::db::redis::redis_pool;
+use crate::parser::parser::{self, IrcMessage, IrcParser};
+use crate::socket::settings::ConnectionSettings;
 use chrono::prelude::*;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
@@ -9,10 +14,6 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use tokio_util::sync::CancellationToken;
 
-use crate::db::redis::redis_pool;
-use crate::parser::parser::{self, IrcMessage, IrcParser};
-use crate::socket::settings::ConnectionSettings;
-
 pub type Writer = Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>;
 pub type Reader = Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>;
 
@@ -22,15 +23,6 @@ pub struct Client {
     pub reader: Reader,
     channel: String,
 }
-
-const NEEDLE: &'static str = "piss";
-const KEEPALIVE_RESPONSE: &'static str = "PONG :tmi.twitch.tv";
-
-// Should expand on these cases we're handling - this is going to be a long-running process,
-// after all...
-const IRC_COMMAND_PING: &'static str = "PING";
-const IRC_COMMAND_CHAT: &'static str = "PRIVMSG";
-const IRC_COMMAND_JOIN: &'static str = "JOIN";
 
 impl Client {
     /// Creates the RW streams for the given URL
@@ -69,9 +61,11 @@ impl Client {
         loop {
             tokio::select! {
                 incoming_res = Self::read(&reader_clone) => {
-
                     if let Some(incoming) = incoming_res {
                         let raw_data = incoming.to_string();
+
+                        // we could construct a parser to a specification based on the broadcaster
+                        // to search for unique words/strings/??
                         let parser = parser::IrcParser::new();
 
                         // check parsed success/failure and handle accordingly
@@ -153,7 +147,8 @@ impl Client {
                 }
             }
 
-            // we may want to handle more cases here
+            // we DEFINITELY want to handle more cases here.
+            // _ => println!("[-] rx unhandled ws message {:?}", data),
             _ => (),
         }
 
@@ -163,8 +158,6 @@ impl Client {
     /// Send a message outbound to the socket
     pub async fn write(&self, data: &str) -> Result<()> {
         let msg = Message::text(data.to_string());
-        Self::print(&msg);
-
         Ok(self.writer.lock().await.send(msg).await?)
     }
 
@@ -181,12 +174,13 @@ impl Client {
 
     /// Debug print helper function - used to log a `Message` struct
     #[allow(dead_code, unused_variables)]
+    #[cfg(not(feature = "production"))]
     fn print(data: &Message) {
-        // let curr = get_current_time();
-        // let text = data.to_text().unwrap_or("FAILED_TEXT_CONV");
-        // if !text.contains("PASS oauth:") {
-        //     println!("[{}] SENT: {:?}", curr, text);
-        // }
+        let curr = get_current_time();
+        let text = data.to_text().unwrap_or("FAILED_TEXT_CONV");
+        if !text.contains("PASS oauth:") {
+            println!("[{}] SENT: {:?}", curr, text);
+        }
     }
 }
 

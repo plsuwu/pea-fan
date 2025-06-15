@@ -9,6 +9,7 @@ codegen-units = 1
 
 [features]
 production = []
+testing = []
 
 [dependencies]
 anyhow = "1.0.98"

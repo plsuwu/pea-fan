@@ -1,8 +1,5 @@
-use std::sync::Arc;
-
 use clap::Parser;
-
-const TWITCH_OAUTH_LENGTH: usize = 30;
+use std::sync::{Arc, LazyLock};
 
 #[derive(Parser, Debug)]
 pub struct Cli {
@@ -17,30 +14,30 @@ pub struct Cli {
     /// User OAuth (user access token)
     #[arg(short, long)]
     pub user_token: String,
-    // /// TTV broadcaster login/username
-    // #[arg(short, long)]
-    // pub broadcaster: String,
 }
 
-pub fn parse_cli_args() -> Arc<Cli> {
-    let args = Arc::new(Cli::parse());
+pub static COMMAND_LINE_ARGS: LazyLock<ReadableArgs> = LazyLock::new(|| ReadableArgs::new());
 
-    // debug printer
-    // println!("[+] COMMAND LINE: {:?}", args);
-    
-    let args_clone = args.clone();
-    for token in [&args_clone.app_token, &args_clone.user_token].iter() {
-        match token.len() {
-            TWITCH_OAUTH_LENGTH => continue,
-            _ => {
-                panic!(
-                    "[x] EXPECTED OAUTH TOKEN LENGTH OF {} (got {})",
-                    TWITCH_OAUTH_LENGTH,
-                    token.len()
-                );
-            }
-        }
+impl Cli {
+    pub fn new() -> Arc<Cli> {
+        Arc::new(Cli::parse())
+    }
+}
+
+pub struct ReadableArgs {
+    inner: Arc<Cli>,
+}
+
+impl ReadableArgs {
+    pub fn new() -> Self {
+        Self { inner: Cli::new() }
     }
 
-    args
+    pub fn read(&self) -> Arc<Cli> {
+        Arc::clone(&self.inner)
+    }
+}
+
+pub fn get_cli_args() -> Arc<Cli> {
+    COMMAND_LINE_ARGS.read()
 }

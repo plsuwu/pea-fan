@@ -1,19 +1,62 @@
-use axum::{
-    body::{Body, Bytes},
-    extract::{FromRequest, Request},
-    http::{HeaderMap, StatusCode},
-    middleware::Next,
-    response::Response,
-};
-use ring::hmac;
+use crate::constants::HMAC_PREFIX;
+use crate::constants::{TWITCH_MESSAGE_ID, TWITCH_MESSAGE_SIGNATURE, TWITCH_MESSAGE_TIMESTAMP};
+use axum::body::{Body, Bytes};
+use axum::extract::{FromRequest, Request};
+use axum::http::{HeaderMap, StatusCode};
+use axum::middleware::Next;
+use axum::response::Response;
+use ring::digest;
+use ring::hmac::{self, Key};
+use ring::rand;
+use std::fmt;
+use std::sync::{LazyLock, RwLock};
 
-use crate::server::KEY_DIGEST;
+/// Struct for HMAC key storage and generation methods.
+///
+/// Key is stored in-memory for the duration of the server's uptime; restarting the server should
+/// reset this key (this mechanism is, at present, by design).
+///
+/// # Security
+///
+/// In a vacuum, `ring::rand::SystemRandom` is cryptographically secure (as far as I am aware
+/// smile).
+#[derive(Debug)]
+pub struct Secret {
+    pub key: Key,
+    _digest: [u8; digest::SHA256_OUTPUT_LEN],
+    pub _hex: String,
+}
 
-const HMAC_PREFIX: &'static str = "sha256=";
-const TWITCH_MESSAGE_ID: &'static str = "Twitch-Eventsub-Message-Id";
-const TWITCH_MESSAGE_TIMESTAMP: &'static str = "Twitch-Eventsub-Message-Timestamp";
-const TWITCH_MESSAGE_SIGNATURE: &'static str = "Twitch-Eventsub-Message-Signature";
-const TWITCH_MESSAGE_TYPE: &'static str = "Twitch-Eventsub-Message-Type";
+pub static KEY_DIGEST: LazyLock<RwLock<Secret>> = LazyLock::new(|| RwLock::new(Secret::new()));
+
+impl Secret {
+    #[cfg(feature = "production")]
+    pub fn new() -> Self {
+        let rng = rand::SystemRandom::new();
+        let _digest: [u8; digest::SHA256_OUTPUT_LEN] = rand::generate(&rng).unwrap().expose();
+        let _hex = hex::encode(_digest);
+
+        let key = Key::new(hmac::HMAC_SHA256, _hex.as_bytes());
+
+        Self { _digest, _hex, key }
+    }
+
+    #[cfg(not(feature = "production"))]
+    pub fn new() -> Self {
+        let rng = rand::SystemRandom::new();
+        let _digest: [u8; digest::SHA256_OUTPUT_LEN] = rand::generate(&rng).unwrap().expose();
+        let _hex = "f2ffb7656e27b3076c57add06e58621668ab497e8992a9ccbd6f18eb400db094".to_string();
+
+        let key = Key::new(hmac::HMAC_SHA256, _hex.as_bytes());
+        Self { _digest, _hex, key }
+    }
+}
+
+impl fmt::Display for Secret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self._hex)
+    }
+}
 
 #[derive(Clone)]
 pub struct VerifiedBody(pub Bytes);
@@ -45,8 +88,6 @@ pub async fn verify_sender_ident(mut request: Request, next: Next) -> Result<Res
         eprintln!("[x] unable to verify webhook signature!");
         return Err(status);
     };
-
-    // println!("[+] signature ok");
 
     request.extensions_mut().insert(VerifiedBody(body));
     Ok(next.run(request).await)
@@ -104,9 +145,6 @@ fn build_message(id: &str, ts: &str, body: &Bytes) -> Vec<u8> {
 }
 
 fn timing_safe_eq(left: &str, right: &str) -> bool {
-    // println!("\t - calculated: \t'{}'", left);
-    // println!("\t - actual: \t'{}'", right);
-
     if left.len() != right.len() {
         return false;
     }

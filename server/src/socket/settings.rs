@@ -1,12 +1,8 @@
-// pub const BASE_WEBSOCKET_URL: &'static str = "wss://eventsub.wss.twitch.tv/ws";
-pub const IRC_WEBSOCKET_URL: &'static str = "wss://irc-ws.chat.twitch.tv";
-
 #[derive(Debug, Clone)]
 pub struct ConnectionSettings {
     pub url: &'static str,
     pub channel: String,
     pub ws_authentication: [String; 5],
-
 }
 
 /**
@@ -26,10 +22,16 @@ impl ConnectionSettings {
         let user_nick = format!("NICK {}", login);
         let user_login = format!("USER {} 8 * :{}", login, login);
 
-        let ws_authentication = [capabilities, user_oauth, user_nick, user_login, channel_join];
+        let ws_authentication = [
+            capabilities,
+            user_oauth,
+            user_nick,
+            user_login,
+            channel_join,
+        ];
 
         ConnectionSettings {
-            url: IRC_WEBSOCKET_URL,
+            url: crate::constants::IRC_WEBSOCKET_URL,
             channel: channel.to_string(),
             ws_authentication,
         }

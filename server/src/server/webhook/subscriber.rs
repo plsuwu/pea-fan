@@ -1,6 +1,9 @@
 #![allow(non_snake_case, dead_code, unused_variables)]
 
-use super::types::{StreamGenericRequest, StreamGenericRequestType, SubscriptionGenericResponse};
+use super::super::types::StreamGenericRequestType;
+use super::super::types::{StreamGenericRequest, SubscriptionGenericResponse};
+use crate::constants::{API_GQL_URL, API_HELIX_URL};
+use crate::constants::{BROWSER_CLIENT_ID, CALLBACK_ROUTE, TESTING_CLIENT_ID};
 use crate::server::KEY_DIGEST;
 use crate::socket::client::get_current_time;
 use anyhow::anyhow;
@@ -9,26 +12,11 @@ use reqwest::header::{AUTHORIZATION, HeaderMap};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[cfg(feature = "production")]
-const CALLBACK_ROUTE: &'static str = "https://api.piss.fan/webhook-global";
-
-#[cfg(not(feature = "production"))]
-const CALLBACK_ROUTE: &'static str = "https://pls.ngrok.io/webhook-global";
-
-const API_GQL_URL: &'static str = "https://gql.twitch.tv/gql";
-const API_HELIX_URL: &'static str = "https://api.twitch.tv/helix";
-const BROWSER_CLIENT_ID: &'static str = "kimne78kx3ncx6brgo4mv6wki5h1ko";
-const TESTING_CLIENT_ID: &'static str = "7jz14ixoeglm6aq8eott8196p4g5ox";
-
 /// Subcribes to the required stream webhook events
 ///
 /// Makes a subscribe request to the twitch API for both `stream.online` and `stream.offline` events
 /// for a given broadcaster `broadcaster_login`.
 pub async fn sub_stream_event_multi(broadcaster_login: &str, token: &str) -> anyhow::Result<()> {
-    // Current server session's secret key instance
-    //
-    // This should be constant for the lifetime of the server listener and changes
-    // on application restart
     let key = (&*KEY_DIGEST).read().unwrap()._hex.clone();
     let broadcaster_user_id: String = get_user_id(broadcaster_login).await?;
 
@@ -116,6 +104,31 @@ pub async fn subscribe_stream_event(
     }
 }
 
+#[cfg(feature = "production")]
+pub async fn reset_all_hooks() {
+    let args = crate::args::get_cli_args();
+    if let Some(active_subscriptions) = get_active_hooks(&args.app_token).await {
+        _ = futures_util::future::join_all(
+            active_subscriptions
+                .iter()
+                .map(async |sub_val: &serde_json::Value| {
+                    let subscription_id: &str = sub_val["id"].as_str().unwrap();
+                    println!("[+] deleting subscription with id '{}'", subscription_id);
+                    delete_subscription_multi(subscription_id, &args.app_token)
+                        .await
+                        .unwrap()
+                })
+                .collect::<Vec<_>>(),
+        )
+        .await;
+    };
+}
+
+#[cfg(not(feature = "production"))]
+pub async fn reset_all_hooks() {
+    return;
+}
+
 pub async fn delete_subscription_multi(subscription_id: &str, token: &str) -> anyhow::Result<()> {
     let headers = build_headers(token)?;
     let client = Client::new();
@@ -154,55 +167,6 @@ pub async fn get_active_hooks(token: &str) -> Option<Vec<Value>> {
     None
 }
 
-// :((
-// pub async fn subscribe_chat_messages(
-//     broadcaster_login: &str,
-//     user_login: &str,
-//     token: &str,
-// ) -> anyhow::Result<SubscriptionGenericResponse> {
-//     let key_lock = (&*KEY_DIGEST).read().unwrap()._hex.clone();
-//
-//     let broadcaster_id: String = get_user_id(broadcaster_login).await?;
-//     let user_id: String = get_user_id(user_login).await?;
-//     let request_chat =
-//         ChannelChatMessageRequest::new(&broadcaster_id, &user_id, CALLBACK_ROUTE, &key_lock);
-//
-//     println!("req_body: {:#?}", serde_json::to_string(&request_chat));
-//
-//     let headers = build_headers(token)?;
-//
-//     let subs_uri = format!("{}/eventsub/subscriptions", API_HELIX_URL);
-//     let client = reqwest::Client::new();
-//     let req = client.post(subs_uri).json(&request_chat).headers(headers);
-//     println!("req: {:#?}", req);
-//
-//     let res = req.send().await?;
-//     if res.status() != 200 {
-//         let err: Value = serde_json::from_str(&res.text().await?)?;
-//         return Err(anyhow!(format!(
-//             "Status of request (subscription) was not 200/OK: {:#?}",
-//             err
-//         )));
-//     }
-//
-//     let pre_conv: Value = serde_json::from_str(&res.text().await?)?;
-//     println!("{:#?}", pre_conv);
-//
-//     let body: SubscriptionGenericResponse = serde_json::from_value(pre_conv)?;
-//
-//     Ok(body)
-// }
-
-// async fn get_app_token() -> anyhow::Result<String> {
-//
-// }
-
-// pub async fn verify_signature() {
-//     todo!();
-// }
-
-// let broadcaster_login = get_user_data(token, broadcaster_id).await?.login;
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StreamsQueryData {
     pub id: String,
@@ -235,7 +199,7 @@ pub struct StreamsQueryResponse {
     pub pagination: PaginationData,
 }
 
-pub async fn stream_online(token: &str, broadcaster_id: &str) -> anyhow::Result<bool> {
+pub async fn check_stream_state(token: &str, broadcaster_id: &str) -> anyhow::Result<bool> {
     let client = reqwest::Client::new();
     let headers = build_headers(token)?;
     let uri = format!("{}/streams?user_id={}", API_HELIX_URL, broadcaster_id);

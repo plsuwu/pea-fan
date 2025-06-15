@@ -1,9 +1,5 @@
+use crate::constants::{CHANNEL_CHAT_MESSAGE, STREAM_OFFLINE, STREAM_ONLINE, VERSION};
 use serde::{Deserialize, Serialize};
-
-const CHANNEL_CHAT_MESSAGE: &'static str = "channel.chat.message";
-const STREAM_ONLINE: &'static str = "stream.online";
-const STREAM_OFFLINE: &'static str = "stream.offline";
-const VERSION: &'static str = "1";
 
 pub enum StreamGenericRequestType {
     Online,
@@ -440,7 +436,7 @@ pub struct Subscription {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChallengeRequest {
     pub challenge: String,
-    pub subscription: SubscriptionGenericData, 
+    pub subscription: SubscriptionGenericData,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
