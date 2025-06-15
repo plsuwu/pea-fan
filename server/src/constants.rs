@@ -4,11 +4,11 @@ pub const TWITCH_OAUTH_LENGTH: usize = 30;
 #[cfg(feature = "production")]
 pub const ORIGIN_URL_ENDSWITH: &'static [u8; 9] = b".piss.fan";
 
-// #[cfg(feature = "production")]
+#[cfg(feature = "production")]
 pub const CALLBACK_ROUTE: &str = "https://api.piss.fan/webhook-global";
 
-// #[cfg(not(feature = "production"))]
-// pub const CALLBACK_ROUTE: &str = "https://pls.ngrok.io/webhook-global";
+#[cfg(not(feature = "production"))]
+pub const CALLBACK_ROUTE: &str = "https://pls.ngrok.io/webhook-global";
 
 pub const API_GQL_URL: &str = "https://gql.twitch.tv/gql";
 pub const API_HELIX_URL: &str = "https://api.twitch.tv/helix";
@@ -39,7 +39,7 @@ pub const IRC_COMMAND_JOIN: &str = "JOIN";
 pub const KEEPALIVE_RESPONSE: &str = "PONG :tmi.twitch.tv";
 
 #[cfg(feature = "production")]
-pub const TRACKED_CHANNELS_COUNT: usize = 26;
+pub const TRACKED_CHANNELS_COUNT: usize = 28;
 
 #[cfg(not(feature = "production"))]
 pub const TRACKED_CHANNELS_COUNT: usize = 1;
@@ -74,6 +74,8 @@ pub const CHANNELS: TrackedChannels = [
     "kyundere",
     "miaelou",
     "saltae",
+    "flippersphd",
+    "misspeggyx",
 ];
 
 #[cfg(not(feature = "production"))]
