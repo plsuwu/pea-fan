@@ -13,10 +13,7 @@ pub type RedisPoolResult<T> = Result<T, redis::RedisError>;
 #[cfg(not(any(feature = "production", feature = "testing")))]
 const REDIS_URL: &'static str = "redis://127.0.0.1:6380";
 
-#[cfg(feature = "testing")]
-const REDIS_URL: &'static str = "redis://leaderboard_store:6380";
-
-#[cfg(feature = "production")]
+#[cfg(any(feature = "production", feature = "testing"))]
 const REDIS_URL: &'static str = "redis://leaderboard_store:6380";
 
 static REDIS_CONNECTION_POOL: LazyLock<OnceCell<RedisPool>> = LazyLock::new(OnceCell::new);
