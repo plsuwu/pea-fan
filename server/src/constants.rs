@@ -4,11 +4,11 @@ pub const TWITCH_OAUTH_LENGTH: usize = 30;
 #[cfg(feature = "production")]
 pub const ORIGIN_URL_ENDSWITH: &'static [u8; 9] = b".piss.fan";
 
-#[cfg(feature = "production")]
+// #[cfg(feature = "production")]
 pub const CALLBACK_ROUTE: &str = "https://api.piss.fan/webhook-global";
 
-#[cfg(not(feature = "production"))]
-pub const CALLBACK_ROUTE: &str = "https://pls.ngrok.io/webhook-global";
+// #[cfg(not(feature = "production"))]
+// pub const CALLBACK_ROUTE: &str = "https://pls.ngrok.io/webhook-global";
 
 pub const API_GQL_URL: &str = "https://gql.twitch.tv/gql";
 pub const API_HELIX_URL: &str = "https://api.twitch.tv/helix";
