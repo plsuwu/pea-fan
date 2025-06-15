@@ -5,7 +5,7 @@ COPY . /usr/leaderboard/
 
 RUN cd /usr/leaderboard/src
 
-RUN cargo build --release --features=testing
+RUN cargo build --release --features=production
 
 FROM debian:bullseye-slim AS runtime
 
