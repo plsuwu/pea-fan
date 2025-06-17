@@ -1,5 +1,4 @@
-#![allow(non_snake_case, dead_code, unused_variables)]
-
+#[allow(non_snake_case)]
 use super::super::types::StreamGenericRequestType;
 use super::super::types::{StreamGenericRequest, SubscriptionGenericResponse};
 use crate::constants::{API_GQL_URL, API_HELIX_URL};
@@ -104,6 +103,11 @@ pub async fn subscribe_stream_event(
     }
 }
 
+#[cfg(not(feature = "production"))]
+pub async fn reset_all_hooks() {
+    return;
+}
+
 #[cfg(feature = "production")]
 pub async fn reset_all_hooks() {
     let args = crate::args::get_cli_args();
@@ -122,11 +126,6 @@ pub async fn reset_all_hooks() {
         )
         .await;
     };
-}
-
-#[cfg(not(feature = "production"))]
-pub async fn reset_all_hooks() {
-    return;
 }
 
 pub async fn delete_subscription_multi(subscription_id: &str, token: &str) -> anyhow::Result<()> {

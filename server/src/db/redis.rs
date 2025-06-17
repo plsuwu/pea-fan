@@ -1,9 +1,8 @@
 extern crate redis;
-use std::sync::LazyLock;
-
 use redis::{Client, aio::ConnectionManager};
 use redis::{Value, from_redis_value};
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 use tokio::sync::OnceCell;
 
 use crate::server::RedisQueryResponse;

@@ -30,7 +30,6 @@ pub struct Secret {
 pub static KEY_DIGEST: LazyLock<RwLock<Secret>> = LazyLock::new(|| RwLock::new(Secret::new()));
 
 impl Secret {
-    #[cfg(feature = "production")]
     pub fn new() -> Self {
         let rng = rand::SystemRandom::new();
         let _digest: [u8; digest::SHA256_OUTPUT_LEN] = rand::generate(&rng).unwrap().expose();
@@ -41,11 +40,10 @@ impl Secret {
         Self { _digest, _hex, key }
     }
 
-    #[cfg(not(feature = "production"))]
-    pub fn new() -> Self {
+    pub fn testing_new() -> Self {
         let rng = rand::SystemRandom::new();
         let _digest: [u8; digest::SHA256_OUTPUT_LEN] = rand::generate(&rng).unwrap().expose();
-        let _hex = "f2ffb7656e27b3076c57add06e58621668ab497e8992a9ccbd6f18eb400db094".to_string();
+        let _hex = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
 
         let key = Key::new(hmac::HMAC_SHA256, _hex.as_bytes());
         Self { _digest, _hex, key }
