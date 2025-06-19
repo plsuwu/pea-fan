@@ -1,3 +1,3 @@
 pub mod client;
-mod connection;
-mod tests;
+pub mod connection;
+pub mod tests;

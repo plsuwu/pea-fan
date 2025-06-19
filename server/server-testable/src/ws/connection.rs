@@ -83,7 +83,7 @@ macro_rules! impl_connection {
 impl_connection!(WsConnection, socket_url,  needle, user_token, user_login, channel);
 
 #[cfg(test)]
-mod unit_tests {
+mod tests {
     use super::*;
 
     #[test]

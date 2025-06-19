@@ -271,12 +271,12 @@ where
 
 #[derive(Debug)]
 pub struct IrcClient {
-    connection: WsConnection,
-    manager: Arc<dyn Manager>,
-    parser: Arc<dyn Parser>,
-    handler: Arc<dyn EventHandler>,
-    event_tx: mpsc::UnboundedSender<WsEvent>,
-    event_rx: Option<mpsc::UnboundedReceiver<WsEvent>>,
+    pub connection: WsConnection,
+    pub manager: Arc<dyn Manager>,
+    pub parser: Arc<dyn Parser>,
+    pub handler: Arc<dyn EventHandler>,
+    pub event_tx: mpsc::UnboundedSender<WsEvent>,
+    pub event_rx: Option<mpsc::UnboundedReceiver<WsEvent>>,
 }
 
 const IRC_CAPABILITIES_IDX: usize = 0;
@@ -485,12 +485,13 @@ impl WsClientBuilder {
 }
 
 #[cfg(test)]
-mod unit_tests {
-
-    use super::*;
+mod tests {
     use crate::database::redis::MockRedisLayer;
+    use crate::ws::client::*;
+    use crate::ws::connection::*;
     use crate::ws::tests;
     use std::future::IntoFuture;
+    use std::sync::Arc;
 
     #[derive(Clone, Debug)]
     struct MockClient {
