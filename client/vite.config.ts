@@ -1,20 +1,22 @@
-import { svelteTesting } from '@testing-library/svelte/vite';
 import tailwindcss from '@tailwindcss/vite';
+import devtoolsJson from 'vite-plugin-devtools-json';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
-import devtoolsJson from 'vite-plugin-devtools-json';
 
 export default defineConfig({
-	plugins: [devtoolsJson(), tailwindcss(), sveltekit()],
+	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
 	test: {
 		projects: [
 			{
 				extends: './vite.config.ts',
-				plugins: [svelteTesting()],
 				test: {
 					name: 'client',
-					environment: 'jsdom',
-					clearMocks: true,
+					environment: 'browser',
+					browser: {
+						enabled: true,
+						provider: 'playwright',
+						instances: [{ browser: 'chromium' }]
+					},
 					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
 					exclude: ['src/lib/server/**'],
 					setupFiles: ['./vitest-setup-client.ts']
