@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ROOT_HOSTNAME } from '$lib/client/constants';
+	import Crown from '$lib/components/icons/Crown.svelte';
 
 	let { color, total, channel, leaderboard } = $props();
 </script>
@@ -18,18 +19,31 @@
 
 	{#if leaderboard.length > 0}
 		<div>these chatters have brought piss up the most:</div>
-		<div class="w-full py-8">
-			{#each leaderboard as chatter}
+		<div class="h-[550px] w-full overflow-y-scroll py-8">
+			{#each leaderboard as chatter, i}
 				<div class="flex flex-row justify-between px-4">
-					<div class="px-4 pt-2">{chatter[0]}</div>
+					<div class="flex flex-row items-center justify-center py-px">
+						{#if i === 0}
+							<Crown size={22} class="mr-4" />
+						{:else}
+							<Crown size={22} class="invisible ml-4" />
+						{/if}
+						<div>
+							{i + 1}.
+						</div>
+						<div class="px-4">{chatter[0]}</div>
+					</div>
 					<div class="px-4 pt-2 text-sm">
-						(in <span class="font-semibold italic"
-							>{chatter[1]} {chatter[1] === 1 ? 'message' : 'messages'}</span
+						(<span class="font-semibold italic"
+							>{chatter[1]} {chatter[1] === 1 ? 'time' : 'times'}</span
 						>)
 					</div>
 				</div>
 			{/each}
 		</div>
 	{/if}
-	<a href={`http://${ROOT_HOSTNAME}`} class="hover:opacity-50 transition-opacity duration-150">{'<<<'} back</a>
+	<!-- <a href={`https://${ROOT_HOSTNAME}`} class="hover:opacity-50 transition-opacity duration-150 pb-12">{'<<<'} back</a> -->
+	<a href={`http://${ROOT_HOSTNAME}`} class="mt-12 border rounded-xl px-2 py-1 mb-12 transition-opacity duration-150 hover:opacity-50"
+		>{'<<<'} back</a
+	>
 </div>

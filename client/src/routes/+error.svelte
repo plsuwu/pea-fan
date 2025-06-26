@@ -12,7 +12,7 @@
 <div>
 	<div class="mb-12 text-lg font-medium">there was an error: {err}</div>
 	<div>i'm genuinely not even sorry</div>
-	<div>this site is still under construction and its like 4am</div>
+	<div>this is a prototype frontend get OFF my case</div>
 	<a class="text-blue-500 transition-opacity duration-150 hover:opacity-40" href="/"
 		>{'<--'} go home.</a
 	>

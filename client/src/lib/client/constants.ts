@@ -1,10 +1,9 @@
-
 export type LeaderboardEntry = [String, number];
 export interface ChannelResponse {
-    err: boolean;
-    err_msg: string;
-    total: string;
-    leaderboard: Array<LeaderboardEntry>;
+	err: boolean;
+	err_msg: string;
+	total: string;
+	leaderboard: Array<LeaderboardEntry>;
 }
 export interface ActiveSocketResponse {
 	active_count: number;
@@ -14,23 +13,37 @@ export interface ActiveSocketResponse {
 export const CHANNELS = [
 	'sleepiebug',
 	'parasi',
+	'unipiu',
 	'cchiko_',
 	'liljuju',
+    'kyundere',
+    'miaelou',
+    'saltae',
+    'haelpc',
+    'misspeggyx',
+
 	'vacu0usly',
-
 	'bexvalentine',
+    'rena_chuu',
 
-	'snoozy',
+    'snoozy',
+    'gloomybyte',
+    'miffygeist',
 	'womfyy',
-	'kyoharuvt',
+    'niupao',
 
+    'myrmidonvt',
+    'myramors',
+    'kyoharuvt',
 	'batatvideogames',
-	'myrmidonvt',
-	'myramors',
+	'kokopimento',
 	'sheriff_baiken',
 
 	'lcolonq',
-	'chocojax'
+	'chocojax',
+	'souly_ch',
+
+	'flippersphd',
 ];
 
 export interface GqlQuery {
@@ -67,9 +80,7 @@ export const BROWSER_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
 // export const API_HOSTNAME = 'leaderboard_api';
 export const API_HOSTNAME = 'api.piss.fan';
 
-export const ROOT_HOSTNAME = 'piss.fan';
-export const ROOT_SUBDOMAIN = 'piss';
-// export const ROOT_HOSTNAME = 'localhost:5173';
-// export const ROOT_SUBDOMAIN = 'localhost:5173';
-
-
+// export const ROOT_HOSTNAME = 'piss.fan';
+// export const ROOT_SUBDOMAIN = 'piss';
+export const ROOT_HOSTNAME = 'localhost:5173';
+export const ROOT_SUBDOMAIN = 'localhost:5173';

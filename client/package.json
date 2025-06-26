@@ -37,6 +37,7 @@
 		"vitest": "^3.2.3"
 	},
 	"dependencies": {
+		"client": ".",
 		"svelte-adapter-bun": "^0.5.2"
 	}
 }
