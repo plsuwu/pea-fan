@@ -1,1 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
 @import 'tailwindcss';
+
+@theme inline {
+    --font-sans: 'Inter', 'sans-serif';
+	--font-mono: 'Source Code Pro', 'monospace';
+	--font-alt: 'Courier', 'sans-serif';
+}
+
+@layer base {
+    ::-webkit-scrollbar {
+        @apply w-1.5 rounded-lg;
+    }
+    
+    ::-webkit-scrollbar-track {
+        @apply bg-neutral-200;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        @apply bg-neutral-500 rounded-lg;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        @apply bg-neutral-800;
+    }
+}

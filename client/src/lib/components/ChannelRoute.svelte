@@ -3,9 +3,19 @@
 	import Crown from '$lib/components/icons/Crown.svelte';
 
 	let { color, total, channel, leaderboard } = $props();
+
+    function lPad(n: number) {
+        let text = (n).toString(); 
+
+        if (text.length < 2) {
+            return '&nbsp;' + text
+        } 
+
+        return text;
+    }
 </script>
 
-<div class="flex h-full w-full flex-col items-center pt-8">
+<div class="flex h-full flex-col items-center pt-8 overflow-x-hidden w-full">
 	<div class="w-5/6 py-16 text-justify lg:w-full">
 		<span class="">piss</span> has been brought up a total of
 		<span class="font-bold underline">{total}</span>
@@ -18,8 +28,8 @@
 	</div>
 
 	{#if leaderboard.length > 0}
-		<div>these chatters have brought piss up the most:</div>
-		<div class="h-[550px] w-full overflow-y-scroll py-8">
+		<div class="mb-4">these chatters have brought piss up the most:</div>
+		<div class="h-[550px] w-full overflow-y-scroll p-4 border rounded-md">
 			{#each leaderboard as chatter, i}
 				<div class="flex flex-row justify-between px-4">
 					<div class="flex flex-row items-center justify-center py-px">
@@ -28,14 +38,14 @@
 						{:else}
 							<Crown size={22} class="invisible ml-4" />
 						{/if}
-						<div>
-							{i + 1}.
+						<div class="font-mono">
+							{@html lPad(i + 1)}.
 						</div>
 						<div class="px-4">{chatter[0]}</div>
 					</div>
 					<div class="px-4 pt-2 text-sm">
-						(<span class="font-semibold italic"
-							>{chatter[1]} {chatter[1] === 1 ? 'time' : 'times'}</span
+						(<span class="font-semibold"
+							>{chatter[1]}</span> <span>{chatter[1] === 1 ? 'time' : 'times'}</span
 						>)
 					</div>
 				</div>

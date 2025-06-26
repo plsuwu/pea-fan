@@ -16,25 +16,26 @@ export const CHANNELS = [
 	'unipiu',
 	'cchiko_',
 	'liljuju',
-    'kyundere',
-    'miaelou',
-    'saltae',
-    'haelpc',
-    'misspeggyx',
+	'kyundere',
+	'miaelou',
+	'saltae',
+	'haelpc',
+	'misspeggyx',
 
 	'vacu0usly',
 	'bexvalentine',
-    'rena_chuu',
+	'rena_chuu',
+	'pekoe_bunny',
 
-    'snoozy',
-    'gloomybyte',
-    'miffygeist',
+	'snoozy',
+	'gloomybyte',
+	'miffygeist',
 	'womfyy',
-    'niupao',
+	'niupao',
 
-    'myrmidonvt',
-    'myramors',
-    'kyoharuvt',
+	'myrmidonvt',
+	'myramors',
+	'kyoharuvt',
 	'batatvideogames',
 	'kokopimento',
 	'sheriff_baiken',
@@ -43,7 +44,7 @@ export const CHANNELS = [
 	'chocojax',
 	'souly_ch',
 
-	'flippersphd',
+	'flippersphd'
 ];
 
 export interface GqlQuery {
