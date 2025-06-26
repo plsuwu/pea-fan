@@ -1,18 +1,73 @@
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-import { pgTable, serial, text, integer, json } from 'drizzle-orm/pg-core';
+import {
+	pgTable,
+	text,
+	bigint,
+	timestamp,
+	primaryKey,
+	index
+} from 'drizzle-orm/pg-core';
 
-export const user = pgTable('users', {
-	id: text('id').primaryKey(),
-	login: text('login'),
-	color: text('color'),
-	total: integer('total'),
-	channels: json('leaderboard').$type<{ channel: string; total: number }>()
-});
+export const user = pgTable(
+	'users',
+	{
+		userLogin: text('user_login').primaryKey().notNull(),
+		userId: text('user_id').notNull().unique(),
+		color: text('color').default('#000000').notNull(),
+		total: bigint({ mode: 'number' }).notNull().default(0),
+		createdAt: timestamp('created_at').defaultNow(),
+		updatedAt: timestamp('updated_at').defaultNow()
+	},
+	(t) => [index('idx_users_total').on(t.total.desc())]
+);
 
-export const channel = pgTable('broadcasters', {
-	id: text('id')
-		.references((): AnyPgColumn => user.id)
-		.primaryKey(),
-	total: integer('total'),
-	chatters: json('leaderboard').$type<{ chatter: string; total: number }>()
-});
+export const channel = pgTable(
+	'channels',
+	{
+		broadcasterLogin: text('broadcaster_login')
+			.references((): AnyPgColumn => user.userLogin, {
+				onDelete: 'cascade'
+			})
+			.primaryKey()
+			.notNull(),
+		broadcasterId: text('broadcaster_id')
+			.references((): AnyPgColumn => user.userId, { onDelete: 'cascade' })
+			.notNull(),
+		profileImgUrl: text('profile_img_url').notNull(),
+		total: bigint({ mode: 'number' }).default(0).notNull(),
+		createdAt: timestamp('created_at').defaultNow(),
+		updatedAt: timestamp('updated_at').defaultNow()
+	},
+	(t) => [index('idx_channel_total').on(t.total.desc())]
+);
+
+export const userChannelScore = pgTable(
+	'user_channel_scores',
+	{
+		userLogin: text('user_login')
+			.references((): AnyPgColumn => user.userLogin, {
+				onDelete: 'cascade'
+			})
+			.notNull(),
+		broadcasterLogin: text('broadcaster_login')
+			.references((): AnyPgColumn => channel.broadcasterLogin, {
+				onDelete: 'cascade'
+			})
+			.notNull(),
+		score: bigint({ mode: 'number' }).notNull().default(0),
+		createdAt: timestamp('created_at').defaultNow(),
+		updatedAt: timestamp('updated_at').defaultNow()
+	},
+	(t) => [
+		primaryKey({ columns: [t.userLogin, t.broadcasterLogin] }),
+		index('idx_channel_user_scores_user_login').on(t.userLogin),
+		index('idx_channel_user_scores_broadcaster_login').on(
+			t.broadcasterLogin
+		),
+		index('idx_channel_user_scores_user_score').on(t.score.desc()),
+		index('idx_channel_user_scores_channel_score').on(
+			t.broadcasterLogin,
+			t.score.desc()
+		)
+	]
+);
