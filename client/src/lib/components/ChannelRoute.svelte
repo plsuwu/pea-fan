@@ -43,7 +43,9 @@
 		</div>
 	{/if}
 	<!-- <a href={`https://${ROOT_HOSTNAME}`} class="hover:opacity-50 transition-opacity duration-150 pb-12">{'<<<'} back</a> -->
-	<a href={`http://${ROOT_HOSTNAME}`} class="mt-12 border rounded-xl px-2 py-1 mb-12 transition-opacity duration-150 hover:opacity-50"
+	<a
+		href={`https://${ROOT_HOSTNAME}`}
+		class="mb-12 mt-12 rounded-xl border px-2 py-1 transition-opacity duration-150 hover:opacity-50"
 		>{'<<<'} back</a
 	>
 </div>

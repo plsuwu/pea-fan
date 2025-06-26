@@ -80,7 +80,7 @@ export const BROWSER_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
 // export const API_HOSTNAME = 'leaderboard_api';
 export const API_HOSTNAME = 'api.piss.fan';
 
-// export const ROOT_HOSTNAME = 'piss.fan';
-// export const ROOT_SUBDOMAIN = 'piss';
-export const ROOT_HOSTNAME = 'localhost:5173';
-export const ROOT_SUBDOMAIN = 'localhost:5173';
+export const ROOT_HOSTNAME = 'piss.fan';
+export const ROOT_SUBDOMAIN = 'piss';
+// export const ROOT_HOSTNAME = 'localhost:5173';
+// export const ROOT_SUBDOMAIN = 'localhost:5173';

@@ -32,8 +32,7 @@
 	}
 
 	function getChannelUri(channel: string) {
-		// return `https://${channel}.${ROOT_HOSTNAME}`;
-		return `http://${channel}.${ROOT_HOSTNAME}`;
+		return `https://${channel}.${ROOT_HOSTNAME}`;
 	}
 </script>
 
