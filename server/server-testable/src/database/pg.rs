@@ -74,7 +74,7 @@ impl Database for DatabaseLayer {
             VALUES ($1) 
             ON CONFLICT (user_login)
             DO UPDATE SET updated_at = NOW()
-            RETURNING user_id, user_login, color, total
+            RETURNING id, user_id, user_login, color, total, redact
             "#,
             user_login
         )
@@ -315,10 +315,12 @@ impl Database for DatabaseLayer {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
-    pub user_id: String,
+    pub id: i32,
     pub user_login: String,
+    pub user_id: String,
     pub color: String,
     pub total: i64,
+    pub redact: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

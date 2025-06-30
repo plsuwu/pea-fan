@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { Button } from 'bits-ui';
-	import { MagnifyingGlass } from 'phosphor-svelte';
+	import Key from '$lib/components/Key.svelte';
+	import { MagnifyingGlass, Command, ArrowFatUp } from 'phosphor-svelte';
 	import { fade } from 'svelte/transition';
 	import { expoIn, expoInOut } from 'svelte/easing';
 	import SearchModal from './SearchModal.svelte';
+    
+    let { data } = $props();
+    let channels = data.channels;
+    let chatters = data.chatters;
 
 	let open = $state(false);
 
@@ -28,16 +33,25 @@
 
 <Button.Root
 	onclick={toggleModal}
-	class="group border-border rounded-input hover:border-foreground-alt/40 flex min-w-[255px] flex-row items-center justify-start border px-4 py-2 duration-100 ease-in-out hover:brightness-90 active:scale-[0.98] active:transition-all"
+	class="border-border rounded-input hover:border-foreground-alt/40 group flex min-w-[255px] flex-row items-center justify-start border px-4 py-2 duration-100 ease-in-out hover:brightness-90 active:scale-[0.98] active:transition-all"
 >
 	<MagnifyingGlass
 		weight="bold"
 		class="text-foreground-alt/50 group-hover:text-foreground-alt mr-4 transition-all duration-100 ease-out"
 	/>
 	<div
-		class="text-foreground-alt/50 group-hover:text-foreground-alt text-sm transition-all"
+		class="text-foreground-alt/50 group-hover:text-foreground-alt flex w-full flex-row items-center justify-between text-sm transition-all"
 	>
-		search
+		<div>search</div>
+		<div class="flex flex-row flex-nowrap justify-self-end">
+			<Key>
+				<Command size={12} class="shrink-0" />
+			</Key>
+			<Key>
+				<ArrowFatUp size={12} class="shrink-0" />
+			</Key>
+			<Key><span class="mt-px font-mono text-[12px] font-medium">K</span></Key>
+		</div>
 	</div>
 </Button.Root>
 
@@ -49,9 +63,11 @@
 		tabindex="0"
 		in:fade={{ delay: 0, duration: 150, easing: expoInOut }}
 		out:fade={{ delay: 0, duration: 150, easing: expoIn }}
-		class="absolute top-0 left-0 z-[99] flex h-full w-full flex-col items-center justify-center overflow-hidden bg-black/30 backdrop-blur-[2px]"
+		class="absolute left-0 top-0 z-[99] flex h-full w-full flex-col items-center justify-center overflow-hidden bg-black/30 backdrop-blur-[2px]"
 	></div>
-	<div class="absolute z-[100] self-center top-[50%] left-[50%] -translate-[50%] content-center">
-		<SearchModal />
+	<div
+		class="-translate-[50%] absolute left-[50%] top-[50%] z-[100] content-center self-center"
+	>
+		<SearchModal {channels} {chatters} />
 	</div>
 {/if}

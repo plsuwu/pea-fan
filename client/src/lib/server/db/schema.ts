@@ -5,16 +5,20 @@ import {
 	bigint,
 	timestamp,
 	primaryKey,
-	index
+	index,
+	boolean,
+    serial,
 } from 'drizzle-orm/pg-core';
 
 export const user = pgTable(
 	'users',
 	{
-		userLogin: text('user_login').primaryKey().notNull(),
+		id: serial('id').primaryKey().notNull(),
+		userLogin: text('user_login').unique().notNull(),
 		userId: text('user_id').notNull().unique(),
 		color: text('color').default('#000000').notNull(),
 		total: bigint({ mode: 'number' }).notNull().default(0),
+		redact: boolean('redact').notNull().default(false),
 		createdAt: timestamp('created_at').defaultNow(),
 		updatedAt: timestamp('updated_at').defaultNow()
 	},

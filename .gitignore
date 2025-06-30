@@ -1,7 +1,10 @@
 /**/target
 /**/*-old.rs
 
-/appendonlydir
+/**/appendonlydir
+/**/.redis_data_backup
+/**/_data-rw
+/**/_data
 dump.rdb
 compose.yaml
 /**/drizzle
