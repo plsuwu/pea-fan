@@ -33,14 +33,16 @@
 
 <Button.Root
 	onclick={toggleModal}
-	class="border-border rounded-input hover:border-foreground-alt/40 group flex min-w-[255px] flex-row items-center justify-start border px-4 py-2 duration-100 ease-in-out hover:brightness-90 active:scale-[0.98] active:transition-all"
+	class="border-border rounded-input hover:border-foreground-alt/40 group flex min-w-[255px] flex-row items-center
+    justify-start border px-4 py-2 duration-100 ease-in-out hover:brightness-90 active:scale-[0.98] active:transition-all"
 >
 	<MagnifyingGlass
 		weight="bold"
 		class="text-foreground-alt/50 group-hover:text-foreground-alt mr-4 transition-all duration-100 ease-out"
 	/>
 	<div
-		class="text-foreground-alt/50 group-hover:text-foreground-alt flex w-full flex-row items-center justify-between text-sm transition-all"
+		class="text-foreground-alt/50 group-hover:text-foreground-alt flex w-full flex-row items-center justify-between
+        text-sm transition-all"
 	>
 		<div>search</div>
 		<div class="flex flex-row flex-nowrap justify-self-end">
@@ -63,7 +65,8 @@
 		tabindex="0"
 		in:fade={{ delay: 0, duration: 150, easing: expoInOut }}
 		out:fade={{ delay: 0, duration: 150, easing: expoIn }}
-		class="absolute left-0 top-0 z-[99] flex h-full w-full flex-col items-center justify-center overflow-hidden bg-black/30 backdrop-blur-[2px]"
+		class="absolute left-0 top-0 z-[99] flex h-full w-full flex-col items-center justify-center overflow-hidden
+        bg-black/30 backdrop-blur-[2px]"
 	></div>
 	<div
 		class="-translate-[50%] absolute left-[50%] top-[50%] z-[100] content-center self-center"

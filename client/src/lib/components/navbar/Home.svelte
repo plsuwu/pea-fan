@@ -10,7 +10,8 @@
 		<DropHalfBottom size={22} weight="duotone" />
 	</div>
 	<div
-		class="from-foreground w-full bg-gradient-to-bl from-40% to-yellow-400 bg-clip-text font-sans text-2xl font-bold tracking-[-0.09em] text-transparent dark:to-yellow-200"
+		class="from-foreground w-full bg-gradient-to-bl from-40% to-yellow-400 bg-clip-text font-sans 
+        text-2xl font-bold tracking-[-0.09em] text-transparent dark:to-yellow-200"
 	>
 		piss.fan
 	</div>

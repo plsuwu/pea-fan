@@ -1,11 +1,12 @@
-export interface Chatter {
-    login: string;
-    image: string;
-    total: number;
+export interface CachedUserData {
+	image: string;
+	total: number;
 }
 
-export interface Channel {
-    broadcaster: string;
-    image: string;
-    total: number;
+export interface Chatter extends CachedUserData {
+	login: string;
+}
+
+export interface Channel extends CachedUserData {
+	broadcaster: string;
 }

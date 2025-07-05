@@ -2,7 +2,7 @@ import { APP_TOKEN, CLIENT_ID } from '$env/static/private';
 
 export const HELIX_API = 'https://api.twitch.tv/helix/users';
 
-export const getUserImageFromHelix = async (login: string) => {
+export const helixFetchUserImage = async (login: string) => {
 	const uri = `${HELIX_API}?login=${login}`;
 	const headers = getAppTokenHeaders();
 	const res = await fetch(uri, {
@@ -19,7 +19,7 @@ export const getUserImageFromHelix = async (login: string) => {
 	return body;
 };
 
-export const getBatchUserImageFromHelix = async (logins: string[]): Promise<{ data: any[] } | null> => {
+export const helixFetchBatchedImages = async (logins: string[]): Promise<{ data: any[] } | null> => {
 	const uri = getBatchUrl(logins);
 	const headers = getAppTokenHeaders();
 

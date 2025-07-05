@@ -5,7 +5,7 @@
 </script>
 
 <aside
-	class="flex h-[calc(100vh-60px)] w-[350px] flex-col justify-between overflow-hidden border-r py-3"
+	class="flex h-[calc(100vh-60px)] w-[350px] shrink-0 flex-col justify-between overflow-hidden border-r py-3"
 >
 	<Tabs {data} />
 	<div class="inline-flex w-full flex-col px-4">
