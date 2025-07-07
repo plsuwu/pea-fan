@@ -1,5 +1,6 @@
 use std::fmt;
 
+#[allow(dead_code)]
 pub trait Connection: fmt::Debug {
     fn new(
         socket_url: &str,
@@ -9,9 +10,9 @@ pub trait Connection: fmt::Debug {
         channel: &str,
     ) -> Self;
     fn url(&self) -> &str;
-    fn channel(&self) -> &str;
     fn auth_commands(&self) -> &[String; 5];
     fn needle(&self) -> &str;
+    fn channel(&self) -> &str;
 }
 
 pub const CAPABILITIES: &str = "CAP REQ :twitch.tv/tags twitch.tv/commands";
@@ -24,6 +25,60 @@ pub struct WsConnection {
     pub needle: String,
 }
 
+/// Macro to simplify (?) creating `Connection` implementations for new structs.
+///
+///
+/// There are three implementation details for implementers to note:
+///   - The struct must also implement `Debug`,
+///   - The struct must have a field named `auth_commands` (typed as `[String; 5]`),
+///   - The macro call must use a specific ordering:
+///     1. Struct name,
+///     2. URL to for which to connect,
+///     3. The needle (i.e, the search string),
+///     4. User OAuth token,
+///     5. User login (i.e, the user's username),
+///     6. Channel to join.
+///
+/// # Example
+/// 
+/// ```
+/// // The struct must implement `Debug`, as required by `Connection` trait bounds
+/// #[derive(Debug)]
+/// struct ExampleConnection {
+///     pub url: String,
+///     pub channel: String,
+///     pub needle: String,
+///     // Requires an `auth_commands` field
+///     pub auth_commands: [String; 5],
+/// }
+///
+/// // Pass the name of each respective parameter to the macro - as if calling
+/// // `ExampleConnection::new`. the actual parameters don't have to exist as variables,
+/// // but should reflect the respective fields in the implementing struct.
+/// // 
+/// // The required order is:
+/// //  1. Struct name,
+/// //  2. URL to connect to,
+/// //  3. Needle (search string)
+/// //  4. User's OAuth token,
+/// //  5. User's login/username
+/// //  6. Target channel's name
+/// impl_connection!(ExampleConnection, url, needle, token, login, channel);
+///
+/// // ...
+/// // `ExampleConnection` implements methods from the `Connection` trait:
+/// let example_connection = ExampleConnection::new(
+///     "wss://irc-ws.twitch.tv", 
+///     "trigger_word",
+///     "oauth_token_example", 
+///     "john_chatter", 
+///     "john_twitch",
+/// );
+///
+/// assert_eq!(example_connection.url(), "wss://irc-ws.twitch.tv");
+/// assert_eq!(example_connection.channel(), "john_twitch");
+/// assert_eq!(example_connection.needle(), "trigger_word");
+/// ```
 #[macro_export]
 macro_rules! impl_connection {
     (
@@ -48,7 +103,8 @@ macro_rules! impl_connection {
                 let user_nick = format!("NICK {}", $user_login);
                 let user_login = format!("USER {} 8 * :{}", $user_login, $user_login);
 
-                // these must be in the correct order!
+                // keep ordering!
+                // Twitch IRC requirements mean these must be sent in order.
                 let auth_commands = [
                     crate::ws::connection::CAPABILITIES.to_string(),
                     user_oauth,

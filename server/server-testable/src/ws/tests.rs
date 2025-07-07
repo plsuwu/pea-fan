@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use crate::ws::client::{CacheCounter, WsClientError, WsClientResult};
+use async_trait::async_trait;
 use axum::Router;
 use axum::extract::WebSocketUpgrade;
 use axum::extract::ws::{Message, WebSocket};
@@ -20,7 +22,7 @@ pub async fn listener() -> (TcpListener, SocketAddr) {
     (listener, addr)
 }
 
-/// Endpoint(s) to test websocket client reads/writes. 
+/// Endpoint(s) to test websocket client reads/writes.
 ///
 /// _Should_ implement an endpoint to check that sent data references the intended data but I don't really want to
 /// do this right now.
@@ -43,5 +45,26 @@ async fn handler_recv_socket(mut socket: WebSocket) {
                 break;
             }
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct MockRedisLayer {
+    client: redis::Client,
+}
+
+impl MockRedisLayer {
+    pub async fn new(url: &str) -> WsClientResult<Self> {
+        let client = redis::Client::open(url).map_err(|e| WsClientError::Redis(e))?;
+
+        Ok(Self { client })
+    }
+}
+
+#[async_trait]
+impl CacheCounter for MockRedisLayer {
+    async fn increment_counter(&self, _channel: &str, _user: &str) -> WsClientResult<()> {
+        // this is fine for now as we don't need this test layer to actually do anything
+        Ok(())
     }
 }

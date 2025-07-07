@@ -1,10 +1,12 @@
 use crate::parser::{IrcMessage, IrcParser, Parser, ParserError};
 use crate::ws::connection::{Connection, WsConnection};
 use async_trait::async_trait;
+use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use std::fmt;
 use std::sync::Arc;
 use thiserror::Error;
+use tokio::net::TcpStream;
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::protocol::Message;
@@ -17,6 +19,9 @@ pub enum WsClientError {
     #[error("Websocket connection error: {0}")]
     Websocket(#[from] tokio_tungstenite::tungstenite::Error),
 
+    #[error("Redis client error: {0}")]
+    Redis(#[from] redis::RedisError),
+
     #[error("Authentication failure: {0}")]
     Authentication(String),
 
@@ -26,9 +31,6 @@ pub enum WsClientError {
     #[error("Channel error: {0}")]
     Channel(String),
 
-    #[error("Redis error: {0}")]
-    Redis(String),
-
     #[error("Connection closed")]
     ConnectionClosed,
 
@@ -37,19 +39,8 @@ pub enum WsClientError {
 }
 
 pub type WsClientResult<T> = std::result::Result<T, WsClientError>;
-pub type SocketWriter = Arc<
-    Mutex<
-        futures_util::stream::SplitSink<
-            WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
-            Message,
-        >,
-    >,
->;
-pub type SocketReader = Arc<
-    Mutex<
-        futures_util::stream::SplitStream<WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>>,
-    >,
->;
+pub type SocketWriter = Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>;
+pub type SocketReader = Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>;
 
 #[derive(Debug, Clone)]
 pub enum WsEvent {
@@ -98,7 +89,7 @@ pub trait Client: Send + Sync + fmt::Debug {
 }
 
 #[async_trait]
-pub trait Store: Send + Sync + fmt::Debug {
+pub trait CacheCounter: Send + Sync + fmt::Debug {
     async fn increment_counter(&self, channel: &str, user: &str) -> WsClientResult<()>;
 }
 
@@ -198,14 +189,14 @@ where
     T: Connection,
 {
     connection: T,
-    data_store: Arc<dyn Store>,
+    data_store: Arc<dyn CacheCounter>,
 }
 
 impl<T> WsEventHandler<T>
 where
     T: Connection,
 {
-    pub fn new(connection: T, data_store: Arc<dyn Store>) -> Self {
+    pub fn new(connection: T, data_store: Arc<dyn CacheCounter>) -> Self {
         Self {
             connection,
             data_store,
@@ -486,10 +477,10 @@ impl WsClientBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::database::redis::MockRedisLayer;
     use crate::ws::client::*;
     use crate::ws::connection::*;
     use crate::ws::tests;
+    use crate::ws::tests::MockRedisLayer;
     use std::future::IntoFuture;
     use std::sync::Arc;
 

@@ -25,10 +25,22 @@ pub struct Client {
 }
 
 impl Client {
-    /// Creates the RW streams for the given URL
+    /// Creates an instance of a Websocket `Client` with read/write streams.
     ///
     /// I am unsure if this actually CREATES a connection? But the `open` method actually sends
     /// the required auth messages.
+    ///
+    /// # Params
+    ///
+    /// * `conn`: An `&Arc` pointing to a `ConnectionSettings` instance; this must be created
+    /// before this method is called (e.g via a lazy global `static` instance).
+    ///
+    /// # Returns
+    ///
+    /// A `tungstenite::Result`, returning `Ok(Self)` on a successful call.
+    ///
+    /// `tungstenite::Result` is used here to facilitate `Err(_)` error propogation on an internal
+    /// `connect_async` method call.
     pub async fn new(conn: &Arc<ConnectionSettings>) -> Result<Self> {
         let url = &conn.url;
 
