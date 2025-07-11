@@ -10,3 +10,5 @@ export interface Chatter extends CachedUserData {
 export interface Channel extends CachedUserData {
 	broadcaster: string;
 }
+
+export type CacheRetrievalResult<T extends CachedUserData> = T[];

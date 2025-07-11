@@ -2,9 +2,7 @@
 	import type { PageServerData } from './$types';
 
 	let { data }: { data: PageServerData } = $props();
-
 	let { userLeaderboard } = data;
-	console.log(userLeaderboard);
 </script>
 
 <ul class="w-full">

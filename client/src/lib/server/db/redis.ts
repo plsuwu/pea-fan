@@ -1,6 +1,11 @@
 import { createClient, type RedisClientType } from 'redis';
 import { helixFetchBatchedImages, helixFetchUserImage } from '../helix/utils';
-import type { Chatter, Channel, CachedUserData } from '$lib/types';
+import type {
+	Chatter,
+	Channel,
+	CachedUserData,
+	CacheRetrievalResult
+} from '$lib/types';
 
 export type KeyStoredType = 'user' | 'channel';
 export type KeyReturnType = 'login' | 'broadcaster';
@@ -19,7 +24,8 @@ interface FetchedImagesResult {
 }
 
 export class RedisClientPool {
-	private readonly MAX_QUERY_LENGTH: number = 100;
+	// we mirror the Twitch max in our application
+	public readonly MAX_QUERY_LENGTH: number = 100;
 	private readonly REDACTED_USER: string = '{{REDACTED_USER}}';
 
 	private hostname: string;
@@ -49,71 +55,147 @@ export class RedisClientPool {
 				this.connected = true;
 				await this.client.connect();
 			} catch (err) {
-				if (err == 'Socket already opened') {
-					console.error('[?]: ', err);
-					this.connected = true;
-				} else {
-					throw err;
-				}
+				// avoids crashing if the socket is already open, which seems to happen but i don't know why.
+				//
+				// we probably want to check that the error is something like 'Socket already opened' but it refuses
+				// to work for me and i dont know why, and frankly this should be fine.
+				console.error('[?]: ', err);
+				this.connected = true;
 			}
 		}
+	}
+
+	public async migrateOldData() {
+		this.connect();
+
+		const rawUserKeys = await this.client.KEYS(`user:*:total`);
+		const rawChannelKeys = await this.client.KEYS(`channel:*:total`);
+
+		await this._migrate(rawUserKeys, 'user');
+		await this._migrate(rawChannelKeys, 'channel');
+	}
+
+	private async _migrate(keys: string[], keyType: string) {
+		await Promise.all(
+			keys.map(async (user) => {
+				const name = user.split(':')[1];
+				const total = Number(
+					await this.client.GET(`${keyType}:${name}:total`)
+				);
+				await this.client.zAdd(`${keyType}:global:leaderboard`, {
+					value: name,
+					score: total
+				});
+			})
+		);
 	}
 
 	/**
 	 * Retrieves chatter data across all channels.
 	 * @async
-	 * @todo Note: This function needs to implement some form of pagination before the list of users grows too large!
 	 */
-	public async getChatters(): Promise<Chatter[]> {
-		return await Promise.all(
-			(await this.getUserData<Chatter>('user', 'login')).map(
-				async (user) => {
-					return {
-						...user
-					};
-				}
-			)
+	public async getChatters(
+		_cursor: number = 0,
+		_max: number = this.MAX_QUERY_LENGTH
+	) {
+		const users = await this.getLeaderboard<Chatter>(
+			'user',
+			'login',
+			'global'
 		);
+		return users;
 	}
 
 	/**
 	 * Retrieves all channel data.
 	 * @async
-	 * @todo Note: this function could benefit from a pagination implementation, but the list of channels is likely
-	 * significantly smaller than the list fetched by `this.getChatters`.
 	 */
-	public async getChannels(): Promise<Channel[]> {
-		return await Promise.all(
-			(await this.getUserData<Channel>('channel', 'broadcaster')).map(
-				async (chan) => {
-					const broadcaster = (chan.broadcaster as string).split(
-						'#'
-					)[1];
-
-					return {
-						broadcaster,
-						image:
-							chan.image ??
-							(await this.getChannelImage(broadcaster)),
-						total: chan.total
-					};
-				}
-			)
+	public async getChannels(
+		_cursor: number = 0,
+		_max: number = this.MAX_QUERY_LENGTH
+	) {
+		const leaderboard = await this.getLeaderboard<Channel>(
+			'channel',
+			'broadcaster',
+			'global'
 		);
+
+		return leaderboard;
 	}
 
-	public async getUserLeaderboard(storedKey: KeyStoredType, user: string) {
-		const key = `${storedKey}:${user}:leaderboard`;
-		const leaderboard = await this.client.ZRANGE_WITHSCORES(key, 0, -1, {
-			REV: true
-		});
-
-		return leaderboard.map((item) => {
+	/**
+	 * Retrieves a user's leaderboard (for both channels and chatters).
+     *
+     * todo: maybe refactor the way we handle user/channel paths in this function so we can make sure we dont accidentally let something
+     *       slip through the cracks? currently i think this is it for this implementation?? 
+     *
+	 * @async
+	 * @param storedKey The user type as defined in the cache: either `'user'` or `'channel'`.
+	 * @param user The user's name/login - if `storedKey` is `channel`, this will automatically be prepended with `'#'`.
+	 *  > `'global'` is used to fetch either the global channels or users leaderboard (e.g quering for `user:global:leaderboard`).
+	 * @return Any associated leaderboard as a json-like structure in the format `{ name: [channel/login], score: [count] }`.
+	 */
+	public async getLeaderboard<T extends CachedUserData>(
+		storedKey: KeyStoredType,
+		returnKey: KeyReturnType,
+		user: string,
+		cursor: number = 0,
+		max: number = this.MAX_QUERY_LENGTH
+	) {
+		// ensure open Redis connection
+		this.connect();
+        
+        // euehuhgughuheurhrrrgh
+		const key = `${storedKey}:${storedKey === 'channel' && user !== 'global' ? `#${user}` : user}:leaderboard`;
+		const leaderboard = await this.client.zRangeWithScores(
+			key,
+			cursor,
+			cursor + (max - 1),
+			{
+				REV: true
+			}
+		);
+    
+		const board = leaderboard.map((item) => {
 			return {
-				name: item.value.split('#')[1],
-				score: item.score
+                // channel names will still have the leading `#` connected (this could be corrected
+                // in the Rust lexer) - if this split call is nullish then we have a chatter's login
+                // and we set `name` to the value directly
+				name: item.value.split('#')[1] ?? item.value,
+				total: item.score
 			};
 		});
+
+		if (storedKey !== 'channel') {
+			const fetched = await this.getUserData<T>(
+				storedKey,
+				returnKey,
+				board
+			);
+
+			return fetched;
+		} else {
+			return await Promise.all(
+				board.map(async (broadcaster) => {
+
+                    // make sure we redact chatters that have requested
+                    // to be redacted!
+					const redact = await this.client.GET(
+						`user:${broadcaster.name}:redact`
+					);
+
+					return {
+						[returnKey]: redact
+							? this.REDACTED_USER
+							: broadcaster.name,
+						total: broadcaster.total,
+						image: redact
+							? null
+							: await this.getChannelImage(broadcaster.name)
+					};
+				})
+			);
+		}
 	}
 
 	/**
@@ -128,17 +210,19 @@ export class RedisClientPool {
 	 */
 	public async getUserData<T extends CachedUserData>(
 		storedKey: KeyStoredType,
-		returnKey: KeyReturnType
-	) {
+		returnKey: KeyReturnType,
+		users: { name: string; total: number }[]
+	): Promise<CacheRetrievalResult<T>> {
 		// ensure we're connected to the cache
 		this.connect();
 
 		const needsCacheAttempt = new Array();
-		const rawKeys = await this.client.KEYS(`${storedKey}:*:total`);
-		const users = await Promise.all(
-			rawKeys.map(async (user) => {
+		const resolved = await Promise.all(
+			users.map(async (user) => {
 				let { name, total, image, redact, prevImgFetch } =
-					await this.getUserFromCache(storedKey, user);
+					await this.getUserFromCache(storedKey, user.name);
+
+				// console.log(name, total, image, redact, prevImgFetch);
 
 				// avoid trying to re-fetch user data for redacted users or users that no longer
 				// have assiociated data (e.g banned users) by setting the `prev_helix_fetch` flag
@@ -167,8 +251,9 @@ export class RedisClientPool {
 		// from helix, then map over the resulting array to push each entry into Redis.
 		//
 		// this setup means the cached data won't yet be available to the clientside, and will require
-		// another request to hydrate user avatar fields in the DOM; not ideal but avoids creating even
-		// more weird array operation code.
+		// another request to hydrate user avatar fields in the DOM; not ideal but this only needs to 
+        // happen once EVER and it avoids creating just an insane amount of remapping array types and 
+        // object structures.
 		if (needsCacheAttempt.length > 0) {
 			await Promise.all(
 				(await this.fetchBatchedImages(needsCacheAttempt)).map(
@@ -184,9 +269,8 @@ export class RedisClientPool {
 				)
 			);
 		}
-
 		// filter out nullish entries and sort the final array in descending order
-		const result = users
+		const result: T[] = resolved
 			.filter((i) => i != null && i != undefined)
 			.sort((a: T, b: T) => {
 				return a.total < b.total ? 1 : -1;
@@ -256,9 +340,8 @@ export class RedisClientPool {
 	 */
 	private async getUserFromCache(
 		key: KeyStoredType,
-		rawUser: string
+		name: string
 	): Promise<RedisUserData> {
-		const name = rawUser.split(':')[1];
 		const total = Number(await this.client.GET(`${key}:${name}:total`));
 		const redact = Boolean(await this.client.GET(`${key}:${name}:redact`));
 		const prevImgFetch = Boolean(
@@ -273,29 +356,38 @@ export class RedisClientPool {
 		return {
 			name: redact ? this.REDACTED_USER : name,
 			total,
-			image,
+			image: redact ? null : image,
 			redact,
 			prevImgFetch
 		};
 	}
 
 	/**
-	 * Retrieves a profile image for a channel. Note that this is provided as a separate function
-	 * as we don't need to batch fetch these.
+	 * Retrieves a profile image for a channel.
+	 *
+	 * This is provided as a separate function as we don't need (or want) to batch fetch these.
 	 * @async
 	 * @param broadcaster The `login` for the channel's owner
 	 * @return The channel's `profile_image_url` string
 	 */
-	private async getChannelImage(broadcaster: string): Promise<string> {
-		const cachedImage = await this.client.GET(`user:${broadcaster}:image`);
-		if (!cachedImage) {
-			const { data } = await helixFetchUserImage(broadcaster);
-			this.cacheUserImage(broadcaster, data[0].profile_image_url);
+	private async getChannelImage(broadcaster: string): Promise<string | null> {
+		try {
+			const cachedImage = await this.client.GET(
+				`user:${broadcaster}:image`
+			);
+			if (!cachedImage) {
+				const { data } = await helixFetchUserImage(broadcaster);
+				this.cacheUserImage(broadcaster, data[0].profile_image_url);
 
-			return data[0].profile_image_url;
+				return data[0].profile_image_url;
+			}
+
+			return cachedImage;
+		} catch (err) {
+			console.log('error while fetching user image for:', broadcaster);
+			console.log(err, '\n\n');
+			return null;
 		}
-
-		return cachedImage;
 	}
 
 	/**

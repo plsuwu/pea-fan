@@ -7,13 +7,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@font-face {
-	font-family: 'Cal Sans';
-	font-style: normal;
-	font-weight: 600;
-	font-display: swap;
-	src: url('/CalSans-SemiBold.woff2') format('woff2');
-}
+/* @font-face { */
+/* 	font-family: 'Cal Sans'; */
+/* 	font-style: normal; */
+/* 	font-weight: 600; */
+/* 	font-display: swap; */
+/* 	src: url('/CalSans-SemiBold.woff2') format('woff2'); */
+/* } */
 
 :root {
 	/* Colors */
@@ -147,6 +147,8 @@
 	--font-mono: 'Source Code Pro', 'monospace';
 	--font-alt: 'Courier', 'sans-serif';
 	--font-display: 'Cal Sans', 'sans-serif';
+
+    --breakpoint-3xl: 120rem;
 
 	@keyframes accordion-down {
 		from {

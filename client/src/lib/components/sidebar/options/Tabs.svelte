@@ -1,35 +1,87 @@
 <script lang="ts">
+	import cn from 'clsx';
 	import { Tabs, ScrollArea } from 'bits-ui';
 	import { TwitchLogo, User } from 'phosphor-svelte';
+	import { fly, slide } from 'svelte/transition';
 
 	import Channels from './Channels.svelte';
 	import Chatters from './Chatters.svelte';
 	import type { Channel, Chatter } from '$lib/types';
+	import { onMount } from 'svelte';
+	import { expoIn, expoInOut, expoOut } from 'svelte/easing';
 
-	let { data }: { data: { channels: Channel[]; chatters: Chatter[] } } =
-		$props();
+	interface Props {
+		data: {
+			channels: Channel[];
+			chatters: Chatter[];
+			leaderboard: { channel: string; leaderboard: any[] } | null;
+		};
 
-	let channels = data.channels;
-	let chatters = data.chatters;
+		onContinueLoad: (key: 'user' | 'channel') => Promise<void>;
+		hasMoreContent: {
+			channels: boolean;
+			chatters: boolean;
+		};
+		loading: boolean;
+	}
+
+	let {
+		data = $bindable(),
+		onContinueLoad,
+		hasMoreContent,
+		loading = false
+	}: Props = $props();
+
+	let channels = $derived(data.channels);
+	let chatters = $derived(data.chatters);
+	let currentChannel = $derived(data.leaderboard?.channel ?? null);
+	let selectedTab: 'channels' | 'users' | 'HYDRATING' = $state('HYDRATING');
+
+	let expand = $state({ expanded: false, expandable: false });
+	onMount(() => {
+		if (data.leaderboard != null) {
+			chatters = data.leaderboard.leaderboard;
+			selectedTab = 'users';
+			expand.expandable = true;
+		} else {
+			selectedTab = 'channels';
+		}
+	});
 </script>
 
-<Tabs.Root value="channels" class="flex h-[90.5%] flex-col">
+<Tabs.Root bind:value={selectedTab} class="flex h-[90.5%] flex-col">
 	<Tabs.List
-		class="dark:bg-background grid w-full grid-cols-2 gap-1 space-x-1 rounded-2xl px-4 py-0.5 text-xs font-semibold leading-[0.01em]"
+		class="dark:bg-background grid w-full gap-1 space-x-1 rounded-2xl px-4 py-0.5 text-xs font-semibold leading-[0.01em] transition-[grid-template-columns] duration-300 ease-in-out
+		{!expand.expandable || selectedTab === 'channels'
+			? 'grid-cols-[2fr_2fr]'
+			: 'grid-cols-[1fr_3fr]'}"
 	>
 		<Tabs.Trigger
 			value="channels"
-			class="dark:data-[state=active]:bg-muted data-[state=active]:border-border shadow-inset border-muted flex h-7 flex-row 
-            items-center justify-around rounded-xl border bg-transparent px-6 py-2 data-[state=active]:bg-white"
+			class="dark:data-[state=active]:bg-muted data-[state=active]:border-border shadow-inset border-muted flex h-7
+            flex-row items-center justify-around rounded-xl border bg-transparent px-6 py-2 transition-[width] duration-300
+            ease-in ease-in-out data-[state=active]:bg-white
+            {!expand.expandable ||
+			(expand.expandable && selectedTab === 'channels')
+				? 'w-full'
+				: 'w-[65px]'}
+            "
 		>
-			<TwitchLogo size={16} weight="bold" />
-			<div>channels</div>
+			<TwitchLogo size={16} weight="bold" class="shrink-0" />
+			<div
+				class="w-min shrink transition-[display] duration-100 ease-in-out
+                    {!expand.expandable || selectedTab === 'channels'
+					? 'block opacity-100 transition-[opacity] delay-100'
+					: 'absolute opacity-0'}
+                    "
+			>
+				channels
+			</div>
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
 			value="users"
-			class="dark:data-[state=active]:bg-muted data-[state=active]:border-border shadow-inset border-muted flex h-7 flex-row
-            items-center justify-around rounded-xl border bg-transparent px-6 py-2 data-[state=active]:bg-white"
+			class="dark:data-[state=active]:bg-muted data-[state=active]:border-border shadow-inset border-muted flex h-7 flex-row items-center justify-around rounded-xl border bg-transparent px-6 py-2 transition-transform duration-200 data-[state=active]:bg-white"
 		>
 			<div>chatters</div>
 			<User size={16} weight="bold" />
@@ -41,12 +93,28 @@
           min-h-full w-full flex-col overflow-hidden rounded-[10px] border border-r-0 px-1"
 	>
 		<ScrollArea.Viewport>
-			<Tabs.Content value="channels" class="pt-3"
-				><Channels {channels} /></Tabs.Content
-			>
-			<Tabs.Content value="users" class="pt-3"
-				><Chatters {chatters} /></Tabs.Content
-			>
+			{#key selectedTab}
+				<div in:slide={{ duration: 700, easing: expoOut }}>
+					<Tabs.Content value="channels" class="shrink pt-3"
+						><Channels
+							{channels}
+							{onContinueLoad}
+							hasMoreContent={hasMoreContent.channels}
+							{loading}
+						/></Tabs.Content
+					>
+
+					<Tabs.Content value="users" class="shrink-0 pt-3"
+						><Chatters
+							{chatters}
+							{onContinueLoad}
+							hasMoreContent={hasMoreContent.chatters}
+							{loading}
+							forChannel={currentChannel}
+						/></Tabs.Content
+					>
+				</div>
+			{/key}
 		</ScrollArea.Viewport>
 		<ScrollArea.Scrollbar
 			orientation="vertical"

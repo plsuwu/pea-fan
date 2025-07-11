@@ -5,10 +5,10 @@
 	import { fade } from 'svelte/transition';
 	import { expoIn, expoInOut } from 'svelte/easing';
 	import SearchModal from './SearchModal.svelte';
-    
-    let { data } = $props();
-    let channels = data.channels;
-    let chatters = data.chatters;
+
+	let { data } = $props();
+	let channels = data.channels;
+	let chatters = data.chatters;
 
 	let open = $state(false);
 
@@ -33,8 +33,8 @@
 
 <Button.Root
 	onclick={toggleModal}
-	class="border-border rounded-input hover:border-foreground-alt/40 group flex min-w-[255px] flex-row items-center
-    justify-start border px-4 py-2 duration-100 ease-in-out hover:brightness-90 active:scale-[0.98] active:transition-all"
+	class="h-10 border-border rounded-input hover:border-foreground-alt/40 group flex min-w-[255px] flex-row items-center
+    justify-center border px-4 py-2 duration-100 ease-in-out hover:brightness-90 active:scale-[0.98] active:transition-all"
 >
 	<MagnifyingGlass
 		weight="bold"
@@ -52,7 +52,10 @@
 			<Key>
 				<ArrowFatUp size={12} class="shrink-0" />
 			</Key>
-			<Key><span class="mt-px font-mono text-[12px] font-medium">K</span></Key>
+			<Key
+				><span class="mt-px font-mono text-[12px] font-medium">K</span
+				></Key
+			>
 		</div>
 	</div>
 </Button.Root>
@@ -65,12 +68,10 @@
 		tabindex="0"
 		in:fade={{ delay: 0, duration: 150, easing: expoInOut }}
 		out:fade={{ delay: 0, duration: 150, easing: expoIn }}
-		class="absolute left-0 top-0 z-[99] flex h-full w-full flex-col items-center justify-center overflow-hidden
-        bg-black/30 backdrop-blur-[2px]"
+		class="absolute left-0 top-0 flex h-screen w-full flex-col items-center justify-center
+            overflow-hidden bg-black/30 backdrop-blur-[2px]"
 	></div>
-	<div
-		class="-translate-[50%] absolute left-[50%] top-[50%] z-[100] content-center self-center"
-	>
+	<div class="translate-[50%] top-[50%] left-[25%] absolute z-[101] content-center">
 		<SearchModal {channels} {chatters} />
 	</div>
 {/if}

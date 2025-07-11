@@ -3,7 +3,8 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
 	let user = event.url.pathname.split('/')[1];
-    let leaderboard = await RedisClient.getUserLeaderboard('user', user);
+    let leaderboard = await RedisClient.getLeaderboard('user', user);
+
 	return {
 		userLeaderboard: leaderboard
 	};

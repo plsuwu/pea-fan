@@ -2,16 +2,42 @@
 	import { Crown } from 'phosphor-svelte';
 	import { formatNumber, PROTO, PF_BASE_URL } from '$lib/utils';
 	import type { Channel } from '$lib/types';
+	import { onMount } from 'svelte';
 
-	let { channels }: { channels: Channel[] } = $props();
+	interface Props {
+		channels: Channel[];
+
+		onContinueLoad: (key: 'user' | 'channel') => Promise<void>;
+		hasMoreContent: boolean;
+		loading: boolean;
+	}
+
+	let {
+		channels = $bindable(),
+		onContinueLoad,
+		hasMoreContent,
+		loading = false
+	}: Props = $props();
+
+	// console.log('aa', channels);
+
+	let scrollContainer: HTMLOListElement;
+	let sentinel: HTMLDivElement;
+	let observer: IntersectionObserver;
+
+	onMount(() => {});
 </script>
 
-<ol class="list-inside list-decimal flex-col px-4 py-4 text-sm">
+<ol
+	class="list-inside list-decimal flex-col px-4 py-4 text-sm"
+	bind:this={scrollContainer}
+>
 	{#each channels as chan, i}
-		<a 
-        href={`${PROTO}://${chan.broadcaster}.${PF_BASE_URL}/`}
-        class="hover:opacity-50 transition-opacity duration-100 ease-out"
-        >
+		<a
+			href={`${PROTO}://${chan.broadcaster}.${PF_BASE_URL}/`}
+			data-sveltekit-preload-data="false"
+			class="transition-opacity duration-100 ease-out hover:opacity-50"
+		>
 			<li class="flex flex-row items-center justify-start space-y-1">
 				{#if i === 0}
 					<Crown size={16} class="shrink-0 text-yellow-400" />

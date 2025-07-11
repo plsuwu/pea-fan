@@ -1,10 +1,11 @@
 <script lang="ts">
+    import { PROTO, PF_BASE_URL } from '$lib/utils';
 	import { DropHalfBottom } from 'phosphor-svelte';
 </script>
 
 <a
 	class="flex flex-row items-center justify-center space-x-1 align-text-bottom px-1 mr-30 select-none"
-	href="/"
+	href={`${PROTO}://${PF_BASE_URL}/`}
 >
 	<div class="pt-1 text-yellow-400 dark:text-yellow-100">
 		<DropHalfBottom size={22} weight="duotone" />

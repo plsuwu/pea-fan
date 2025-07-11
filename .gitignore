@@ -3,7 +3,7 @@
 
 /**/appendonlydir
 /**/.redis_data_backup
-/**/_data-rw
+/**/_data_rw
 /**/_data
 dump.rdb
 compose.yaml
@@ -37,4 +37,4 @@ vite.config.ts.timestamp-*
 /**/.idea
 .idea
 
-
+*.log

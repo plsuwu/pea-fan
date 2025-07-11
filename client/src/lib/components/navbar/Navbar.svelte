@@ -9,7 +9,7 @@
 <div
 	class="border-border h-15 flex w-full flex-row items-center justify-between border-b px-8"
 >
-	<div class="flex flex-row">
+	<div class="flex flex-row h-full w-full overflow-hidden items-center">
 		<Home />
 		<Search {data} />
 	</div>

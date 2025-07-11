@@ -4,7 +4,8 @@ declare global {
 	namespace App {
 		// interface Error {}
 		interface Locals {
-			channel: string;
+			currentChannel: string | undefined;
+            live: string[]; 
 		}
 		// interface PageData {}
 		// interface PageState {}
