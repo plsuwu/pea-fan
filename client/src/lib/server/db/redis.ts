@@ -1,5 +1,9 @@
 import { createClient, type RedisClientType } from 'redis';
-import { helixFetchBatchedImages, helixFetchUserImage } from '../helix/utils';
+import {
+	helixFetchBatchedImages,
+	helixFetchUserImage,
+	helixGetIdsFromLogins
+} from '../helix/utils';
 import type {
 	Chatter,
 	Channel,
@@ -7,8 +11,25 @@ import type {
 	CacheRetrievalResult
 } from '$lib/types';
 
+export const USER_KEY_INDEX_DISPLAY_NAME = 0;
+export const USER_KEY_INDEX_LOGIN = 1;
+export const USER_KEY_INDEX_IMAGE = 2;
+export const USER_KEY_INDEX_PREV_FETCH = 3;
+export const USER_KEY_INDEX_REDACT = 4;
+export const USER_KEY_INDEX_TOTAL = 5;
+export const USER_KEY_INDEX_LEADERBOARD = 6;
+
 export type KeyStoredType = 'user' | 'channel';
 export type KeyReturnType = 'login' | 'broadcaster';
+
+export interface UserTable {
+	id: string;
+	login: string;
+	name: string;
+	image: string;
+	total: string;
+	// leaderboard: { value: string; score: number }[];
+}
 
 interface RedisUserData {
 	name: string;
@@ -64,6 +85,35 @@ export class RedisClientPool {
 			}
 		}
 	}
+	private getMigrationPairs(prefix: string, id: string, data: UserTable) {
+		const { name, login, image, total } = data;
+		return [
+			{
+				key: `${prefix}:${id}:name`,
+				val: name
+			},
+			{
+				key: `${prefix}:${id}:login`,
+				val: login
+			},
+			{
+				key: `${prefix}:${id}:image`,
+				val: image
+			},
+			{
+				key: `${prefix}:${id}:prev_fetch`,
+				val: 1
+			},
+			// {
+			// 	key: `${prefix}:${id}:redact`,
+			// 	val: 0
+			// },
+			{
+				key: `${prefix}:${id}:total`,
+				val: total
+			}
+		];
+	}
 
 	public async migrateOldData() {
 		this.connect();
@@ -71,19 +121,134 @@ export class RedisClientPool {
 		const rawUserKeys = await this.client.KEYS(`user:*:total`);
 		const rawChannelKeys = await this.client.KEYS(`channel:*:total`);
 
-		await this._migrate(rawUserKeys, 'user');
-		await this._migrate(rawChannelKeys, 'channel');
+		const userKeys = rawUserKeys.map((key) => key.split(':')[1]);
+		const channelKeys = rawChannelKeys.map(
+			(key) => key.split(':')[1].split('#')[1]
+		);
+
+		const userLoginIdMap = await Promise.all(
+			(await helixGetIdsFromLogins(userKeys)).map(
+				async ({ id, login, name, image }) => {
+					try {
+						const total =
+							(await this.client.GET(`user:${name}:total`)) ??
+							(await this.client.GET(`user:${login}:total`));
+						let leaderboard = await this.client.zRangeWithScores(
+							`user:${name}:leaderboard`,
+							0,
+							-1
+						);
+
+						if (leaderboard.length === 0) {
+							leaderboard = await this.client.zRangeWithScores(
+								`user:${login}:leaderboard`,
+								0,
+								-1
+							);
+						}
+
+						const migration = this.getMigrationPairs('user', id, {
+							id,
+							login,
+							name,
+							image,
+							total: total ?? '0'
+						});
+
+						for (const obj of migration) {
+							const { key, val } = obj;
+
+							// await this.client.DEL(key);
+							await this.client.SET(key, String(val));
+						}
+
+						await this.client.del(`user:${id}:leaderboard`);
+						await this.client.zAdd(
+							`user:${id}:leaderboard`,
+							leaderboard
+						);
+
+						return {
+							id,
+							total,
+							leaderboard,
+							login,
+							name,
+							image,
+							prev_fetch: true,
+						};
+					} catch (err) {
+						console.error('ERR @ USER:', name);
+						console.error(`\t\t(id: ${id})`);
+						console.error('REASON:', err);
+					}
+				}
+			)
+		);
+
+		const userIds = userLoginIdMap.map((user) => user?.id ?? null).filter(Boolean);
+        await this._migrate(userIds, 'user');
+
+		const channelLoginIdMap = await Promise.all(
+			(await helixGetIdsFromLogins(channelKeys)).map(
+				async ({ id, login, name, image }) => {
+					const total = await this.client.GET(
+						`channel:#${login}:total`
+					);
+					const leaderboard = await this.client.zRangeWithScores(
+						`channel:#${login}:leaderboard`,
+						0,
+						-1
+					);
+
+					const migration = this.getMigrationPairs(
+						'channel',
+						`#${login}`,
+						{
+							id,
+							login,
+							name,
+							image,
+							total: total ?? '0'
+						}
+					);
+
+					for (const obj of migration) {
+						const { key, val } = obj;
+						await this.client.SET(key, String(val));
+					}
+
+					// this seems like something we will need
+					await this.client.SET(`channel:#${login}:id`, id);
+					await this.client.zAdd(
+						`channel:#${login}:leaderboard`,
+						leaderboard
+					);
+
+					return {
+						id,
+						total,
+						leaderboard,
+						login,
+						name,
+						image
+					};
+				}
+			)
+		);
+
+		// await this._migrate(rawUserKeys, 'user');
+		// await this._migrate(rawChannelKeys, 'channel');
 	}
 
 	private async _migrate(keys: string[], keyType: string) {
 		await Promise.all(
-			keys.map(async (user) => {
-				const name = user.split(':')[1];
+			keys.map(async (id) => {
 				const total = Number(
-					await this.client.GET(`${keyType}:${name}:total`)
+					await this.client.GET(`${keyType}:${id}:total`)
 				);
 				await this.client.zAdd(`${keyType}:global:leaderboard`, {
-					value: name,
+					value: id,
 					score: total
 				});
 			})
@@ -125,10 +290,10 @@ export class RedisClientPool {
 
 	/**
 	 * Retrieves a user's leaderboard (for both channels and chatters).
-     *
-     * todo: maybe refactor the way we handle user/channel paths in this function so we can make sure we dont accidentally let something
-     *       slip through the cracks? currently i think this is it for this implementation?? 
-     *
+	 *
+	 * todo: maybe refactor the way we handle user/channel paths in this function so we can make sure we dont accidentally let something
+	 *       slip through the cracks? currently i think this is it for this implementation??
+	 *
 	 * @async
 	 * @param storedKey The user type as defined in the cache: either `'user'` or `'channel'`.
 	 * @param user The user's name/login - if `storedKey` is `channel`, this will automatically be prepended with `'#'`.
@@ -144,8 +309,8 @@ export class RedisClientPool {
 	) {
 		// ensure open Redis connection
 		this.connect();
-        
-        // euehuhgughuheurhrrrgh
+
+		// euehuhgughuheurhrrrgh
 		const key = `${storedKey}:${storedKey === 'channel' && user !== 'global' ? `#${user}` : user}:leaderboard`;
 		const leaderboard = await this.client.zRangeWithScores(
 			key,
@@ -155,12 +320,12 @@ export class RedisClientPool {
 				REV: true
 			}
 		);
-    
+
 		const board = leaderboard.map((item) => {
 			return {
-                // channel names will still have the leading `#` connected (this could be corrected
-                // in the Rust lexer) - if this split call is nullish then we have a chatter's login
-                // and we set `name` to the value directly
+				// channel names will still have the leading `#` connected (this could be corrected
+				// in the Rust lexer) - if this split call is nullish then we have a chatter's login
+				// and we set `name` to the value directly
 				name: item.value.split('#')[1] ?? item.value,
 				total: item.score
 			};
@@ -177,9 +342,8 @@ export class RedisClientPool {
 		} else {
 			return await Promise.all(
 				board.map(async (broadcaster) => {
-
-                    // make sure we redact chatters that have requested
-                    // to be redacted!
+					// make sure we redact chatters that have requested
+					// to be redacted!
 					const redact = await this.client.GET(
 						`user:${broadcaster.name}:redact`
 					);
@@ -251,9 +415,9 @@ export class RedisClientPool {
 		// from helix, then map over the resulting array to push each entry into Redis.
 		//
 		// this setup means the cached data won't yet be available to the clientside, and will require
-		// another request to hydrate user avatar fields in the DOM; not ideal but this only needs to 
-        // happen once EVER and it avoids creating just an insane amount of remapping array types and 
-        // object structures.
+		// another request to hydrate user avatar fields in the DOM; not ideal but this only needs to
+		// happen once EVER and it avoids creating just an insane amount of remapping array types and
+		// object structures.
 		if (needsCacheAttempt.length > 0) {
 			await Promise.all(
 				(await this.fetchBatchedImages(needsCacheAttempt)).map(

@@ -3,7 +3,7 @@ import RedisClient from '$lib/server/db/redis';
 import type { Chatter } from '$lib/types';
 
 export const load: LayoutServerLoad = async ({ locals, fetch }) => {
-	// await RedisClient.migrateOldData();
+	await RedisClient.migrateOldData();
 
 	let leaderboard: { channel: string; leaderboard: any[] } | null = null;
 	let live = null;

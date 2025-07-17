@@ -2,22 +2,21 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
 	pgTable as table,
 	text,
-	bigint,
+	integer,
 	timestamp,
 	primaryKey,
 	index,
-	boolean,
-	serial
+	boolean
 } from 'drizzle-orm/pg-core';
 
 export const user = table(
 	'users',
 	{
-		id: text('id').primaryKey().notNull(),
+		id: text('id').primaryKey().unique().notNull(),
 		login: text('login').unique().notNull(),
 		color: text('color').default('#000000').notNull(),
 		image: text('image'),
-		total: bigint({ mode: 'number' }).default(1).notNull(),
+		total: integer('total').default(1).notNull(),
 		redact: boolean('redact').default(false).notNull(),
 		createdAt: timestamp('created_at').defaultNow(),
 		updatedAt: timestamp('updated_at').defaultNow()
@@ -29,13 +28,10 @@ export const channel = table(
 	'channels',
 	{
 		id: text('id')
-			.references((): AnyPgColumn => user.id)
+			.references((): AnyPgColumn => user.id, { onDelete: 'cascade' })
 			.primaryKey()
 			.notNull(),
-		broadcaster: text('broadcaster')
-			.references((): AnyPgColumn => user.login)
-			.notNull(),
-		total: bigint({ mode: 'number' }).default(0).notNull(),
+		total: integer('total').default(1).notNull(),
 		createdAt: timestamp('created_at').defaultNow(),
 		updatedAt: timestamp('updated_at').defaultNow()
 	},
@@ -45,22 +41,22 @@ export const channel = table(
 export const score = table(
 	'scores',
 	{
-		chatter: text('chatter')
-			.references((): AnyPgColumn => user.login)
+		chatterId: text('chatter_id')
+			.references((): AnyPgColumn => user.id, { onDelete: 'cascade' })
 			.notNull(),
-		broadcaster: text('broadcaster')
-			.references((): AnyPgColumn => channel.broadcaster)
+		broadcasterId: text('channel_id')
+			.references((): AnyPgColumn => channel.id, { onDelete: 'cascade' })
 			.notNull(),
-		score: bigint({ mode: 'number' }).notNull().default(1),
+		score: integer('score').notNull().default(1),
 		createdAt: timestamp('created_at').defaultNow(),
 		updatedAt: timestamp('updated_at').defaultNow()
 	},
 	(t) => [
-		primaryKey({ columns: [t.chatter, t.broadcaster] }),
-		index('idx_scores_chatter').on(t.chatter),
-		index('idx_scores_broadcaster').on(t.broadcaster),
-		index('idx_user_score').on(t.chatter, t.score.desc()),
-		index('idx_channel_score').on(t.broadcaster, t.score.desc())
+		primaryKey({ columns: [t.chatterId, t.broadcasterId] }),
+		index('idx_scores_chatter').on(t.chatterId),
+		index('idx_scores_broadcaster').on(t.broadcasterId),
+		index('idx_user_score').on(t.chatterId, t.score.desc()),
+		index('idx_channel_score').on(t.broadcasterId, t.score.desc())
 	]
 );
 
@@ -77,7 +73,7 @@ export const score = table(
 // 				onDelete: 'cascade'
 // 			})
 // 			.notNull(),
-// 		score: bigint({ mode: 'number' }).notNull().default(0),
+// 		score: integer({ mode: 'number' }).notNull().default(0),
 // 		createdAt: timestamp('created_at').defaultNow(),
 // 		updatedAt: timestamp('updated_at').defaultNow()
 // 	},

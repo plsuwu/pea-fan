@@ -26,6 +26,54 @@ export const helixFetchStreamState = async (logins: string[]) => {
     return { body, status: res.status };
 };
 
+export const helixGetIdsFromLogins = async (logins: string[]) => {
+    console.log('input keyspace:', logins.length);
+    let retrieved = new Array();
+    let remaining = logins.length;
+	let cursor = 0;
+
+	while (remaining) {
+		const arraySlice = logins.slice(
+			cursor,
+			Math.min(cursor + 100, logins.length)
+		);
+
+		const fetched: { data: any[] } | null =
+			await helixFetchBatchedImages(arraySlice);
+
+		if (fetched) {
+			const { data } = fetched;
+			retrieved.push(...data);
+		}
+
+		cursor += Math.min(100, remaining);
+		remaining -=
+			remaining > 100
+				? 100
+				: remaining;
+	}
+
+    const formatted = retrieved.map((user) => {
+        return {
+            id: user.id,
+            login: user.login,
+            name: user.display_name,
+            image: user.profile_image_url,
+        };
+    });
+    
+    console.log('ALL RETRIEVED USER DATA:');
+    console.log('keyspace:', formatted.length);
+    return formatted;
+
+	// return retrieved.map((user) => {
+	// 	return {
+	// 		login: user.display_name,
+	// 		image: user.profile_image_url
+	// 	};
+	// });
+}
+
 export const helixFetchUserImage = async (login: string) => {
 	const uri = `${HELIX_USERS}?login=${login}`;
 	const headers = getAppTokenHeaders();
@@ -84,7 +132,7 @@ const helixIndividualFetch = async (
 	return { data: result };
 };
 
-function getBatchUrl(logins: string[]) {
+function getBatchUrl(logins: string[], base_url: string = HELIX_USERS) {
 	let uri = `${HELIX_USERS}?login=${logins.pop()}`;
 	logins.forEach((element) => {
 		uri += `&login=${element}`;
