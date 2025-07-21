@@ -39,7 +39,7 @@ pub const IRC_COMMAND_JOIN: &str = "JOIN";
 pub const KEEPALIVE_RESPONSE: &str = "PONG :tmi.twitch.tv";
 
 #[cfg(feature = "production")]
-pub const TRACKED_CHANNELS_COUNT: usize = 29;
+pub const TRACKED_CHANNELS_COUNT: usize = 31;
 
 #[cfg(not(feature = "production"))]
 pub const TRACKED_CHANNELS_COUNT: usize = 1;
@@ -77,6 +77,8 @@ pub const CHANNELS: TrackedChannels = [
     "flippersphd",
     "misspeggyx",
     "pekoe_bunny",
+    "walfas",
+    "noi_vt"
 ];
 
 #[cfg(not(feature = "production"))]
