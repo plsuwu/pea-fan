@@ -8,7 +8,7 @@
 	interface Props {
 		chatters: Chatter[];
 
-		onContinueLoad: (key: 'user' | 'channel') => void;
+		onContinueLoad: (key: 'chatter' | 'channel') => void;
 		hasMoreContent: boolean;
 		loading: boolean;
         forChannel: string | null,
@@ -27,17 +27,18 @@
 	let observer: IntersectionObserver | null = $state(null);
 
 	onMount(() => {
+        onContinueLoad(forChannel ? 'channel' : 'chatter');
 		observer = new IntersectionObserver(
 			(entries) => {
 				const entry = entries[0];
 				if (entry.isIntersecting && hasMoreContent && !loading) {
-					onContinueLoad('user');
+                    onContinueLoad(forChannel ? 'channel' : 'chatter');
 				}
 			},
 			{
 				root: scrollContainer,
 				rootMargin: '100px',
-				threshold: 0.7
+				threshold: 1.0
 			}
 		);
 
@@ -78,14 +79,14 @@
 						<img
 							src={chatter.image}
 							class="size-5 rounded-full"
-							alt={`${chatter.login} profile_image`}
+							alt={`${chatter.login} avatar`}
 						/>
 					{:else}
 						<UserCircleDashed class="size-5" />
 					{/if}
 				</div>
 				<div class="flex w-full flex-row items-center justify-between">
-					<div>{chatter.login}</div>
+					<div>{chatter.name}</div>
 					<div>{chatter.total}</div>
 				</div>
 			</li>

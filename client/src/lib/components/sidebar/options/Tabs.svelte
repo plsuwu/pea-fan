@@ -17,7 +17,7 @@
 			leaderboard: { channel: string; leaderboard: any[] } | null;
 		};
 
-		onContinueLoad: (key: 'user' | 'channel') => Promise<void>;
+		onContinueLoad: (key: 'chatter' | 'channel') => Promise<void>;
 		hasMoreContent: {
 			channels: boolean;
 			chatters: boolean;
@@ -35,13 +35,14 @@
 	let channels = $derived(data.channels);
 	let chatters = $derived(data.chatters);
 	let currentChannel = $derived(data.leaderboard?.channel ?? null);
-	let selectedTab: 'channels' | 'users' | 'HYDRATING' = $state('HYDRATING');
+	let selectedTab: 'channels' | 'chatters' | 'HYDRATING' =
+		$state('HYDRATING');
 
 	let expand = $state({ expanded: false, expandable: false });
 	onMount(() => {
 		if (data.leaderboard != null) {
 			chatters = data.leaderboard.leaderboard;
-			selectedTab = 'users';
+			selectedTab = 'chatters';
 			expand.expandable = true;
 		} else {
 			selectedTab = 'channels';
@@ -80,7 +81,7 @@
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
-			value="users"
+			value="chatters"
 			class="dark:data-[state=active]:bg-muted data-[state=active]:border-border shadow-inset border-muted flex h-7 flex-row items-center justify-around rounded-xl border bg-transparent px-6 py-2 transition-transform duration-200 data-[state=active]:bg-white"
 		>
 			<div>chatters</div>
@@ -104,7 +105,7 @@
 						/></Tabs.Content
 					>
 
-					<Tabs.Content value="users" class="shrink-0 pt-3"
+					<Tabs.Content value="chatters" class="shrink-0 pt-3"
 						><Chatters
 							{chatters}
 							{onContinueLoad}

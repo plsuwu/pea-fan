@@ -8,21 +8,25 @@
 	let loading = $state(false);
 	let hasMoreContent = $state({ channels: true, chatters: true });
 
-	async function onContinueLoad(key: 'user' | 'channel') {
+	async function onContinueLoad(key: 'chatter' | 'channel') {
 		loading = true;
 
 		let offset =
-			key === 'user'
-				? mutableData.chatters.length
-				: mutableData.channels.length;
-
+			key === 'chatter'
+				? mutableData.chatters
+					? mutableData.chatters.length
+					: 0
+				: mutableData.channels
+					? mutableData.channels.length
+					: 0;
+        
+        console.log(key, offset);
 
 		let uri = `/api/cache-query?key=${key}&offset=${offset}`;
-        if (data.leaderboard && data.leaderboard.channel) {
-            uri += `&user=${data.leaderboard.channel}`;
-        }
-        console.log(uri);
-        
+		if (data.leaderboard && data.leaderboard.channel) {
+			uri += `&user=${data.leaderboard.channel}`;
+		}
+		console.log(uri);
 
 		let res = await fetch(uri, {
 			method: 'GET'
@@ -30,14 +34,15 @@
 
 		console.log(res.status, res.statusText);
 		if (res.status == 200) {
-
 			let body = await res.json();
+			console.log(body);
+
 			if (body === null) {
-				key === 'user'
+				key === 'chatter'
 					? (hasMoreContent.chatters = false)
 					: (hasMoreContent.channels = false);
 			} else {
-				if (key === 'user') {
+				if (key === 'chatter') {
 					mutableData.chatters.push(...body);
 				} else {
 					mutableData.channels.push(...body);

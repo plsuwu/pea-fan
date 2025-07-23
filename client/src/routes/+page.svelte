@@ -4,7 +4,7 @@
 	import LiveCard from '$lib/components/broadcaster-card/LiveCard.svelte';
 
 	let { data } = $props();
-	let { leaderboard, channels, chatters, live } = data;
+	let { leaderboard, channels, chatters, live, current } = data;
 
 	console.log(live);
 </script>

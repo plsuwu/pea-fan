@@ -17,7 +17,6 @@ export const GET = async (event: RequestEvent) => {
 		return json(body ?? null, { status: res.status });
 	}
 
-	console.log(body);
 	const streamQuery = await helixFetchStreamState(body.active_broadcasters);
 
 	if (!streamQuery || streamQuery.status != 200) {

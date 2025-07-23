@@ -7,7 +7,7 @@
 	interface Props {
 		channels: Channel[];
 
-		onContinueLoad: (key: 'user' | 'channel') => Promise<void>;
+		onContinueLoad: (key: 'chatter' | 'channel') => Promise<void>;
 		hasMoreContent: boolean;
 		loading: boolean;
 	}
@@ -34,7 +34,7 @@
 >
 	{#each channels as chan, i}
 		<a
-			href={`${PROTO}://${chan.broadcaster}.${PF_BASE_URL}/`}
+			href={`${PROTO}://${chan.login}.${PF_BASE_URL}/`}
 			data-sveltekit-preload-data="false"
 			class="transition-opacity duration-100 ease-out hover:opacity-50"
 		>
@@ -49,11 +49,11 @@
 					<img
 						src={chan.image}
 						class="size-5 rounded-full"
-						alt={`${chan.broadcaster} profile_image`}
+						alt={`${chan.login} avatar`}
 					/>
 				</div>
 				<div class="flex w-full flex-row items-center justify-between">
-					<div>{chan.broadcaster}</div>
+					<div>{chan.name}</div>
 					<div>{chan.total}</div>
 				</div>
 			</li>

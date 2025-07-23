@@ -33,16 +33,18 @@
 
 <Button.Root
 	onclick={toggleModal}
-	class="h-10 border-border rounded-input hover:border-foreground-alt/40 group flex min-w-[255px] flex-row items-center
-    justify-center border px-4 py-2 duration-100 ease-in-out hover:brightness-90 active:scale-[0.98] active:transition-all"
+	class="h-10 border-border rounded-input hover:border-foreground-alt/40 group flex min-w-[255px]
+    flex-row items-center justify-center border px-4 py-2 duration-100 ease-in-out hover:brightness-90
+    active:scale-[0.98] active:transition-all"
 >
 	<MagnifyingGlass
 		weight="bold"
-		class="text-foreground-alt/50 group-hover:text-foreground-alt mr-4 transition-all duration-100 ease-out"
+		class="text-foreground-alt/50 group-hover:text-foreground-alt mr-4 transition-all duration-100
+        ease-out"
 	/>
 	<div
-		class="text-foreground-alt/50 group-hover:text-foreground-alt flex w-full flex-row items-center justify-between
-        text-sm transition-all"
+		class="text-foreground-alt/50 group-hover:text-foreground-alt flex w-full flex-row items-center
+        justify-between text-sm transition-all"
 	>
 		<div>search</div>
 		<div class="flex flex-row flex-nowrap justify-self-end">
