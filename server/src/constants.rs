@@ -39,7 +39,7 @@ pub const IRC_COMMAND_JOIN: &str = "JOIN";
 pub const KEEPALIVE_RESPONSE: &str = "PONG :tmi.twitch.tv";
 
 #[cfg(feature = "production")]
-pub const TRACKED_CHANNELS_COUNT: usize = 31;
+pub const TRACKED_CHANNELS_COUNT: usize = 33;
 
 #[cfg(not(feature = "production"))]
 pub const TRACKED_CHANNELS_COUNT: usize = 1;
@@ -48,37 +48,40 @@ pub type TrackedChannels = [&'static str; TRACKED_CHANNELS_COUNT];
 
 #[cfg(feature = "production")]
 pub const CHANNELS: TrackedChannels = [
-    "sleepiebug",
-    "parasi",
-    "unipiu",
-    "cchiko_",
-    "liljuju",
-    "vacu0usly",
-    "bexvalentine",
-    "rena_chuu",
-    "snoozy",
-    "womfyy",
-    "kyoharuvt",
     "batatvideogames",
-    "myrmidonvt",
-    "kokopimento",
-    "myramors",
-    "sheriff_baiken",
-    "lcolonq",
+    "bexvalentine",
+    "byebi",
+    "cchiko_",
     "chocojax",
-    "miffygeist",
-    "haelpc",
-    "gloomybyte",
-    "niupao",
-    "souly_ch",
-    "kyundere",
-    "miaelou",
-    "saltae",
     "flippersphd",
+    "gloomybyte",
+    "haelpc",
+    "kokopimento",
+    "krumroll",
+    "kyoharuvt",
+    "kyundere",
+    "lcolonq",
+    "liljuju",
+    "miaelou",
+    "miffygeist",
     "misspeggyx",
+    "myramors",
+    "myrmidonvt",
+    "niupao",
+    "noi_vt",
+    "parasi",
     "pekoe_bunny",
+    "rena_chuu",
+    "saltae",
+    "sheriff_baiken",
+    "sleepiebug",
+    "snoozy",
+    "souly_ch",
+    "unipiu",
+    "vacu0usly",
     "walfas",
-    "noi_vt"
+    "womfyy"
+
 ];
 
 #[cfg(not(feature = "production"))]
