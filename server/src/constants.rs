@@ -81,7 +81,6 @@ pub const CHANNELS: TrackedChannels = [
     "vacu0usly",
     "walfas",
     "womfyy"
-
 ];
 
 #[cfg(not(feature = "production"))]
