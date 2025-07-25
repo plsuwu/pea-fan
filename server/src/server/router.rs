@@ -34,8 +34,22 @@ pub async fn route(tx: oneshot::Sender<(SocketAddr, Option<String>)>) {
     axum::serve(listener, app).await.unwrap();
 }
 
-pub async fn get_tracked_channels() -> Json<TrackedChannels> {
-    Json(CHANNELS)
+
+// ```ignore
+// .route("/channels", get(get_tracked_channels))
+// 148.7     |                             --- ^^^^^^^^^^^^^^^^^^^^ the trait `Handler<_, _>` is not implemented for fn item `fn() -> impl Future<Output = ...> {get_tracked_channels}`
+// 148.7     |                             |
+// 148.7     |                             required by a bound introduced by this call
+// ```
+//
+// I don't really get it, but we fix this for now by returning a `Json<Vec<&str>>`
+// instead of `Json<[&str; 33]>`.
+// Allegedly it is something to do with `std` historically only automatically implementing `Serialize` for arrays 
+// up to 32 items in length? 
+//
+// See: https://stackoverflow.com/questions/62665558/how-can-i-implement-serdedeserialize-for-arrays-larger-than-32
+pub async fn get_tracked_channels() -> Json<Vec<&'static str>> {
+    Json(CHANNELS.to_vec())
 }
 
 pub async fn get_channel(Query(query): Query<GetChannelQueryParams>) -> Json<RedisQueryResponse> {
