@@ -111,11 +111,13 @@ impl Client for WsClient {
             .send(msg)
             .await
             .map_err(WsClientError::Websocket)?;
-
+        
+        // This isn't particularly robust - if a user sends a message that says `PASS oauth:`, for
+        // example, this handler will trigger
         if !message.contains("PASS oauth:") {
             debug!("Sent: {}", message);
         } else {
-            debug!("Sent: [AUTHENTICATION MESSAGE]");
+            debug!("Sent: [OAUTH]");
         }
 
         Ok(())
@@ -228,7 +230,7 @@ where
                         user_id = %user_id,
                         color = ?color,
                         message_len = message.len(),
-                        "found target string"
+                        "matches target"
                     );
 
                     self.data_store

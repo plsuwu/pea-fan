@@ -26,64 +26,6 @@ pub async fn redis_pool() -> RedisPoolResult<&'static RedisPool> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RedisResponse {}
 
-pub trait Key {
-    fn new(name: &str) -> Self;
-}
-
-#[derive(Debug)]
-pub struct ChatterKeys {
-    total: String,
-    leaderboard: String,
-    image: String,
-    redact: String,
-    prev_helix_fetch: String,
-}
-
-impl Key for ChatterKeys {
-    fn new(name: &str) -> Self {
-        Self {
-            total: format!("user:{}:total", name),
-            leaderboard: format!("user:{}:leaderboard", name),
-            image: format!("user:{}:image", name),
-            redact: format!("user:{}:redact", name),
-            prev_helix_fetch: format!("user:{}:prev_helix_fetch", name),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct ChannelKeys {
-    total: String,
-    leaderboard: String,
-    image: String,
-}
-
-impl Key for ChannelKeys {
-    fn new(name: &str) -> Self {
-        Self {
-            total: format!("channel:#{}:total", name),
-            leaderboard: format!("channel:#{}:leaderboard", name),
-            image: format!("channel:#{}:image", name),
-        }
-    }
-}
-
-#[async_trait]
-pub trait CacheRead {
-    async fn get_channel_data(&self, channel: &str) -> RedisPoolResult<()>;
-    async fn get_chatter_data(&self, chatter: &str) -> RedisPoolResult<()>;
-
-    fn format_leadboard(leaderboard: Vec<String>) -> Vec<(String, isize)> {
-        leaderboard
-            .chunks_exact(2)
-            .map(|chunk| (chunk[0].to_string(), chunk[1].parse::<isize>().unwrap_or(0)))
-            .collect()
-    }
-}
-
-#[async_trait]
-pub trait CacheWrite {}
-
 #[derive(Clone)]
 pub struct RedisPool {
     manager: ConnectionManager,
@@ -91,6 +33,9 @@ pub struct RedisPool {
 
 impl fmt::Debug for RedisPool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // i want to be able to log debug info where alongside this struct but for obvious
+        // reasons this isn't really viable to have debug implemented in a simple way, so
+        // we have this thing instead
         write!(f, "{}", CANNOT_DEBUG)
     }
 }
@@ -103,57 +48,152 @@ impl RedisPool {
         Ok(Self { manager })
     }
 
-    pub async fn pull_from_db(channel: &str) -> RedisPoolResult<()> {
-        todo!() 
+    /// When is stream comes online, perform a batched read from the database to facilitate faster
+    /// write access
+    ///
+    /// # Params
+    ///
+    /// * `channel_id` - The ID of the channel to pull into Redis
+    pub async fn from_db(channel_id: &str) -> RedisPoolResult<()> {
+        todo!()
     }
 
-    pub async fn push_to_db(channel: &str) -> RedisPoolResult<()> {
+    /// When a stream goes offline, perform a batched write to the database to free up memory
+    ///
+    /// # Params
+    ///
+    /// * `channel_id` - the ID of the channel to push out of Redis
+    pub async fn to_db(channel_id: &str) -> RedisPoolResult<()> {
         todo!()
     }
 }
 
 #[async_trait]
-impl CacheRead for RedisPool {
-    async fn get_chatter_data(&self, chatter: &str) -> RedisPoolResult<()> {
-        let mut conn = self.manager.clone();
+pub trait CacheWrite {}
 
-        let chatter_keys = ChatterKeys::new(chatter);
+pub enum UserType {
+    Chatter,
+    Channel,
+}
 
-        let mut pipe = redis::pipe();
-        pipe.atomic();
+impl ToString for UserType {
+    fn to_string(&self) -> String {
+        match self {
+            UserType::Chatter => String::from("user"),
+            UserType::Channel => String::from("channel"),
+        }
+    }
+}
 
-        pipe.get(chatter_keys.total);
-        pipe.zrevrange_withscores(chatter_keys.leaderboard, 0, -1);
+pub trait Key {
+    fn leaderboard(&self, id: &str) -> String;
 
-        let res_outer: Vec<Value> = pipe.query_async(&mut conn).await?;
+    fn login(&self, id: &str) -> String;
+    fn image(&self, id: &str) -> String;
+    fn total(&self, id: &str) -> String;
 
-        Ok(())
+    fn redact(&self, id: &str) -> String;
+    fn fetched(&self, id: &str) -> String;
+}
+
+#[derive(Debug)]
+pub enum QueryKey {
+    Chatter,
+    Channel,
+}
+
+impl QueryKey {
+    fn to_str(&self) -> &'static str {
+        match self {
+            QueryKey::Chatter => "chatter",
+            QueryKey::Channel => "channel",
+        }
+    }
+}
+
+impl Key for QueryKey {
+    fn login(&self, id: &str) -> String {
+        format!("{}:{}:login", self.to_str(), id)
     }
 
-    async fn get_channel_data(&self, channel: &str) -> RedisPoolResult<()> {
-        Ok(())
+    fn image(&self, id: &str) -> String {
+        format!("{}:{}:image", self.to_str(), id)
+    }
+
+    fn total(&self, id: &str) -> String {
+        format!("{}:{}:total", self.to_str(), id)
+    }
+
+    fn leaderboard(&self, id: &str) -> String {
+        format!("{}:{}:leaderboard", self.to_str(), id)
+    }
+
+    fn redact(&self, id: &str) -> String {
+        format!("{}:{}:redact", self.to_str(), id)
+    }
+
+    fn fetched(&self, id: &str) -> String {
+        format!("{}:{}:fetched", self.to_str(), id)
+    }
+}
+
+pub struct Region {
+    cursor: isize,
+    limit: isize,
+}
+
+impl Region {
+    pub fn increment(&mut self) {
+        self.cursor += self.limit;
+        self.limit += self.limit;
+    }
+}
+
+impl Default for Region {
+    fn default() -> Self {
+        Self {
+            cursor: 0,
+            limit: 99,
+        }
     }
 }
 
 #[async_trait]
-impl CacheCounter for RedisPool {
-    async fn increment_counter(&self, channel: &str, chatter: &str) -> WsClientResult<()> {
-        let mut conn = self.manager.clone();
+pub trait CacheRead {
+    // async fn get_leaderboard(&self, key: QueryKey, region: Region) -> RedisPoolResult<Vec<User>>;
+    async fn get_image(&self, key: QueryKey) -> Option<String>;
+    async fn get_total(&self, key: QueryKey) -> i32;
+    async fn get_login(&self, key: QueryKey) -> String;
+    async fn get_redaction(&self, key: QueryKey) -> bool;
+    async fn get_fetched(&self, key: QueryKey) -> bool;
+}
 
-        let chatter_keys = ChatterKeys::new(chatter);
-        let channel_keys = ChannelKeys::new(channel);
+#[async_trait]
+impl CacheRead for RedisPool {
+    // async fn get_leaderboard(&self, key: QueryKey, region: Region) -> RedisPoolResult<Vec<User>> {
+    //     // let leaderboard =
+    //     //     self.manager
+    //     //         .zrevrange_withscores(key.to_str(), region.cursor, region.limit).await?;
+    //     todo!();
+    // }
 
-        let mut pipe = redis::pipe();
-        pipe.atomic();
+    async fn get_image(&self, key: QueryKey) -> Option<String> {
+        todo!()
+    }
 
-        pipe.incr(chatter_keys.total, 1);
-        pipe.incr(channel_keys.total, 1);
+    async fn get_total(&self, key: QueryKey) -> i32 {
+        todo!()
+    }
 
-        pipe.zincr(chatter_keys.leaderboard, chatter, 1);
-        pipe.zincr(channel_keys.leaderboard, channel, 1);
+    async fn get_login(&self, key: QueryKey) -> String {
+        todo!()
+    }
 
-        let _: () = pipe.query_async(&mut conn).await?;
+    async fn get_redaction(&self, key: QueryKey) -> bool {
+        todo!()
+    }
 
-        Ok(())
+    async fn get_fetched(&self, key: QueryKey) -> bool {
+        todo!()
     }
 }

@@ -7,6 +7,7 @@ use tower_http::cors::{self, Any};
 use crate::webhook::middleware::verify::{self, VerifiedBody};
 
 pub type TxSender = (SocketAddr, String);
+
 pub async fn route(tx: oneshot::Sender<TxSender>) {
     let app = Router::new()
         .route("/webhook-global", post(webhook_handler))

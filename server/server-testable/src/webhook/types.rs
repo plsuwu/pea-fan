@@ -89,6 +89,37 @@ pub struct Subscription {
     pub transport: Transport,
 }
 
+/** 
+https://dev.twitch.tv/docs/eventsub/manage-subscriptions/
+            
+# Example response:
+```ignore
+    {
+      "data": [
+        {
+          "id": "f1c2a387-161a-49f9-a165-0f21d7a4e1c4",
+          "status": "webhook_callback_verification_pending",
+          "type": "channel.follow",
+          "version": "2",
+          "cost": 1,
+          "condition": {
+            "broadcaster_user_id": "1234",
+            "moderator_user_id": "1234"
+          },
+          "transport": {
+            "method": "webhook",
+            "callback": "https://example.com/webhooks/callback"
+          },
+          "created_at": "2019-11-16T10:11:12.634234626Z"
+        }
+      ],
+      "total": 1,
+      "total_cost": 1,
+      "max_total_cost": 10000
+    }
+```
+*/
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EventMetadata {
     // fields that should always be present
