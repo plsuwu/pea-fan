@@ -77,7 +77,12 @@ impl IrcParser {
     /// into a `ChatData` struct.
     pub fn get_chat<'a>(&'a self, message: &IrcMessage<'a>) -> Result<ChatData<'a>, ParseError> {
         if message.command != "PRIVMSG" {
-            return Err(ParseError::NotPrivmsg);
+            // quick check to see if its crashing due to an auth issue, potentially
+            if message.command == "NOTICE" {
+                println!("recv 'NOTICE': {:#?}", message);
+            } else {
+                return Err(ParseError::NotPrivmsg);
+            }
         }
 
         let channel = message.params.get(0).ok_or(ParseError::InvalidFormat)?;
