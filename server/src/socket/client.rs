@@ -110,10 +110,10 @@ impl Client {
     ) -> anyhow::Result<()> {
         match data.command {
             IRC_COMMAND_PING => {
-                println!("[{}]::[{:?}] rx KEEPALIVE", get_current_time(), data.params);
+                println!("[{}]::[{:?}] rx KEEPALIVE", get_current_time(), data);
                 match Self::write(self, KEEPALIVE_RESPONSE).await {
                     Err(e) => println!("[{}] tx KEEPALIVE err: {:?}", get_current_time(), e),
-                    _ => println!("[{}]::[{:?}] KEEPALIVE OK", get_current_time(), data.params),
+                    _ => println!("[{}]::[{:?}] KEEPALIVE OK", get_current_time(), data),
                 }
             }
 
