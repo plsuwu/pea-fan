@@ -1,4 +1,3 @@
-pub mod connection;
 pub mod helix;
 pub mod middleware;
 pub mod router;
@@ -22,7 +21,7 @@ pub async fn get_tracked_channels() -> reqwest::Result<Vec<String>> {
         .collect::<Vec<_>>();
 
     info!(
-        "Using channel list ({} items): {:#?}",
+        "Current channel list ({} items): {:#?}",
         channel_list.len(),
         channel_list
     );

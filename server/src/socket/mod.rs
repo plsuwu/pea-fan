@@ -1,4 +1,4 @@
-pub mod settings;
 pub mod client;
-pub mod types;
-pub mod commands;
+pub mod old_client;
+pub mod connection;
+pub mod tests;

@@ -1,23 +1,39 @@
-use crate::constants::CHANNELS;
-use crate::server::router;
-use crate::server::webhook::subscriber::{self, reset_all_hooks};
-use args::get_cli_args;
 use std::process::exit;
-use std::sync::Arc;
-use tokio::io;
+use thiserror::Error;
 
-mod args;
-mod constants;
-mod db;
+use tokio::task::JoinError;
+use tracing::{debug, error, info, instrument};
+
+use crate::webhook::router;
+use crate::webhook::subscriber::{HookHandler, HookHandlerError, Subscriber};
+
+mod database;
 mod parser;
-mod server;
+mod webhook;
 mod socket;
 
-extern crate chrono;
+type MainResult<T> = core::result::Result<T, MainError>;
+
+#[derive(Error, Debug)]
+enum MainError {
+    #[error("Failed to get tracked channels: {0}")]
+    ChannelRetrievalFailure(#[from] reqwest::Error),
+
+    #[error("HookHandlerError: {0}")]
+    HookHandlerError(#[from] HookHandlerError),
+
+    #[error("Error awaiting server handle future: {0}")]
+    ServerFutureError(#[from] JoinError)
+}
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
-    let args = get_cli_args();
+#[instrument]
+async fn main() -> MainResult<()> {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::TRACE)
+        .init();
+
+    info!("LOGGING STARTED\n");
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     let server_handle = tokio::task::spawn(async move {
@@ -25,45 +41,21 @@ async fn main() -> io::Result<()> {
     });
 
     match rx.await {
-        Ok((bind_addr, key_opt)) => {
-            println!("[+] server listening on {}", bind_addr);
-            if let Some(key) = key_opt {
-                println!("[+] using key '{}'", key);
-            };
+        Ok((bind_addr, key)) => {
+            info!("Webhook server listening on {}", bind_addr);
+            info!("Using verification key: '{}'", key);
         }
 
         Err(_) => {
-            eprintln!("[x] Failed to start webhook server.");
+            error!("Failed to start webhook server; exiting...");
             exit(1);
         }
     }
 
-    reset_all_hooks().await;
+    let hook_handler = HookHandler::new().await?;
+    let channel_sub_handles = hook_handler.startup().await;
 
-    let mut handles = Vec::new();
-    for broadcaster in CHANNELS.iter() {
-        println!(
-            "[+] subscribing to 'stream.online'+'stream.offline' event webhooks for '{}'",
-            &broadcaster
-        );
-
-        let args_clone = Arc::clone(&args);
-        let handle = tokio::task::spawn(async move {
-            match subscriber::sub_stream_event_multi(&broadcaster, &args_clone.app_token).await {
-                Ok(res) => res,
-                Err(e) => {
-                    println!(
-                        "[x] Subscription attempt for '{}' - error: {:?}",
-                        broadcaster, e
-                    );
-                }
-            }
-        });
-
-        handles.push(handle);
-    }
-
-    _ = futures_util::future::join_all(handles).await;
     server_handle.await?;
+
     Ok(())
 }

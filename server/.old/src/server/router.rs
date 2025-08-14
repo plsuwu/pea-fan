@@ -34,8 +34,8 @@ pub async fn route(tx: oneshot::Sender<(SocketAddr, Option<String>)>) {
     axum::serve(listener, app).await.unwrap();
 }
 
-pub async fn get_tracked_channels() -> Json<TrackedChannels> {
-    Json(CHANNELS)
+pub async fn get_tracked_channels() -> Json<Vec<&'static str>> {
+    Json(CHANNELS.to_vec())
 }
 
 pub async fn get_channel(Query(query): Query<GetChannelQueryParams>) -> Json<RedisQueryResponse> {

@@ -1,24 +1,23 @@
-/**/target
-/**/*-old.rs
+target/
+.pg-data/
+.pg-sock/
+*-old.rs
 
-/**/appendonlydir
-/**/.redis_data_backup
-/**/_data_rw
-/**/_data
+appendonlydir/
+.redis_data_backup/
+_data_rw/
+_data/
 dump.rdb
 compose.yaml
-/**/drizzle
+drizzle/
 
-/**/test-results
-/**/node_modules
+test-results/
+node_modules/
 
 # Output
-/**/.output
-/**/.vercel
-/**/.netlify
-/**/.wrangler
-/**/.svelte-kit
-/**/build
+.output/
+.svelte-kit/
+build/
 
 # OS
 .DS_Store
@@ -38,3 +37,4 @@ vite.config.ts.timestamp-*
 .idea
 
 *.log
+.direnv/

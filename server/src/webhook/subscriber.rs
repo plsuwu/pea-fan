@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use axum::response::sse::Event;
 use http::{
     HeaderMap, StatusCode,
     header::{AUTHORIZATION, InvalidHeaderValue},
@@ -7,12 +8,17 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tracing::{info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
-use crate::webhook::types::{EventType, WebhookRequest};
+use crate::webhook::{
+    middleware::verify::{SESSION_KEY, SessionKey},
+    types::{EventType, WebhookRequest},
+};
 
 const HELIX_BASE: &str = "https://api.twitch.tv/helix";
-const CALLBACK_ROUTE: &str = "http://localhost/webhook-global"; // <-- get something proper for this :))
+// const CALLBACK_ROUTE: &str = "https://ff4be2d2d5e6.ngrok-free.app";
+
+// const CALLBACK_ROUTE: &str = "http://localhost/webhook-global"; // <-- get something proper for this :))
 // const CALLBACK_ROUTE: &str = "https://api.piss.fan/webhook-global";
 
 #[derive(Error, Debug)]
@@ -40,12 +46,13 @@ pub type HookHandlerResult<T> = core::result::Result<T, HookHandlerError>;
 
 #[async_trait]
 pub trait Subscriber {
-    async fn init_hooks(&self) -> HookHandlerResult<()>;
+    // async fn init_hooks(&self, broadcasters: &Vec<String>) -> HookHandlerResult<()>;
+    async fn startup(&self) -> HookHandlerResult<()>;
     async fn create(
         &self,
         broadcaster: &str,
         notification: EventType,
-        key: &str,
+        // key: &str,
     ) -> HookHandlerResult<Value>;
     async fn delete(&self, subscription_id: &str) -> HookHandlerResult<()>;
     async fn get_current(&self) -> Option<Vec<Value>>;
@@ -129,20 +136,33 @@ impl HookHandler {
 #[async_trait]
 impl Subscriber for HookHandler {
     #[instrument(skip(self))]
-    async fn init_hooks(&self) -> HookHandlerResult<()> {
+    async fn startup(&self) -> HookHandlerResult<()> {
         if let Some(active) = self.get_current().await {
+            debug!("ACTIVE: {:?}", active);
             _ = futures_util::future::join_all(
                 active
                     .iter()
                     .map(async |sub_val: &serde_json::Value| {
                         let sub_id = sub_val["id"].as_str().unwrap();
                         info!("Deleting subscription '{}'", sub_id);
+
                         self.delete(sub_id).await.unwrap();
                     })
                     .collect::<Vec<_>>(),
             )
             .await;
         };
+
+        let key = SESSION_KEY.get_hex_key();
+        let mut handles = Vec::new();
+
+        for brd in self.channels.iter() {
+            let on = self.create(&brd, EventType::StreamOnline).await?;
+            let off = self.create(&brd, EventType::StreamOffline).await?;
+
+            handles.push(on);   
+            handles.push(off);
+        }
 
         Ok(())
     }
@@ -152,18 +172,31 @@ impl Subscriber for HookHandler {
         &self,
         broadcaster: &str,
         notification: EventType,
-        key: &str,
+        // key: &str,
     ) -> HookHandlerResult<Value> {
         let client = reqwest::Client::new();
         let headers = self.secrets.build_headers()?;
         let subs_uri = format!("{}/eventsub/subscriptions", HELIX_BASE);
 
-        let body = WebhookRequest::new(
-            notification,
-            broadcaster,
-            CALLBACK_ROUTE,
-            self.secrets.client_secret.clone(),
-        );
+        let body = match notification {
+            EventType::StreamOnline => WebhookRequest::stream_online(
+                broadcaster,
+                CALLBACK_ROUTE,
+                &self.secrets.client_secret,
+            ),
+            EventType::StreamOffline => WebhookRequest::stream_offline(
+                broadcaster,
+                CALLBACK_ROUTE,
+                &self.secrets.client_secret,
+            ),
+        };
+
+        // let body = WebhookRequest::new(
+        //     notification,
+        //     broadcaster,
+        //     CALLBACK_ROUTE,
+        //     self.secrets.client_secret.clone(),
+        // );
 
         let req = client.post(subs_uri).json(&body).headers(headers);
         let res = req.send().await?;
@@ -171,8 +204,8 @@ impl Subscriber for HookHandler {
         if res.status() != 200 && res.status() != 202 {
             match res.status() {
                 // StatusCode::CONFLICT => {
-                //     // todo: revoke and retry like 5 times with a backoff timer or something
-                //     // will i ever bother doing this who knows :3
+                //     // TODO: revoke and retry + implement like a backoff or something
+                //     //       > will i ever bother doing this? probably not who knows :3
                 // }
                 _ => {
                     let err: Value = serde_json::from_str(&res.text().await?)?;

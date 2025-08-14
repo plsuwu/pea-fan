@@ -1,5 +1,6 @@
 use crate::parser::{IrcMessage, IrcParser, Parser, ParserError};
-use crate::ws::connection::{Connection, WsConnection};
+use crate::socket::connection::{Connection, SocketConnection};
+
 use async_trait::async_trait;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
@@ -15,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
 #[derive(Debug, Error)]
-pub enum WsClientError {
+pub enum SocketClientErrorold {
     #[error("Websocket connection error: {0}")]
     Websocket(#[from] tokio_tungstenite::tungstenite::Error),
 
@@ -38,12 +39,12 @@ pub enum WsClientError {
     Timeout(String),
 }
 
-pub type WsClientResult<T> = std::result::Result<T, WsClientError>;
+pub type WsClientResult<T> = std::result::Result<T, SocketClientError>;
 pub type SocketWriter = Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>;
 pub type SocketReader = Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>;
 
 #[derive(Debug, Clone)]
-pub enum WsEvent {
+pub enum SocketEvent {
     Connected,
     Disconnected {
         channel: String,
@@ -64,6 +65,10 @@ pub enum WsEvent {
     Error {
         error: String,
     },
+    Notice {
+        channel: String,
+        message: String,
+    },
     Unknown {
         command: String,
         raw: String,
@@ -72,12 +77,12 @@ pub enum WsEvent {
 
 #[async_trait]
 pub trait EventHandler: Send + Sync + fmt::Debug {
-    async fn handle_event(&self, event: WsEvent) -> WsClientResult<()>;
+    async fn handle_event(&self, event: SocketEvent) -> WsClientResult<()>;
 }
 
 #[async_trait]
 pub trait Manager: fmt::Debug {
-    async fn connect(&self, conn: &WsConnection) -> WsClientResult<Box<dyn Client>>;
+    async fn connect(&self, conn: &SocketConnection) -> WsClientResult<Box<dyn Client>>;
 }
 
 #[async_trait]
@@ -110,14 +115,14 @@ impl Client for WsClient {
             .await
             .send(msg)
             .await
-            .map_err(WsClientError::Websocket)?;
-        
-        // This isn't particularly robust - if a user sends a message that says `PASS oauth:`, for
-        // example, this handler will trigger
+            .map_err(SocketClientError::Websocket)?;
+
+        // This isn't particularly robust but I don't think we will
+        // send messages containing `PASS oauth:` in chat.
         if !message.contains("PASS oauth:") {
             debug!("Sent: {}", message);
         } else {
-            debug!("Sent: [OAUTH]");
+            debug!("Sent [OAUTH TOKEN]");
         }
 
         Ok(())
@@ -139,12 +144,12 @@ impl Client for WsClient {
             Some(Err(e)) => {
                 error!("Websocket error: {:?}", e);
                 *self.connected.lock().await = false;
-                Err(WsClientError::ConnectionClosed)
+                Err(SocketClientError::ConnectionClosed)
             }
             None => {
                 info!("Websocket connection closed");
                 *self.connected.lock().await = false;
-                Err(WsClientError::ConnectionClosed)
+                Err(SocketClientError::ConnectionClosed)
             }
         }
     }
@@ -156,7 +161,7 @@ impl Client for WsClient {
             .await
             .close()
             .await
-            .map_err(WsClientError::Websocket)
+            .map_err(SocketClientError::Websocket)
     }
 
     fn is_connected(&self) -> bool {
@@ -170,11 +175,13 @@ pub struct WsManager;
 #[async_trait]
 impl Manager for WsManager {
     #[instrument(skip(self, conn))]
-    async fn connect(&self, conn: &WsConnection) -> WsClientResult<Box<dyn Client>> {
+    async fn connect(&self, conn: &SocketConnection) -> WsClientResult<Box<dyn Client>> {
         let url = conn.url();
         info!("Connecting to {}", &url);
 
-        let (stream, _) = connect_async(url).await.map_err(WsClientError::Websocket)?;
+        let (stream, _) = connect_async(url)
+            .await
+            .map_err(SocketClientError::Websocket)?;
         let (w, r) = stream.split();
 
         Ok(Box::new(WsClient {
@@ -211,12 +218,12 @@ impl<T> EventHandler for WsEventHandler<T>
 where
     T: Connection + Send + Sync,
 {
-    async fn handle_event(&self, event: WsEvent) -> WsClientResult<()> {
+    async fn handle_event(&self, event: SocketEvent) -> WsClientResult<()> {
         match event {
-            WsEvent::Connected => {
+            SocketEvent::Connected => {
                 info!("Connected to IRC");
             }
-            WsEvent::ChatMessage {
+            SocketEvent::ChatMessage {
                 channel,
                 user_login,
                 user_id,
@@ -238,22 +245,25 @@ where
                         .await?;
                 }
             }
-            WsEvent::Joined { channel } => {
+            SocketEvent::Joined { channel } => {
                 info!("Joined channel '{}'", channel);
             }
-            WsEvent::Ping => {
+            SocketEvent::Ping => {
                 debug!("Received PING");
             }
-            WsEvent::Error { error } => {
+            SocketEvent::Error { error } => {
                 error!("IRC Error: {}", error);
             }
-            WsEvent::Disconnected { channel, reason } => {
+            SocketEvent::Disconnected { channel, reason } => {
                 warn!("Disconnected from '{}': {}", channel, reason);
             }
-            WsEvent::Unknown { command, raw } => {
+            SocketEvent::Notice { channel, message } => {
+                info!("Received NOTICE on '{}': {}", channel, message);
+            }
+            SocketEvent::Unknown { command, raw } => {
                 debug!("Unknown IRC command '{}': {}", command, raw);
             }
-            WsEvent::Authenticated => {
+            SocketEvent::Authenticated => {
                 info!("Authentication OK");
             }
         }
@@ -264,12 +274,12 @@ where
 
 #[derive(Debug)]
 pub struct IrcClient {
-    pub connection: WsConnection,
+    pub connection: SocketConnection,
     pub manager: Arc<dyn Manager>,
     pub parser: Arc<dyn Parser>,
     pub handler: Arc<dyn EventHandler>,
-    pub event_tx: mpsc::UnboundedSender<WsEvent>,
-    pub event_rx: Option<mpsc::UnboundedReceiver<WsEvent>>,
+    pub event_tx: mpsc::UnboundedSender<SocketEvent>,
+    pub event_rx: Option<mpsc::UnboundedReceiver<SocketEvent>>,
 }
 
 const IRC_CAPABILITIES_IDX: usize = 0;
@@ -280,7 +290,7 @@ const IRC_CHANNEL_IDX: usize = 4;
 
 impl IrcClient {
     pub fn new(
-        connection: WsConnection,
+        connection: SocketConnection,
         manager: Arc<dyn Manager>,
         parser: Arc<dyn Parser>,
         handler: Arc<dyn EventHandler>,
@@ -296,7 +306,7 @@ impl IrcClient {
         })
     }
 
-    async fn emit_event(&self, event: WsEvent) {
+    async fn emit_event(&self, event: SocketEvent) {
         if let Err(_) = self.event_tx.send(event) {
             error!("Failed to send event, receiver dropped");
         }
@@ -312,14 +322,14 @@ impl IrcClient {
 
     async fn respond_ping(&self, client: &mut Box<dyn Client>) -> WsClientResult<()> {
         client.send("PONG :tmi.twitch.tv").await?;
-        self.emit_event(WsEvent::Ping).await;
+        self.emit_event(SocketEvent::Ping).await;
 
         Ok(())
     }
 
     async fn respond_join(&self, parsed: &IrcMessage<'_>) {
         if let Ok(channel) = self.parser.extract_channel(&parsed) {
-            self.emit_event(WsEvent::Joined {
+            self.emit_event(SocketEvent::Joined {
                 channel: channel.to_string(),
             })
             .await;
@@ -327,11 +337,11 @@ impl IrcClient {
     }
 
     async fn respond_privmsg(&self, parsed: &IrcMessage<'_>) {
-        println!("{:?}", parsed);
+        // println!("{:?}", parsed);
 
         match self.parser.extract_chat_data(&parsed) {
             Ok(data) => {
-                self.emit_event(WsEvent::ChatMessage {
+                self.emit_event(SocketEvent::ChatMessage {
                     channel: data.channel.to_string(),
                     user_login: data.user_login.to_string(),
                     user_id: data.user_id.to_string(),
@@ -343,7 +353,7 @@ impl IrcClient {
 
             Err(e) => {
                 warn!("Failed to extract chat data: {:?}", e);
-                self.emit_event(WsEvent::Error {
+                self.emit_event(SocketEvent::Error {
                     error: format!("Chat parsing error: {}", e),
                 })
                 .await;
@@ -351,11 +361,32 @@ impl IrcClient {
         }
     }
 
+    #[instrument(skip(self))]
     async fn respond_unhandled(&self, parsed: &IrcMessage<'_>, raw_message: &str) {
-        debug!("Unhandled IRC command: {}", parsed.command);
-        self.emit_event(WsEvent::Unknown {
+        // println!(
+        //     "[{}]:asfdsdf",
+        //     parsed.params.get(0).unwrap_or(&"NO_CHANNEL")
+        // );
+        warn!(
+            "[{}]: Unhandled IRC command: {}",
+            parsed.params.get(0).unwrap_or(&"NO_CHANNEL"),
+            parsed.command
+        );
+        self.emit_event(SocketEvent::Unknown {
             command: parsed.command.to_string(),
             raw: raw_message.to_string(),
+        })
+        .await;
+    }
+
+    #[instrument(skip(self))]
+    async fn respond_notice(&self, parsed: &IrcMessage<'_>, raw_message: &str) {
+        let channel = parsed.params.get(0).map_or("NO_CHANNEL", |&ch| ch);
+        let message = parsed.params.get(1).map_or(raw_message, |&msg| msg);
+
+        self.emit_event(SocketEvent::Notice {
+            channel: channel.into(),
+            message: message.into(),
         })
         .await;
     }
@@ -371,6 +402,7 @@ impl IrcClient {
             "PING" => self.respond_ping(client).await?,
             "JOIN" => self.respond_join(&parsed).await,
             "PRIVMSG" => self.respond_privmsg(&parsed).await,
+            "NOTICE" => self.respond_notice(&parsed, raw_message).await,
             _ => self.respond_unhandled(&parsed, raw_message).await,
         }
 
@@ -384,10 +416,11 @@ impl IrcClient {
 
         self.authenticate(&mut conn).await?;
 
-        conn.send(&format!("JOIN #{}", self.connection.channel()))
-            .await?;
+        for chan in self.connection.channels() {
+            conn.send(&format!("JOIN #{}",)).await?;
+        }
 
-        self.emit_event(WsEvent::Connected).await;
+        self.emit_event(SocketEvent::Connected).await;
         loop {
             tokio::select! {
                 message_result = conn.receive() => {
@@ -395,14 +428,14 @@ impl IrcClient {
                         Ok(Some(raw_msg)) => {
                             if let Err(e) = self.process_message(&mut conn, &raw_msg).await {
                                 error!("Error while processing message: {:?}", e);
-                                self.emit_event(WsEvent::Error { error: e.to_string() }).await;
+                                self.emit_event(SocketEvent::Error { error: e.to_string() }).await;
                             }
                         }
 
                         Ok(None) => continue,
                         Err(e) => {
                             error!("Connection error: {:?}", e);
-                            self.emit_event(WsEvent::Disconnected {
+                            self.emit_event(SocketEvent::Disconnected {
                                 reason: e.to_string(),
                                 channel: self.connection.channel().to_string(),
                             }).await;
@@ -419,6 +452,7 @@ impl IrcClient {
 
                 _ = cancel_token.cancelled() => {
                     info!("Client shutdown requested");
+                    // cancel_token.
                     _ = conn.send(&format!("PART #{}", self.connection.channel())).await;
                     _ = conn.close().await;
                     break;
@@ -431,19 +465,19 @@ impl IrcClient {
 }
 
 #[derive(Default, Debug)]
-pub struct WsClientBuilder {
-    connection: Option<WsConnection>,
+pub struct SocketClientBuilder {
+    connection: Option<SocketConnection>,
     manager: Option<Arc<dyn Manager>>,
     parser: Option<Arc<dyn Parser>>,
     handler: Option<Arc<dyn EventHandler>>,
 }
 
-impl WsClientBuilder {
+impl SocketClientBuilder {
     pub fn new() -> Self {
         Self { ..Self::default() }
     }
 
-    pub fn with_connection(mut self, connection: WsConnection) -> Self {
+    pub fn with_connection(mut self, connection: SocketConnection) -> Self {
         self.connection = Some(connection);
         self
     }
@@ -465,10 +499,10 @@ impl WsClientBuilder {
 
     pub fn build(self) -> WsClientResult<IrcClient> {
         let connection = self.connection.ok_or_else(|| {
-            WsClientError::Authentication("Connection configuration required".into())
+            SocketClientError::Authentication("Connection configuration required".into())
         })?;
         let event_handler = self.handler.ok_or_else(|| {
-            WsClientError::Authentication("Event handler configuration required".into())
+            SocketClientError::Authentication("Event handler configuration required".into())
         })?;
         let manager = self.manager.unwrap_or_else(|| Arc::new(WsManager));
         let parser = self.parser.unwrap_or_else(|| Arc::new(IrcParser));
@@ -488,7 +522,7 @@ mod tests {
 
     #[derive(Clone, Debug)]
     struct MockClient {
-        connection_config: WsConnection,
+        connection_config: SocketConnection,
     }
 
     impl MockClient {
@@ -498,7 +532,7 @@ mod tests {
             let url = format!("ws://{}{}", addr, endpoint);
 
             let connection_config =
-                WsConnection::new(&url, "hello", "test_user_token", "testuser", "testchannel");
+                SocketConnection::new(&url, "hello", "test_user_token", "testuser", "testchannel");
             Self { connection_config }
         }
 
@@ -506,7 +540,7 @@ mod tests {
             let store = Arc::new(MockRedisLayer::new("redis://127.0.0.1:6380").await.unwrap());
             let handler = Arc::new(WsEventHandler::new(self.connection_config.clone(), store));
 
-            let client = WsClientBuilder::new()
+            let client = SocketClientBuilder::new()
                 .with_connection(self.connection_config.clone())
                 .with_handler(handler)
                 .build();
