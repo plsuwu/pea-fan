@@ -11,6 +11,7 @@ export interface ActiveSocketResponse {
 }
 
 export const CHANNELS = [
+	"b0barley",
     "batatvideogames",
     "bexvalentine",
     "byebi",
