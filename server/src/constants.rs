@@ -48,6 +48,7 @@ pub type TrackedChannels = [&'static str; TRACKED_CHANNELS_COUNT];
 
 #[cfg(feature = "production")]
 pub const CHANNELS: TrackedChannels = [
+    "b0barley",
     "batatvideogames",
     "bexvalentine",
     "byebi",
