@@ -1,4 +1,4 @@
 pub mod client;
-pub mod old_client;
-pub mod connection;
-pub mod tests;
+pub mod core;
+pub mod handlers;
+pub mod pool;

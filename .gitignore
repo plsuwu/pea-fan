@@ -2,6 +2,8 @@ target/
 .pg-data/
 .pg-sock/
 *-old.rs
+.old-ref
+.old-env
 
 appendonlydir/
 .redis_data_backup/
