@@ -52,7 +52,7 @@ pub const CHANNELS: TrackedChannels = [
     "batatvideogames",
     "bexvalentine",
     "byebi",
-    "cchiko_",
+    "chikogaki",
     "chocojax",
     "flippersphd",
     "gloomybyte",
