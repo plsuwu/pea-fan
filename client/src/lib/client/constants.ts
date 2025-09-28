@@ -15,7 +15,7 @@ export const CHANNELS = [
     "batatvideogames",
     "bexvalentine",
     "byebi",
-    "cchiko_",
+    "chikogaki",
     "chocojax",
     "flippersphd",
     "gloomybyte",
