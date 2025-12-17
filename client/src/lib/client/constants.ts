@@ -11,12 +11,14 @@ export interface ActiveSocketResponse {
 }
 
 export const CHANNELS = [
-	"b0barley",
+    "b0barley",
+    "baikenvt",
     "batatvideogames",
     "bexvalentine",
     "byebi",
     "chikogaki",
     "chocojax",
+    "dearpekoe",
     "flippersphd",
     "gloomybyte",
     "haelpc",
@@ -36,10 +38,8 @@ export const CHANNELS = [
     "niupao",
     "noi_vt",
     "parasi",
-    "pekoe_bunny",
     "rena_chuu",
     "saltae",
-    "sheriff_baiken",
     "sleepiebug",
     "snoozy",
     "souly_ch",
