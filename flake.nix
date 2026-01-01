@@ -29,7 +29,7 @@
             pkg-config
             openssl
             cargo
-            rustc
+
             bun
 
             twitch-cli
@@ -53,10 +53,6 @@
               echo "unix_socket_directories = '$PWD/.pg-sock'" >> .pg-data/postgresql.conf
               echo "port = 5432" >> .pg-data/postgresql.conf
             fi
-
-
-            export alias la="ls -la"
-            export alias pgrun="pg_ctl -D $PGDATA -l '$PGDATA/pg-log'"
 
             echo "in shell"
           '';

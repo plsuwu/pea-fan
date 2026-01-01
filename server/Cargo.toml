@@ -1,0 +1,40 @@
+[package]
+name = "server"
+version = "0.3.0"
+edition = "2024"
+
+[dependencies]
+async-trait = "0.1.89"
+axum = { version = "0.8.7", features = ["ws", "macros"] }
+chrono = { version = "0.4.42", features = ["serde"] }
+dotenvy = "0.15.7"
+futures = { version = "0.3.31", features = ["futures-executor"] }
+futures-util = "0.3.31"
+hex = "0.4.3"
+http = "1.4.0"
+irc = "1.1.0"
+opentelemetry = { version = "0.31.0", default-features = false, features = ["trace", "metrics"] }
+opentelemetry-otlp = { version = "0.31.0", features = ["trace", "grpc-tonic"] }
+opentelemetry-stdout = { version = "0.31.0", default-features = false, features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "0.31.0", default-features = false, features = ["trace", "rt-tokio"] }
+redis = { version = "1.0.1", features = ["tokio-comp", "connection-manager"] }
+reqwest = { version = "0.12.25", features = ["json"] }
+ring = "0.17.14"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "macros", "chrono"] }
+thiserror = "2.0.17"
+tokio = { version = "1.48.0", features = ["full"] }
+tokio-util = { version = "0.7.17", features = ["rt"]}
+tower = "0.5.2"
+tower-http = { version = "0.6.8", features = ["trace", "cors"] }
+tracing = "0.1.43"
+tracing-opentelemetry = "0.32.0"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+twitch-irc = { version = "5.0.1", features = ["transport-ws", "with-serde", "transport-ws-native-tls", "bytes", "tokio-stream", "tokio-native-tls", "refreshing-token-native-tls"], default-features = false }
+uuid = { version = "1.19.0", features = ["v4"] }
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
