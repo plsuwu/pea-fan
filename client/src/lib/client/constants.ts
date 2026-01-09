@@ -21,6 +21,7 @@ export const CHANNELS = [
     "chocojax",
     "dearpekoe",
     "flippersphd",
+    "gibbbons",
     "haelpc",
     "hempievt",
     "kokopimento",
@@ -47,7 +48,7 @@ export const CHANNELS = [
     "unipiu",
     "vacu0usly",
     "walfas",
-    "womfyy",
+    "womfyy"
 ];
 
 export interface GqlQuery {
