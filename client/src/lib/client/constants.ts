@@ -11,6 +11,7 @@ export interface ActiveSocketResponse {
 }
 
 export const CHANNELS = [
+    "aaallycat",
     "b0barley",
     "baikenvt",
     "batatvideogames",
@@ -20,21 +21,21 @@ export const CHANNELS = [
     "chocojax",
     "dearpekoe",
     "flippersphd",
-    "gloomybyte",
     "haelpc",
     "hempievt",
-    "imnoteds",
     "kokopimento",
     "krumroll",
     "kyoharuvt",
     "kyundere",
     "lcolonq",
     "liljuju",
+    "madmad01",
     "miaelou",
     "miffygeist",
     "misspeggyx",
     "myramors",
     "myrmidonvt",
+    "nanolather",
     "niupao",
     "noi_vt",
     "parasi",
@@ -46,7 +47,7 @@ export const CHANNELS = [
     "unipiu",
     "vacu0usly",
     "walfas",
-    "womfyy"
+    "womfyy",
 ];
 
 export interface GqlQuery {
