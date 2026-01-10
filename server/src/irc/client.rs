@@ -1,18 +1,23 @@
 use std::collections::HashSet;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use futures::StreamExt;
 use irc::client::{ClientStream, prelude::*};
 use irc::proto::CapSubCommand;
+use irc::proto::message::Tag;
+use sqlx::{Postgres, Transaction};
 use thiserror::Error;
+use tokio::sync::OnceCell;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 
-use crate::db::models::{Chatter, DbUser};
-use crate::db::pg::{PgErr, db_pool};
-use crate::util::channel::{ChannelError, update_channels};
+use crate::db::prelude::*;
+use crate::irc::ReplyReason;
+use crate::util::channel::ChannelError;
 use crate::util::env::{EnvErr, Var};
+use crate::util::helix::Helix;
 use crate::var;
 
 #[derive(Debug)]
@@ -23,15 +28,21 @@ pub struct MpscChannels {
 
 #[derive(Debug)]
 pub enum IrcCommand {
-    Privmsg { channel: String, data: String },
-    ReplyPm { channel: String, message: String },
+    Privmsg {
+        channel: String,
+        data: String,
+    },
+    ReplyPm {
+        channel: String,
+        message: String,
+        reply_id: String,
+    },
+    Incr,
 }
 
 #[derive(Debug)]
 pub enum IrcMessage {
     Privmsg { tags: IrcTags, message: String },
-    GetChannels,
-    StreamStart { channel: String },
 }
 
 #[derive(Debug, Default)]
@@ -41,26 +52,59 @@ pub struct IrcTags {
     pub color: String,
     pub channel_name: String,
     pub channel_id: String,
+    pub msg_id: String,
+}
+
+const COUNTER_USER: &str = "owoplease";
+const CHANNEL_WHITELIST: [&str; 4] = ["plss", "sleepiebug", "chikogaki", "gibbbons"];
+const ID_BLACKLIST: [&str; 1] = [
+    // "100135110",  // StreamElements
+    "1152307157", // owoplease (us)
+];
+
+static IGNORED_USER_IDS: LazyLock<OnceCell<HashSet<&str>>> = LazyLock::new(OnceCell::new);
+pub async fn is_ignored_user(user_id: &str) -> bool {
+    let blacklist = IGNORED_USER_IDS
+        .get_or_try_init(|| async { ignored_hashset().await })
+        .await
+        .unwrap();
+
+    blacklist.contains(user_id)
+}
+
+async fn ignored_hashset() -> Result<HashSet<&'static str>, ()> {
+    Ok(HashSet::from_iter(ID_BLACKLIST))
 }
 
 #[instrument]
 pub async fn irc_runner(channels: Vec<String>) -> IrcResult<Vec<tokio::task::JoinHandle<()>>> {
+    // TODO: i think we get the client struct + mpsc channels into this function with dependency
+    // injection rather than trying  to handle everything internally:
+    //
+    // * we probably want to call this from the server startup function (or pass them in as args)
+    //   so that we can call IRC-related stuff using HTTP request to API endpoints
     let (mut irc_client, channels) = IrcConnection::init(channels).await?;
     let rx_handle = tokio::spawn(async move {
         let mut rx_channel = channels.receiver;
         let mut tx_channel = channels.sender;
 
-        read_channel(&mut rx_channel, &mut tx_channel)
-            .await
-            .unwrap();
+        loop {
+            match read_channel(&mut rx_channel, &mut tx_channel).await {
+                Ok(r) => tracing::warn!(result = ?r, "reader thread returned early"),
+                Err(e) => tracing::error!(error = ?e, "error in reader thread"),
+            }
+
+            tracing::warn!("reader thread restarting");
+        }
     });
 
     let client_stream_reader = tokio::spawn(async move {
         irc_client.connect().await.unwrap();
         let mut stream = irc_client.client.stream().unwrap();
 
-        let mut check_interval = tokio::time::interval(Duration::from_secs(30));
-        check_interval.tick().await;
+        const MIN_CHECK_DURATION: Duration = Duration::from_secs(30);
+        const MAX_CHECK_DURATION: Duration = Duration::from_secs(300);
+        let mut check_interval = MIN_CHECK_DURATION;
 
         let joined_channels = irc_client.get_joined();
         tracing::info!(
@@ -70,6 +114,13 @@ pub async fn irc_runner(channels: Vec<String>) -> IrcResult<Vec<tokio::task::Joi
         );
 
         loop {
+            // poller to create a mutable interval timer on which to check for channel join issues.
+            //
+            // `tokio::pin!` to pin the timer to a single thread to avoid holding the reference across
+            // awaits that might resolve on another thread
+            let check_timer = tokio::time::sleep(check_interval);
+            tokio::pin!(check_timer);
+
             tokio::select! {
                 Some(msg_res) = stream.next() => {
                     if let Ok(msg) = msg_res {
@@ -79,16 +130,40 @@ pub async fn irc_runner(channels: Vec<String>) -> IrcResult<Vec<tokio::task::Joi
 
                 Some(cmd) = irc_client.receiver.recv() => {
                     match cmd {
-                        IrcCommand::ReplyPm { channel, message } => {
-                            irc_client.client.send_privmsg(channel, message).unwrap();
+                        IrcCommand::ReplyPm { channel, message, reply_id } => {
+                            let reply_tag = vec![Tag(String::from("reply-parent-msg-id"), Some(reply_id))];
+                            let fmt_channel = format!("{}", channel);
+                            let tagged_message =
+                                Message::with_tags(Some(reply_tag), None, "PRIVMSG", vec![&fmt_channel, &message])
+                                    .unwrap();
+                            match irc_client.client.send(tagged_message) {
+                                Ok(val) => tracing::debug!(val = ?val, "send ok"),
+                                Err(e) => tracing::error!(error = ?e, "error while trying to send reply to IRC"),
+                            }
                         }
                         _ => (),
                     }
                 }
 
-                _ = check_interval.tick() => {
-                    if let Err(e) = rejoin_channels(&mut irc_client).await {
-                        tracing::error!(error = ?e, "channel rejoin failure");
+                _ = &mut check_timer => {
+                    match rejoin_channels(&mut irc_client).await {
+                        Ok(all_joined) => {
+                            if all_joined {
+                                if check_interval < MAX_CHECK_DURATION {
+                                    let new_interval = check_interval.saturating_mul(2).min(MAX_CHECK_DURATION);
+                                    if new_interval != check_interval {
+                                        check_interval = new_interval;
+                                        tracing::debug!(next_interval = ?check_interval, "increasing check interval");
+                                    }
+                                }
+                            }  else {
+                                check_interval = MIN_CHECK_DURATION;
+                                tracing::warn!(check_interval = ?check_interval, "resetting check interval");
+                            }
+                        },
+                        Err(err) => {
+                            tracing::error!(error = ?err, "channel rejoin failure");
+                        }
                     }
                 }
             }
@@ -99,7 +174,15 @@ pub async fn irc_runner(channels: Vec<String>) -> IrcResult<Vec<tokio::task::Joi
 }
 
 #[instrument(skip(client))]
-async fn rejoin_channels(client: &mut IrcConnection) -> IrcResult<()> {
+/// Checks whether any tracked channels are *not* currently joined and attempts to join them
+///
+/// # Returns
+///
+/// If all channels are joined and accounted for, returns `Ok(true)`.
+///
+/// Otherwise, if one or more channels are found to be unjoined (but there are otherwise no errors),
+/// this function will return `Ok(false)`
+async fn rejoin_channels(client: &mut IrcConnection) -> IrcResult<bool> {
     let expected: HashSet<String> = client.channels.iter().cloned().collect();
     let joined: HashSet<String> = client.get_joined().into_iter().collect();
 
@@ -108,18 +191,30 @@ async fn rejoin_channels(client: &mut IrcConnection) -> IrcResult<()> {
     if !missing.is_empty() {
         tracing::warn!(missing_count = missing.len(), missing = ?missing, "trying channel rejoin");
         client.join_channels(missing)?;
+
+        Ok(false)
     } else {
         tracing::debug!(joined_count = joined.len(), "all channels appear joined");
-    }
 
-    Ok(())
+        Ok(true)
+    }
 }
 
 impl IrcConnection {
     #[instrument(skip(channels))]
+    /// `channels` should be a `Vec<String>` containing the login names for the channels we want to
+    /// join (i.e. no leading '#' - this is formatted internally):
+    ///
+    /// ```ignore
+    /// // e.g.:
+    ///
+    /// let channel_names = vec!["plss".to_string()];
+    /// let (connection, _) = IrcConnection::init(channel_names).await?;
+    ///
+    /// assert_eq!(connection.channels, vec!["#plss".to_string()]);
+    /// ```
     pub async fn init(channels: Vec<String>) -> IrcResult<(Self, MpscChannels)> {
         let channel_rooms: Vec<String> = channels.iter().map(|chan| format!("#{}", chan)).collect();
-
         tracing::info!(channels = ?channels, "channel list");
 
         let config = Config {
@@ -141,6 +236,7 @@ impl IrcConnection {
         let client = (
             Self {
                 config,
+                curr_jitter: 0,
                 client: connection,
                 channels: channel_rooms,
                 sender: msg_tx,
@@ -158,7 +254,8 @@ impl IrcConnection {
 
     #[instrument(skip(self))]
     pub async fn connect(&mut self) -> IrcResult<()> {
-        self.client.identify()?; // authenticate
+        // `identify()` authenticates the user with the server
+        self.client.identify()?;
         self.client.send_cap_req(&[
             TtvCap::Commands.into(),
             TtvCap::Membership.into(),
@@ -196,6 +293,12 @@ impl IrcConnection {
 
 #[instrument(skip(msg, client))]
 pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcResult<()> {
+    let command = &msg.command;
+    let tags = &msg.tags;
+    let prefix = &msg.prefix;
+
+    tracing::info!(command = ?command, tags = ?tags, prefix = ?prefix, response_target = ?msg.response_target(), "DEBUG MESSAGE PARTS");
+
     match &msg.command {
         // this is the only command we REALLY care about, but the others
         // are nice to have
@@ -210,15 +313,14 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
         }
 
         Command::PONG(_, _) | Command::PING(_, _) => {
+            let new_ping_timer = {};
+
             let joined = client.get_joined();
             tracing::info!(
-                current_joined_channel_count = joined.len(),
-                total_tracked_channel_count = client.channels.len(),
-                "IRC join stats (RX PING)",
+                current_joined_count = joined.len(),
+                total_tracked_count = client.channels.len(),
+                "IRC channel join stats (RX PING)",
             );
-
-            tracing::debug!("all channels: {:#?}", client.channels);
-            tracing::debug!("joined: {:#?}", joined);
         }
 
         Command::CAP(_, result, caps, _) => match result {
@@ -241,6 +343,9 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
 
         Command::NOTICE(msg_id, target) => {
             tracing::warn!("{}: RECV NOTICE: {}", target, msg_id);
+            if msg_id.contains("less than 30 seconds ago") {
+                tracing::error!("TODO: sovle this lmao");
+            }
         }
 
         Command::JOIN(channel, _, _) => {
@@ -271,20 +376,20 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
     Ok(())
 }
 
-#[instrument(skip(id))]
-pub async fn chatter_by_id(id: &str) -> IrcResult<Chatter> {
-    let conn = db_pool().await.unwrap();
-    Chatter::get_by_id(conn, id)
-        .await
-        .map_err(|e| IrcClientErr::PgErr(e))
+#[instrument(skip(repo, chatter_id))]
+pub async fn chatter_by_id(repo: &ChatterRepository, chatter_id: &str) -> IrcResult<Chatter> {
+    Ok(repo
+        .get_by_id(&ChatterId(chatter_id.to_string()))
+        .await?
+        .ok_or_else(|| IrcClientErr::SqlxError(sqlx::Error::RowNotFound))?)
 }
 
 #[instrument(skip(login))]
-pub async fn chatter_by_login(login: &str) -> IrcResult<Chatter> {
-    let conn = db_pool().await.unwrap();
-    Chatter::get_by_login(conn, login)
+pub async fn chatter_by_login(repo: &ChatterRepository, login: &str) -> IrcResult<Chatter> {
+    Ok(repo
+        .get_by_login(login.to_string())
         .await
-        .map_err(|e| IrcClientErr::PgErr(e))
+        .map_err(|err| IrcClientErr::SqlxError(err))?)
 }
 
 #[instrument(skip(rx, tx))]
@@ -297,36 +402,67 @@ pub async fn read_channel(
         if let Some(msg) = rx.recv().await {
             match msg {
                 IrcMessage::Privmsg { tags, message } => {
+                    let pool = db_pool().await?;
+                    // check to see if we should reply to a chatter's message
                     if message.starts_with("!pisscount")
-                        && (["plss", "sleepiebug", "gibbbons"]
-                            .contains(&tags.channel_name.as_str()))
+                        && CHANNEL_WHITELIST.contains(&tags.channel_name.as_str())
                     {
-                        let message = parse_message_for_response(&message, &tags).await;
+                        let chatter_repo = ChatterRepository::new(pool);
+                        let message = make_query_response(&chatter_repo, &message, &tags).await?;
+                        let channel = format!("#{}", tags.channel_name);
+                        let reply_id = tags.msg_id;
 
-                        tracing::info!(message = ?message, "responding to query");
+                        tracing::info!(
+                            message = message,
+                            parent_msg = reply_id,
+                            channel,
+                            "responding to query"
+                        );
 
                         tx.send(IrcCommand::ReplyPm {
-                            channel: format!("#{}", tags.channel_name),
+                            channel,
+                            reply_id,
                             message,
                         })?;
                     }
+                    // otherwise, if the message isn't a `!pisscount` query,
+                    // check whether we want to increment the user's counter on that channel
+                    else if message.contains("piss")
+                        && !ID_BLACKLIST.contains(&tags.user_id.as_str())
+                    {
+                        let res = increment_score(pool, &tags).await?;
+                        tracing::info!(
+                            increment_result = ?res,
+                            chatter = tags.user_login,
+                            channel = tags.channel_name,
+                            "incremented counter"
+                        );
+
+                        tx.send(IrcCommand::Incr)?;
+                    }
                 }
-                _ => {}
             }
         }
     }
 }
 
 #[instrument]
-pub async fn parse_message_for_response(message: &str, tags: &IrcTags) -> String {
-    let target;
+pub async fn make_query_response(
+    repo: &ChatterRepository,
+    message: &str,
+    tags: &IrcTags,
+) -> IrcResult<String> {
     let parts = message.split(' ').collect::<Vec<_>>();
-
-    if parts.len() != 1 {
-        target = chatter_by_login(&parts[1].to_lowercase()).await;
+    let target = if parts.len() > 1 {
+        // our count is always going to be 0 but we have fun around here
+        if parts[1].to_lowercase() == COUNTER_USER {
+            return Ok(ReplyReason::BotCountQueried.get_reply().to_string());
+        } else {
+            chatter_by_login(repo, &parts[1].to_lowercase()).await
+        }
     } else {
-        target = chatter_by_id(&tags.user_id).await;
-    }
+        chatter_by_id(repo, &tags.user_id).await
+    };
 
     match target {
         Ok(ch) => {
@@ -336,27 +472,104 @@ pub async fn parse_message_for_response(message: &str, tags: &IrcTags) -> String
                 "your".to_string()
             };
 
-            format!(
-                "@{} {} of {} messages have mentioned piss :3",
-                tags.user_login, ch.total, requested_user,
-            )
+            Ok(format!(
+                "{} of {} messages have mentioned piss",
+                ch.total, requested_user,
+            ))
         }
-        Err(IrcClientErr::PgErr(err)) => {
-            tracing::error!(error = ?err, "IRC-based query failed to find a chatter");
-            format!("@{} literally hwo ://", tags.user_login)
+        Err(IrcClientErr::SqlxError(err)) => {
+            tracing::warn!(error = ?err, "IRC-based query failed due to non-existant user");
+            Ok(ReplyReason::RowNotFound.get_reply().to_string())
         }
         Err(err) => {
             tracing::error!(error = ?err, "IRC-based query failed in an unexpected way");
-            String::default()
+            // twitch should filter the empty message here
+            Ok(String::default())
         }
     }
+}
+
+#[instrument(skip(pool, tags))]
+pub async fn increment_score<'a>(pool: &'static sqlx::PgPool, tags: &'a IrcTags) -> IrcResult<()> {
+    let chatter_repo = ChatterRepository::new(pool);
+    // i kind of dont want to do this for channels for efficiency reasons - seems better to make sure
+    // all channels are present when we initialize the channel list and then assume they are present (right??)
+    if !chatter_repo.exists(&tags.user_id.clone().into()).await? {
+        let mut target_id = vec![tags.user_id.clone()];
+        let helix_chatter = Helix::fetch_users_by_id(&mut target_id).await?;
+
+        // TODO: why does this get moved if we dont clone? is it because we return a `Vec` of `T`
+        // rather than just the `T`??
+        let chatter = Chatter::from(helix_chatter[0].clone());
+        chatter_repo.insert(&chatter).await?;
+    }
+
+    let score_repo = LeaderboardRepository::new(pool);
+    let pre_incr = score_repo
+        .get_relational_score(
+            &tags.user_id.clone().into(),
+            &tags.channel_id.clone().into(),
+        )
+        .await?;
+    tracing::debug!(pre_incr = ?pre_incr, "score prior to incrementing");
+
+    // do transaction
+    match Tx::with_tx(&pool, |mut tx| async move {
+        let chatter_id = tags.user_id.clone().into();
+        let channel_id = tags.channel_id.clone().into();
+
+        let result = async {
+            tx.increment_score_by(&chatter_id, &channel_id, 1).await?;
+            tx.recalculate_channel_total(&channel_id).await?;
+            tx.recalculate_chatter_total(&chatter_id).await?;
+
+            Ok(())
+        }
+        .await;
+
+        (tx, result)
+    })
+    .await
+    {
+        Err(e) => {
+            tracing::error!(
+                error = ?e,
+                channel = tags.channel_id,
+                chatter = tags.user_id,
+                "score increment via transaction failure"
+            );
+
+            return Err(IrcClientErr::SqlxError(e));
+        }
+        _ => (),
+    };
+
+    // score_repo
+    //     .increment(
+    //         &tags.channel_id.clone().into(),
+    //         &tags.user_id.clone().into(),
+    //     )
+    //     .await?;
+
+    let post_incr = score_repo
+        .get_relational_score(
+            &tags.user_id.clone().into(),
+            &tags.channel_id.clone().into(),
+        )
+        .await?;
+    tracing::debug!(post_incr = ?post_incr, "score after incrementing");
+
+    Ok(())
 }
 
 #[instrument(skip(tx, data))]
 pub async fn send_to_reader(tx: &UnboundedSender<IrcMessage>, data: IrcMessage) {
     match tx.send(data) {
         Ok(_) => (),
-        Err(err) => tracing::error!(error = ?err, "failed to send to handler channel"),
+        Err(err) => {
+            tracing::error!(error = ?err, "failed to send to handler channel");
+            return;
+        }
     }
 }
 
@@ -380,6 +593,7 @@ pub fn parse_tags(msg: &Message, channel: &str) -> IrcTags {
             ("display-name", Some(name)) => result.user_login = name.to_lowercase(),
             ("user-id", Some(user_id)) => result.user_id = user_id,
             ("color", Some(color)) => result.color = color,
+            ("id", Some(msg_id)) => result.msg_id = msg_id,
             _ => (),
         }
     }
@@ -387,7 +601,7 @@ pub fn parse_tags(msg: &Message, channel: &str) -> IrcTags {
     result
 }
 
-// #[instrument(skip(command, channels, msg))]
+#[instrument(skip(command, channels, msg))]
 #[inline]
 pub fn parse_ttv_command(command: &str, channels: &Vec<String>, msg: &Message) {
     match command {
@@ -395,7 +609,7 @@ pub fn parse_ttv_command(command: &str, channels: &Vec<String>, msg: &Message) {
     }
 }
 
-// #[instrument(skip(response, parts, msg))]
+#[instrument(skip(response, parts, msg))]
 #[inline]
 pub fn parse_ttv_response(response: &Response, parts: &Vec<String>, msg: &Message) {
     match response {
@@ -433,10 +647,16 @@ pub enum IrcClientErr {
     ChannelError(#[from] ChannelError),
 
     #[error(transparent)]
-    PgErr(#[from] PgErr),
+    PgErr(#[from] PgError),
+
+    #[error("{0:?}")]
+    MpscSendCommandErr(#[from] mpsc::error::SendError<IrcCommand>),
 
     #[error(transparent)]
-    MpscSendCommandErr(#[from] mpsc::error::SendError<IrcCommand>),
+    SqlxError(#[from] sqlx::error::Error),
+
+    #[error(transparent)]
+    HelixError(#[from] crate::util::helix::HelixErr),
 }
 
 #[derive(Debug)]
@@ -459,6 +679,7 @@ impl From<TtvCap> for Capability {
 #[derive(Debug)]
 pub struct IrcConnection {
     pub config: Config,
+    pub curr_jitter: u8,
     pub client: Client,
     pub channels: Vec<String>,
     pub sender: UnboundedSender<IrcMessage>,
@@ -468,13 +689,18 @@ pub struct IrcConnection {
 
 #[cfg(test)]
 mod test {
-    use futures::{future::join_all, stream};
+    use futures::future::join_all;
+
+    use crate::util::channel::{update_channels, update_channels_by_name};
 
     use super::*;
 
     #[tokio::test]
-    async fn test_create_handler() {
+    async fn test_single_channel_handler() {
         let provider = crate::util::tracing::build_subscriber().await.unwrap();
+        let channels = vec!["plss".to_string()];
+
+        _ = update_channels_by_name(&channels).await.unwrap();
         let handles = irc_runner(vec!["plss".to_string()]).await.unwrap();
 
         _ = join_all(handles).await;

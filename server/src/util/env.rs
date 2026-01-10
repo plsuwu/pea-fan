@@ -30,6 +30,8 @@ pub async fn get_var(var: Var) -> EnvResult<&'static str> {
         Var::CorsAllowOrigins => &vars.cors_allow_origins,
         Var::DiscordWebhookUrl => &vars.discord_webhook_url,
         Var::ServerApiPort => &vars.server_api_port,
+        Var::OtelExporterEndpoint => &vars.otel_exporter_otlp_endpoint,
+        Var::OtelExporterProto => &vars.otel_exporter_otlp_protocol,
     })
 }
 
@@ -47,6 +49,8 @@ pub struct Env {
     pub cors_allow_origins: String,
     pub discord_webhook_url: String,
     pub server_api_port: String,
+    pub otel_exporter_otlp_endpoint: String,
+    pub otel_exporter_otlp_protocol: String,
 }
 
 impl Env {
@@ -68,6 +72,8 @@ pub enum Var {
     CorsAllowOrigins,
     DiscordWebhookUrl,
     ServerApiPort,
+    OtelExporterEndpoint,
+    OtelExporterProto,
 }
 
 #[macro_export]
@@ -130,7 +136,7 @@ macro_rules! forward_parsed_vals {
                 match self.1.parse::<$ty>() {
                     Ok(val) => val.into_deserializer().$method(visitor),
                     Err(e) => Err(serde::de::Error::custom(format_args!(
-                        "{}: while parsing '{}' (provider: {})", 
+                        "{}: while parsing '{}' (provider: {})",
                         e, self.1, self.0
                     )))
                 }

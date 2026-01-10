@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 
 use chrono::{Days, Utc};
-use sqlx::{Pool, Postgres};
 use thiserror::Error;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::instrument; //{debug, error, info, instrument, warn};
 
-use crate::db::models::{Chatter, DbUser};
-use crate::db::pg::{PgErr, db_pool};
-use crate::util::helix::{Helix, HelixErr};
+use crate::db::prelude::*;
+use crate::util::helix::{Helix, HelixErr, HelixUser};
 
 #[instrument(skip(from_url))]
 pub async fn update_channels(from_url: Option<&str>) -> ChannelResult<HashMap<String, Chatter>> {
@@ -17,15 +15,25 @@ pub async fn update_channels(from_url: Option<&str>) -> ChannelResult<HashMap<St
         .await?;
 
     tracing::debug!(list_url = from_url, "fetching channel list");
-    let ids: Vec<String> = channel_list
+    let ids: Vec<ChatterId> = channel_list
         .lines()
-        .filter_map(|line| line.split(':').nth(1).map(|s| s.to_owned()))
+        .filter_map(|line| line.split(':').nth(1).map(|s| s.to_owned().into()))
         .collect();
 
     update_stored_channels(&ids).await
 }
 
-#[instrument(skip(chatter), fields(id = chatter.id))]
+#[instrument(skip(channels))]
+pub async fn update_channels_by_name(
+    channels: &Vec<String>,
+) -> ChannelResult<HashMap<String, Chatter>> {
+    let helix_users: Vec<HelixUser> = Helix::fetch_users_by_login(channels.clone()).await?;
+    let ids: Vec<ChatterId> = helix_users.into_iter().map(|u| u.id.into()).collect();
+
+    update_stored_channels(&ids).await
+}
+
+#[instrument(skip(chatter), fields(id = chatter.id.0))]
 pub fn update_threshold_elapsed(chatter: &Chatter) -> bool {
     let current_ts = Utc::now().naive_utc();
     let threshold = Days::new(1);
@@ -47,30 +55,49 @@ pub fn update_threshold_elapsed(chatter: &Chatter) -> bool {
 }
 
 #[instrument(skip(ids), fields(count = ids.len()))]
-pub async fn update_stored_channels(ids: &Vec<String>) -> ChannelResult<HashMap<String, Chatter>> {
+pub async fn update_stored_channels(ids: &[ChatterId]) -> ChannelResult<HashMap<String, Chatter>> {
     tracing::debug!("performing stored channel checks");
     let mut requires_update: Vec<String> = Vec::new();
 
-    let conn = db_pool().await?;
-    let mut existing = Chatter::get_by_ids(conn, &ids).await?;
+    let chatter_repo = ChatterRepository::new(db_pool().await?);
+    let mut existing_chatters = chatter_repo.get_many_by_id(ids).await?;
 
+    // TODO:
+    //  this SEEMS like it will be somewhat inefficient (i assume we are potentially
+    //  iterating over `existing_chatters` and checking values twice here, right?)
     for id in ids {
-        if !existing.iter().any(|e_br| &e_br.id == id) {
-            tracing::warn!(channel = id, "uncached channel");
-            requires_update.push(id.clone());
-        } else if let Some(e_br) = existing.iter().find(|e_br| &e_br.id == id)
+        // iter 1
+        if !existing_chatters.iter().any(|e_br| &e_br.id == id) {
+            tracing::warn!(channel = id.0, "uncached channel");
+            requires_update.push(id.to_string());
+
+        // iter 2
+        } else if let Some(e_br) = existing_chatters
+            .iter()
+            .find(|e_br| e_br.id == ChatterId(id.to_string()))
             && update_threshold_elapsed(e_br)
         {
-            requires_update.push(id.clone());
+            requires_update.push(id.to_string());
         }
     }
 
     let channel_list = if requires_update.len() != 0 {
         tracing::info!(count = requires_update.len(), "refreshing channel data");
-        get_and_refresh_chatter_data(conn, &mut existing, &mut requires_update).await?
+        get_and_refresh_chatter_data(&chatter_repo, &mut existing_chatters, &mut requires_update)
+            .await?
     } else {
-        existing
+        existing_chatters
     };
+
+    ChannelRepository::new(db_pool().await?)
+        .insert_many(
+            &channel_list
+                .iter()
+                .cloned()
+                .map(Channel::from)
+                .collect::<Vec<_>>(),
+        )
+        .await?;
 
     let mut channel_map = HashMap::new();
     channel_list.into_iter().for_each(|channel| {
@@ -80,13 +107,13 @@ pub async fn update_stored_channels(ids: &Vec<String>) -> ChannelResult<HashMap<
     Ok(channel_map)
 }
 
-#[instrument(skip(conn, existing, requires_update), fields(update_required_count = requires_update.len(), total_existing_count = existing.len()))]
+#[instrument(skip(existing, requires_update), fields(update_required_count = requires_update.len(), total_existing_count = existing.len()))]
 /// Updates existing database entries with refreshed data
 ///
 /// This function performs the retrieval of chatter data from Helix, calls the database upsert, and
 /// then returns the full list of chatters to its caller
 pub async fn get_and_refresh_chatter_data(
-    conn: &'static Pool<Postgres>,
+    repo: &ChatterRepository,
     existing: &mut Vec<Chatter>,
     requires_update: &mut Vec<String>,
 ) -> ChannelResult<Vec<Chatter>> {
@@ -94,7 +121,7 @@ pub async fn get_and_refresh_chatter_data(
         .await?
         .iter_mut()
         .map(|f_br| {
-            if let Some(e_br) = existing.iter().find(|e| e.id == f_br.id) {
+            if let Some(e_br) = existing.iter().find(|e| e.id == ChatterId(f_br.id.clone())) {
                 f_br.total = e_br.total;
             }
 
@@ -106,8 +133,7 @@ pub async fn get_and_refresh_chatter_data(
     existing.retain(|e_br| !fetched.iter().any(|f_br| f_br.id == e_br.id));
     existing.extend_from_slice(&fetched);
 
-    Chatter::upsert_multi(conn, &existing).await?;
-
+    repo.insert_many(&existing).await?;
     tracing::debug!(
         refreshed_count = fetched.len(),
         old_total_count = pre_retain,
@@ -122,14 +148,17 @@ pub type ChannelResult<T> = core::result::Result<T, ChannelError>;
 
 #[derive(Debug, Error)]
 pub enum ChannelError {
-    #[error("reqwest error: {0}")]
+    #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
 
     #[error(transparent)]
     Helix(#[from] HelixErr),
 
     #[error(transparent)]
-    Pg(#[from] PgErr),
+    Pg(#[from] PgError),
+
+    #[error(transparent)]
+    SqlxError(#[from] sqlx::error::Error),
 }
 
 const CHANNELS_LIST_URL: &str =

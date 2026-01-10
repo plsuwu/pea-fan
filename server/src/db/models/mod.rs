@@ -1,0 +1,42 @@
+use serde::{Deserialize, Serialize};
+
+pub mod channel;
+pub mod chatter;
+pub mod leaderboard;
+
+#[inline]
+const fn default_offset() -> i64 {
+    0
+}
+
+#[inline]
+const fn default_limit() -> i64 {
+    50
+}
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PaginatedResponse<T> {
+    pub items: Vec<T>,
+    pub page: i64,
+    #[serde(default = "default_limit")]
+    pub page_size: i64,
+    pub total_items: i64,
+    pub total_pages: i64,
+}
+
+impl<T> PaginatedResponse<T> {
+    pub fn new(items: Vec<T>, total_items: i64, page_size: i64, page: i64) -> Self {
+        let total_pages = (total_items as f64 / page_size as f64).ceil() as i64;
+        Self {
+            items,
+            page,
+            page_size,
+            total_items,
+            total_pages,
+        }
+    }
+}
+
+pub mod prelude {
+}

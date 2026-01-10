@@ -1,14 +1,16 @@
 use std::collections::{HashMap, HashSet};
-use std::ops::AddAssign;
 
 use redis::{AsyncCommands, CopyOptions, from_redis_value};
-use tracing::{error, info, instrument, warn};
+use tracing::{instrument, warn};
 
 use super::redis_pool::RedisResult;
-use crate::db::models::{Channel, Chatter, DbUser, Score};
-use crate::db::pg::db_pool;
-use crate::db::redis::redis_pool::redis_pool;
+// use crate::db::pg::db_pool;
+use crate::db::redis::redis_pool::{KeyType, RedisKey, redis_pool};
+use crate::db::repositories::Repository;
+use crate::redis_key;
 use crate::util::helix::{Helix, HelixUser};
+
+use crate::db::prelude::*;
 
 #[derive(Debug)]
 pub struct Migrator {
@@ -37,34 +39,25 @@ impl Migrator {
     pub async fn preprocess(&mut self) -> RedisResult<()> {
         tracing::info!("begin preprocess pipeline");
 
-        let mut channel_logins = {
-            let _span = tracing::info_span!("fetch_channel_keys").entered();
-            Self::get_channel_keys().await?
-        };
-
+        let channel_logins = Self::get_channel_keys().await?;
         tracing::info!(
-            channel_count = channel_logins.len(),
+            cached_channel_count = channel_logins.len(),
             "retrieved channel keys from redis"
         );
 
         // process chatters with tracked channels ('broadcasters')
         let (channels, broadcasters) = {
-            let _span =
-                tracing::info_span!("fetch_channel_data", channel_count = channel_logins.len())
-                    .entered();
-
             let fetched = Helix::fetch_users_by_login(channel_logins.clone()).await?;
-            tracing::info!(
-                fetched_count = fetched.len(),
-                requested_count = channel_logins.len(),
-                "fetched channel data from helix"
-            );
-
             (
                 Self::merge_channels(fetched.clone()).await?,
                 fetched.into_iter().map(Chatter::from).collect::<Vec<_>>(),
             )
         };
+        tracing::info!(
+            channels_count = channels.len(),
+            broadcasters_count = broadcasters.len(),
+            "fetched channel and broadcaster data from helix"
+        );
 
         // (re)map redis channel login names onto the new channel structure for database upset
         let mut channel_map = HashMap::new();
@@ -86,40 +79,29 @@ impl Migrator {
 
         let pool = db_pool().await?;
 
-        {
-            // chatter upsert nested span
-            let _span =
-                tracing::info_span!("upsert_broadcasters", count = channels.len()).entered();
+        let chatter_repo = ChatterRepository::new(pool);
+        let channel_repo = ChannelRepository::new(pool);
+        let score_repo = LeaderboardRepository::new(pool);
 
-            Chatter::upsert_multi(pool, &broadcasters).await?;
-            tracing::info!(
-                count = broadcasters.len(),
-                "upsert broadcasters to database"
-            );
-        }
+        chatter_repo.insert_many(&broadcasters).await?;
+        tracing::info!(
+            count = broadcasters.len(),
+            "upsert broadcasters to database"
+        );
 
-        {
-            // channel upsert nested span
-            let _span = tracing::info_span!("upsert_channels", count = channels.len()).entered();
+        let broadcasters_channels: Vec<Channel> =
+            broadcasters.into_iter().map(Channel::from).collect();
+        channel_repo.insert_many(&broadcasters_channels).await?;
+        tracing::info!(count = channels.len(), "channels upserted to database");
 
-            Channel::upsert_multi(pool, &channels).await?;
-            tracing::info!(count = channels.len(), "upsert channels to database");
-        }
+        // -- end of initial broadcaster data processing --
 
         // fetch and process the non-broadcaster chatters
-        let mut chatter_logins = {
-            let _span = tracing::info_span!("fetch_chatter_keys").entered();
-            Self::get_chatter_keys().await?
-        };
-
+        let mut chatter_logins = Self::get_chatter_keys().await?;
         let num_chatters = chatter_logins.len();
         tracing::info!(num_chatters, "retrieved chatter keys from redis");
 
-        let mut fetched = {
-            let _span =
-                tracing::info_span!("fetch_chatter_data", chatter_count = num_chatters).entered();
-            Helix::fetch_users_by_login(chatter_logins.clone()).await?
-        };
+        let mut fetched = Helix::fetch_users_by_login(chatter_logins.clone()).await?;
 
         // filter out 'invalid' chatters
         let existing_logins: Vec<String> = fetched
@@ -141,6 +123,8 @@ impl Migrator {
             tracing::debug!("no invalid chatter logins found in cache");
         }
 
+        // TODO: turn this block into a function call i reckon
+        // --
         {
             let _span = tracing::debug_span!("sort_and_validate").entered();
             chatter_logins.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
@@ -181,6 +165,7 @@ impl Migrator {
                 tracing::debug!("validated chatter-login alignment (sampled)");
             }
         }
+        // --
 
         tracing::info!(
             fetched_count = fetched.len(),
@@ -188,28 +173,13 @@ impl Migrator {
         );
 
         // transform chatter structure + create db entries
-        let chatters = {
-            let _span = tracing::info_span!("merge_chatters", count = fetched.len()).entered();
-            Self::merge_chatters(&mut fetched, &chatter_logins).await?
-        };
+        let chatters = Self::merge_chatters(&mut fetched, &chatter_logins).await?;
 
-        {
-            let _span = tracing::info_span!("upsert_chatters", count = chatters.len()).entered();
-            Chatter::upsert_multi(pool, &chatters).await?;
-            tracing::info!(count = chatters.len(), "upsert chatters to database");
-        }
+        chatter_repo.insert_many(&chatters).await?;
+        tracing::info!(count = chatters.len(), "upsert chatters to database");
 
         // transform leaderboard structure + update db entries
-        let scores = {
-            let _span = tracing::info_span!(
-                "merge_leaderboards",
-                chatter_count = fetched.len(),
-                channel_count = channel_map.len()
-            )
-            .entered();
-            Self::merge_leaderboards(&fetched, &chatter_logins, &channel_map).await?
-        };
-
+        let scores = Self::merge_leaderboards(&fetched, &chatter_logins, &channel_map).await?;
         let total_scores: usize = scores.values().map(|s| s.len()).sum();
         tracing::info!(
             score_maps = scores.len(),
@@ -217,27 +187,50 @@ impl Migrator {
             "merged leaderboard data"
         );
 
-        {
-            let _span =
-                tracing::info_span!("update_scores", score_maps = scores.len(), total_scores)
-                    .entered();
+        Tx::with_tx(pool, |mut tx| async move {
+            let result = async {
+                for (chatter_id, scoremap) in scores.into_iter() {
+                    for (channel_id, score) in scoremap.into_iter() {
+                        tracing::debug!(
+                            channel = channel_id,
+                            "updating and recaculating channel score"
+                        );
+                        tracing::debug!(chatter = chatter_id, "updating chatter scoremap");
+                        tx.update_score(
+                            &chatter_id.clone().into(),
+                            &channel_id.clone().into(),
+                            score.into(),
+                        )
+                        .await?;
 
-            Score::update_multi(pool, scores).await?;
+                        tx.recalculate_channel_total(&channel_id.into()).await?;
+                        tx.recalculate_chatter_total(&chatter_id.clone().into())
+                            .await
+                            .unwrap();
+                    }
+                }
+
+                Ok(())
+            }
+            .await;
+
             tracing::info!("updated scores in database");
-        }
+            tracing::info!("preprocessing pipeline completed successfully");
 
-        tracing::info!("preprocessing pipeline completed successfully");
+            (tx, result)
+        })
+        .await?;
+
         Ok(())
     }
 
     #[instrument]
     pub async fn get_channel_keys() -> RedisResult<Vec<String>> {
         let mut conn = redis_pool().await?.manager.clone();
-        let keys_raw: Vec<String> = {
-            let _span = tracing::debug_span!("redis_keys_query").entered();
-            from_redis_value(conn.keys("channel:*:total").await?)?
-        };
+        let key_query = redis_key!(channel, score);
+        tracing::info!(key = key_query, "built redis key");
 
+        let keys_raw: Vec<String> = from_redis_value(conn.keys(key_query).await?)?;
         tracing::debug!(raw_key_count = keys_raw.len(), "retrieved raw channel keys");
         let mut processed_keys: Vec<_> = keys_raw
             .iter()
@@ -248,20 +241,6 @@ impl Migrator {
                     .map(|s| s.to_owned())
             })
             .collect();
-
-        // let mut processed_keys: Vec<_> = keys_raw
-        //     .iter()
-        //     .map(|val| {
-        //         let b = val
-        //             .split(':')
-        //             .nth(1)
-        //             .expect("key format error (on ':')")
-        //             .split('#')
-        //             .nth(1)
-        //             .expect("key format error (on '#')");
-        //         b.to_owned()
-        //     })
-        //     .collect();
 
         if processed_keys.len() != keys_raw.len() {
             tracing::warn!(
@@ -292,11 +271,7 @@ impl Migrator {
     #[instrument]
     pub async fn get_chatter_keys() -> RedisResult<Vec<String>> {
         let mut conn = redis_pool().await?.manager.clone();
-        let keys_raw: Vec<String> = {
-            let _span = tracing::debug_span!("redis_keys_query").entered();
-            from_redis_value(conn.keys("user:*:total").await?)?
-        };
-
+        let keys_raw: Vec<String> = from_redis_value(conn.keys(redis_key!(user, score)).await?)?;
         tracing::debug!(raw_key_count = keys_raw.len(), "retrieved raw chatter keys");
 
         let mut processed_keys: Vec<_> = keys_raw
@@ -339,22 +314,17 @@ impl Migrator {
         let mut conn = redis_pool().await?.manager.clone();
         let mut pipeline = redis::pipe();
 
-        {
-            let _span = tracing::debug_span!("build_pipeline").entered();
-            for chatter in redis_keys {
-                let chatter_lb_key = format!("user:{}:leaderboard", chatter);
-                pipeline.zrange_withscores(chatter_lb_key, 0, -1);
-            }
+        redis_keys.iter().for_each(|chatter| {
+            let key = redis_key!(user, leaderboard, chatter);
+            pipeline.zrange_withscores(key, 0, -1);
+        });
 
-            tracing::debug!(query_count = redis_keys.len(), "built redis pipeline");
-        }
-
-        let lbs: Vec<Vec<String>> = {
-            let _span = tracing::debug_span!("execute_pipeline").entered();
-            pipeline.query_async(&mut conn).await?
-        };
-
-        tracing::debug!(result_count = lbs.len(), "retrieved leaderboard data");
+        tracing::debug!(query_count = redis_keys.len(), "built redis query pipeline");
+        let leaderboards: Vec<Vec<String>> = pipeline.query_async(&mut conn).await?;
+        tracing::debug!(
+            result_count = leaderboards.len(),
+            "retrieved leaderboard data"
+        );
 
         let mut chatter_scores = HashMap::new();
         let mut total_scores = 0;
@@ -362,11 +332,11 @@ impl Migrator {
         let mut unknown_channels = 0;
         let mut empty_scoremaps = 0;
 
-        for (i, scores) in lbs.into_iter().enumerate() {
+        for (i, scores) in leaderboards.into_iter().enumerate() {
             let mut mapped_scores = HashMap::new();
-            let mut should_update = HashSet::new();
+            // let mut should_update = HashSet::new();
 
-            for score in scores.chunks_exact(2) {
+            for (idx, score) in scores.chunks_exact(2).enumerate() {
                 total_scores += 1;
                 let channel_key = &score[0];
                 let channel_login = channel_key
@@ -378,9 +348,11 @@ impl Migrator {
                     })
                     .to_lowercase();
 
+                // TODO:
+                //  this block doesnt make sense what the fuck is going on here
                 if let Some(channel_data) = &channel_map.get(&channel_login) {
                     if let Ok(score_value) = score[1].parse::<i32>() {
-                        mapped_scores.insert(channel_data.id.to_owned(), score_value);
+                        mapped_scores.insert(channel_data.id.to_string(), score_value);
                     } else {
                         tracing::warn!(
                             channel_key,
@@ -389,24 +361,26 @@ impl Migrator {
                         );
                     }
                 } else {
-                    let mut remapped_login = channel_key.clone();
-                    match channel_login.as_str() {
-                        "#cchiko_" => remapped_login = "chikogaki".to_string(),
-                        "#pekoe_bunny" => remapped_login = "dearpekoe".to_string(),
-                        "#sheriff_baiken" => remapped_login = "baikenvt".to_string(),
+                    let remapped_login = match &*channel_login {
+                        "cchiko_" => "chikogaki".to_string(),
+                        "pekoe_bunny" => "dearpekoe".to_string(),
+                        "sheriff_baiken" => "baikenvt".to_string(),
+
+                        // unknown key (realistically should never match this arm!!)
                         _ => {
                             unknown_channels += 1;
                             tracing::error!(
                                 chatter = %chatters[i].login,
                                 channel_key,
-                                "unknown channel in leaderboard"
+                                "unknown channel in chatter leaderboard"
                             );
 
                             continue;
                         }
                     };
 
-                    if let Some(channel_data) = channel_map.get(&channel_login) {
+                    // --
+                    if let Some(channel_data) = channel_map.get(&remapped_login) {
                         legacy_remaps += 1;
                         tracing::warn!(
                             chatter = %chatters[i].login,
@@ -414,11 +388,10 @@ impl Migrator {
                             new_login = %remapped_login,
                             "legacy channel in leaderboard"
                         );
-                        should_update.insert((score[0].clone(), channel_login.clone()));
 
                         if let Ok(score_value) = score[1].parse::<i32>() {
-                            mapped_scores.insert(channel_data.id.to_owned(), score_value);
-                        }
+                            mapped_scores.insert(channel_data.id.to_string(), score_value);
+                        } 
                     } else {
                         tracing::error!(
                             chatter = %chatters[i].login,
@@ -435,26 +408,26 @@ impl Migrator {
                 tracing::warn!(chatter = %chatters[i].login, "chatter has empty scoremap");
             }
 
-            if !should_update.is_empty() {
-                let update_count = should_update.len();
-                tracing::debug!(
-                    chatter = %chatters[i].login,
-                    update_count,
-                    "updating legacy channel names"
-                );
-
-                for (old, new) in should_update {
-                    if let Err(e) = Self::update_cached_name(&old, &new).await {
-                        tracing::error!(
-                            chatter = %chatters[i].login,
-                            old_key = %old,
-                            new_key = %new,
-                            error = %e,
-                            "failed to update legacy channel name"
-                        );
-                    }
-                }
-            }
+            // if !should_update.is_empty() {
+            //     let update_count = should_update.len();
+            //     tracing::debug!(
+            //         chatter = %chatters[i].login,
+            //         update_count,
+            //         "updating legacy channel names"
+            //     );
+            //
+            //     for (old, new) in should_update {
+            //         if let Err(e) = Self::update_cached_name(&old, &new).await {
+            //             tracing::error!(
+            //                 chatter = %chatters[i].login,
+            //                 old_key = %old,
+            //                 new_key = %new,
+            //                 error = %e,
+            //                 "failed to update a legacy channel name"
+            //             );
+            //         }
+            //     }
+            // }
 
             chatter_scores.insert(chatters[i].id.to_string(), mapped_scores);
         }
@@ -478,17 +451,12 @@ impl Migrator {
 
         let mut conn = redis_pool().await?.manager.clone();
         let mut pipeline = redis::pipe();
-
-        for ch in &broadcasters {
-            let total_key = format!("channel:#{}:total", ch.login);
+        broadcasters.iter().for_each(|ch| {
+            let total_key = redis_key!(channel, score, &ch.login);
             pipeline.get(total_key);
-        }
+        });
 
-        let res: Vec<String> = {
-            let _span = tracing::debug_span!("execute_pipeline").entered();
-            pipeline.query_async(&mut conn).await?
-        };
-
+        let res: Vec<String> = pipeline.query_async(&mut conn).await?;
         tracing::debug!(
             retrieved_count = res.len(),
             "retrieved cached channel totals"
@@ -507,7 +475,7 @@ impl Migrator {
                             channel  =%chan.login,
                             value = %res[i],
                             error = %e,
-                            "failed to parse channel total (using default=0)"
+                            "failed to parse channel_total, falling back to '0'"
                         );
                         chan.total = 0;
                     }
@@ -537,15 +505,11 @@ impl Migrator {
         let mut conn = redis_pool().await?.manager.clone();
         let mut pipeline = redis::pipe();
         redis_keys.iter().for_each(|user| {
-            let total_key = format!("user:{}:total", user);
+            let total_key = redis_key!(user, total, user); // format!("user:{}:total", user);
             pipeline.get(total_key);
         });
 
-        let res: Vec<redis::Value> = {
-            let _span = tracing::debug_span!("execute_pipeline").entered();
-            pipeline.query_async(&mut conn).await?
-        };
-
+        let res: Vec<redis::Value> = pipeline.query_async(&mut conn).await?;
         tracing::debug!(
             retrieved_count = res.len(),
             "retrieved cached chatter totals"
@@ -593,12 +557,12 @@ impl Migrator {
         );
 
         if !parse_failures.is_empty() && parse_failures.len() < 10 {
-            tracing::debug!(failed_users = ?parse_failures, "failed to parse totals for users");
+            tracing::debug!(failed_users = ?parse_failures, "failed to parse totals for some users");
         } else if !parse_failures.is_empty() {
             tracing::debug!(
                 failed_count = parse_failures.len(),
                 sample = ?&parse_failures[..5.min(parse_failures.len())],
-                "failed to parse large number of users"
+                "failed to parse totals for a signficant number of users"
             );
         }
 
@@ -606,29 +570,41 @@ impl Migrator {
     }
 
     #[instrument(skip(old_login, new_login))]
-    /// pipeline for redis COPY operations on a user's cached information:
+    /// Pipeline for copying "stale" cached data from old keys to new keys on a user's cached information
+    ///
+    /// # Redis
     ///
     /// * channel & chatter totals:
-    /// ```redis
+    /// ```
     /// COPY [source_key] [dest_key]
     /// ```
     ///
     /// * channel & chatter leaderboards
-    /// ```redis
+    /// ```
     /// ZUNIONSTORE [dest_key] 1 [source_key]
     /// ```
+    ///
+    /// # Additional note
+    ///
+    /// Unsure whether we actually care about this even slightly if we are
+    ///  - migrating storage from Redis to Postgres,
+    ///  - using the user's ID over their login
     pub async fn update_cached_name(old_login: &str, new_login: &str) -> RedisResult<()> {
-        tracing::debug!("updating cached redis keys for legacy channel");
+        tracing::debug!(
+            old_login,
+            new_login,
+            "updating cached redis keys for legacy channel"
+        );
 
-        let old_channel_total = format!("channel:#{}:total", old_login);
-        let old_channel_lb = format!("channel:#{}:leaderboard", old_login);
-        let old_user_total = format!("user:{}:total", old_login);
-        let old_user_lb = format!("user:{}:leaderboard", old_login);
+        let old_channel_total = redis_key!(channel, score, old_login);
+        let old_channel_lb = redis_key!(channel, leaderboard, old_login);
+        let old_user_total = redis_key!(user, score, old_login);
+        let old_user_lb = redis_key!(user, leaderboard, old_login);
 
-        let new_channel_total = format!("channel:#{}:total", new_login);
-        let new_channel_lb = format!("channel:#{}:leaderboard", new_login);
-        let new_user_total = format!("user:{}:total", new_login);
-        let new_user_lb = format!("user:{}:leaderboard", new_login);
+        let new_channel_total = redis_key!(channel, score, new_login);
+        let new_channel_lb = redis_key!(channel, leaderboard, new_login);
+        let new_user_total = redis_key!(user, score, new_login);
+        let new_user_lb = redis_key!(user, leaderboard, new_login);
 
         let mut conn = redis_pool().await?.manager.clone();
         let mut pipeline = redis::pipe();
@@ -640,10 +616,7 @@ impl Migrator {
         pipeline.zinterstore(new_channel_lb, old_channel_lb);
         pipeline.zinterstore(new_user_lb, old_user_lb);
 
-        let (): _ = {
-            let _span = tracing::debug_span!("execute_pipeline").entered();
-            pipeline.query_async(&mut conn).await?
-        };
+        let (): _ = pipeline.query_async(&mut conn).await?;
 
         tracing::info!("updated cached keys");
         Ok(())
@@ -681,7 +654,7 @@ mod test {
 
         let names_map = Vec::new();
         for update in names_map.chunks_exact(2) {
-            info!("processing: {} -> {}", update[0], update[1]);
+            tracing::info!("processing: {} -> {}", update[0], update[1]);
             Migrator::update_cached_name(update[0], update[1])
                 .await
                 .unwrap();

@@ -9,25 +9,25 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::OnceCell;
-use tracing::{Instrument, debug, error, info, instrument, trace, warn};
+use tracing::{Instrument, error, instrument, warn};
 
 use crate::util::env::{EnvErr, Var};
 use crate::var;
 
-// TODO: these two consts are for redis-related processing and should be instantiated in the
-// correct module :))
+// TODO:
+//  these can probably be removed i think
 pub const NOT_PRESENT_IN_CACHE: &str = "[NOT_PRESENT_IN_CACHE]";
 pub const NOT_VALID_HELIX_USER: &str = "[NOT_VALID_HELIX_USER]";
 
 pub struct Helix;
 impl Helix {
-    #[instrument(skip(users), fields(user_count = users.len()))]
     /// Fetch a list of users' Twitch information via their IDs.
     ///
     /// # Reliability
     ///
     /// This is the preferred method for fetching a user's information, as an account's ID cannot
     /// be changed.
+    #[instrument(skip(users), fields(user_count = users.len()))]
     pub async fn fetch_users_by_id(users: &mut Vec<String>) -> HelixResult<Vec<HelixUser>> {
         let mut retrieved = Vec::new();
         let uri_params = build_query_params(HelixParamType::Id, users);
@@ -41,18 +41,18 @@ impl Helix {
                 .for_each(|user| retrieved.push(user));
         }
 
-        tracing::debug!(fetched_count = retrieved.len(), "fetched primary user data");
+        tracing::info!(user_count = retrieved.len(), "retrieved primary user data");
 
         Self::fetch_auxilliary_data(&mut retrieved).await
     }
 
-    #[instrument(skip(users), fields(user_count = users.len()))]
     /// Fetch a list of users' Twitch information via their logins.
     ///
     /// # Reliability
     ///
     /// Fetching via a login is far more fragile due to the impermanence of Twitch usernames. As such,
     /// `Helix::fetch_users_by_id` is preferred over this function.
+    #[instrument(skip(users), fields(user_count = users.len()))]
     pub async fn fetch_users_by_login(mut users: Vec<String>) -> HelixResult<Vec<HelixUser>> {
         let mut retrieved = Vec::new();
         let uri_params = build_query_params(HelixParamType::Login, &mut users);
@@ -100,8 +100,8 @@ impl Helix {
         Self::fetch_auxilliary_data(&mut retrieved).await
     }
 
+    /// Sends off a request to a given URI
     #[instrument]
-    /// Sends off a request to a given URI using a `reqwest` client
     async fn send(uri: String) -> HelixResult<reqwest::Response> {
         let client = reqwest::Client::new();
         let headers = auth_headers().await?.bearer.clone();
@@ -114,9 +114,16 @@ impl Helix {
             .map_err(|e| HelixErr::ReqwestError(e))
     }
 
-    #[instrument(skip(uri))]
     /// Performs a GET request to a given URI and parses the response according to the specified
     /// `T` output type
+    ///
+    /// # Notes
+    ///
+    /// This is  internal fetch handler method that takes a URI to fetch. We want to create a
+    /// handler function (see e.g. `Self::fetch_users_by_x`, `Self::fetch_colors`, ...) to build
+    /// the URI and wrap this function call, which in turn wraps the `Self::send` method with
+    /// error handling/propagation & logging.
+    #[instrument(skip(uri))]
     async fn fetch_users<T>(uri: String) -> HelixResult<T>
     where
         T: DeserializeOwned + fmt::Debug,
@@ -153,7 +160,8 @@ impl Helix {
             }
         }
 
-        // log rate limit
+        // TODO:
+        //  rate limit "handling"
         let rl_remaining = res.headers().get("ratelimit-remaining");
         let rl_total = res.headers().get("ratelimit-limit");
 
@@ -168,6 +176,7 @@ impl Helix {
         res_body
     }
 
+    /// Attempts to refetch user data one-by-one for failed user fetch batches
     #[instrument(skip(users, param_type))]
     pub async fn try_refetch(
         users: Vec<String>,
@@ -191,7 +200,7 @@ impl Helix {
                             //
                             //   this appears to be due to querying for a user's `display_name` rather
                             //   than their `login`, but this is still probably a good sanity check to
-                            //   have.
+                            //   have just in case.
                             if r.data.len() > 0 {
                                 return Ok((r.data, user));
                             }
@@ -212,27 +221,37 @@ impl Helix {
         tracing::debug!(requests_count = requests.len(), "built requests vec");
         let mut refetched = Vec::new();
 
-        // spawn threads to process user entries concurrently
+        // create async stream for users
         let results: Vec<_> = stream::iter(requests)
             .buffer_unordered(NUM_WORKER_THREADS)
             .collect()
-            .instrument(tracing::debug_span!("resolve_and_unwrap_futures"))
+            .instrument(tracing::debug_span!("await futures for user batch"))
             .await;
 
-        tracing::debug!(results_count = results.len(), "checking request results");
+        tracing::debug!(
+            results_count = results.len(),
+            "checking future result for refetched user batch"
+        );
         for result in results {
             match result {
                 Ok((res, _)) => refetched.push(res[0].clone()),
                 Err((e, user)) => {
-                    tracing::error!(user, error = ?e, "invalid user, manual fix required");
+                    tracing::error!(user, error = ?e, "invalid user: manual fix required (?)");
                 }
             }
         }
 
-        tracing::debug!(total_refetched = refetched.len(), "refetch complete");
+        tracing::info!(
+            total_refetched = refetched.len(),
+            "refetched users for failed batch"
+        );
         Ok(HelixDataResponse { data: refetched })
     }
 
+    /// Fetch handler for auxilliary data
+    ///
+    /// "Auxilliary" here refers to data not immediately available from the `Helix` endpoint - for
+    /// example, a user's chat color (if one is set).
     #[instrument(skip(users), fields(users_count = users.len()))]
     async fn fetch_auxilliary_data(users: &mut Vec<HelixUser>) -> HelixResult<Vec<HelixUser>> {
         let mut colors = Self::fetch_colors(&users).await?;
@@ -240,14 +259,15 @@ impl Helix {
         // ... space for future aux data fetching function calls :3
 
         {
-            let _span = tracing::debug_span!("sort_vecs").entered();
+            let _span = tracing::debug_span!("sort-vecs").entered();
             users.sort();
             colors.sort();
         }
 
         tracing::debug!("sorted auxilliary data vectors");
+
         {
-            let _span = tracing::debug_span!("merge_vecs").entered();
+            let _span = tracing::debug_span!("merge-vecs").entered();
             users.iter_mut().enumerate().for_each(|(idx, user)| {
                 if !colors[idx].color.is_empty() {
                     user.color = colors[idx].color.to_string();
@@ -259,6 +279,7 @@ impl Helix {
         Ok(users.to_owned())
     }
 
+    /// Fetches user chat colors if set.
     #[instrument(skip(users), fields(users_count = users.len()))]
     pub async fn fetch_colors(users: &Vec<HelixUser>) -> HelixResult<Vec<HelixColor>> {
         let mut retrieved = Vec::new();
@@ -475,25 +496,25 @@ pub type HelixResult<T> = core::result::Result<T, HelixErr>;
 
 #[derive(Debug, Error)]
 pub enum HelixErr {
-    #[error("reqwest error: {0}")]
+    #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
 
     #[error("while parsing environment vars: {0}")]
     EnvError(#[from] EnvErr),
 
-    #[error("while creating a HeaderValue ({0})")]
+    #[error("while creating a HeaderValue: {0}")]
     HeaderError(#[from] InvalidHeaderValue),
 
-    #[error("tried to make a request containing an invalid username")]
+    #[error("attempted to request user data with an invalid user login")]
     InvalidUsername,
 
     #[error("error during helix fetch: {0}")]
     FetchErr(String),
 
-    #[error("error (with detail) during helix fetch: {:#?}", body)]
+    #[error("error (with detail) during helix fetch: {:?}", body)]
     FetchErrWithBody { body: Value },
 
-    #[error("empty data field")]
+    #[error("helix response with empty data field")]
     EmptyDataField,
 }
 

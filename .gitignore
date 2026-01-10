@@ -41,3 +41,5 @@ vite.config.ts.timestamp-*
 *.log
 .direnv/
 .container
+
+grafana/obsv-data/

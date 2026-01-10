@@ -4,9 +4,8 @@ use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::OnceCell;
-use tracing::{info, instrument};
+use tracing::instrument;
 
-use crate::db::pg;
 use crate::util::env::{EnvErr, Var};
 use crate::util::helix::HelixErr;
 use crate::var;
@@ -18,40 +17,87 @@ pub async fn redis_pool() -> RedisResult<&'static RedisPool> {
         .await
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum ChatterKey {
-    Id(String),
-    Name(String),
-    Score(String),
-    Leaderboard(String),
+#[macro_export]
+macro_rules! redis_key {
+    ($prefix:ident, $keytype:ident) => {{
+        let key_type = match stringify!($prefix) {
+            "channel" => KeyType::Channel,
+            "user" => KeyType::Chatter,
+            _ => panic!("invalid key type: {}", stringify!($prefix)),
+        };
+
+        let key = match stringify!($keytype) {
+            "total" | "score" => RedisKey::Score(key_type),
+            "leaderboard" => RedisKey::Leaderboard(key_type),
+            _ => panic!("invalid key prefix: '{}'", stringify!($keytype)),
+        }
+        .wildcard();
+        tracing::info!(key = ?key, "built wildcard redis key");
+
+        key
+    }};
+
+    ($prefix:ident, $keytype:ident, $name:expr) => {{
+        let key_type = match stringify!($prefix) {
+            "channel" => KeyType::Channel,
+            "user" => KeyType::Chatter,
+            _ => panic!("invalid key type: {}", stringify!($prefix)),
+        };
+
+        let key = match stringify!($keytype) {
+            "total" | "score" => RedisKey::Score(key_type),
+            "leaderboard" => RedisKey::Leaderboard(key_type),
+            _ => panic!("invalid key prefix: '{}'", stringify!($keytype)),
+        }
+        .with_name($name);
+
+        tracing::info!(key = ?key, "built named redis key");
+
+        key
+    }};
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum ChannelKey {
-    Id(String),
-    Name(String),
-    Score(String),
-    Leaderboard(String),
+#[derive(Debug, Serialize, Deserialize)]
+pub enum RedisKey {
+    Score(KeyType),
+    Leaderboard(KeyType),
 }
 
-impl From<ChatterKey> for String {
-    fn from(value: ChatterKey) -> Self {
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub enum KeyType {
+    Chatter,
+    Channel,
+}
+
+impl core::fmt::Display for KeyType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", String::from(*self))
+    }
+}
+
+impl From<KeyType> for String {
+    fn from(value: KeyType) -> Self {
         match value {
-            ChatterKey::Id(chatter_login) => format!("chatter:{}:id", chatter_login),
-            ChatterKey::Name(chatter_id) => format!("chatter:{}:name", chatter_id),
-            ChatterKey::Score(chatter_id) => format!("chatter:{}:score", chatter_id),
-            ChatterKey::Leaderboard(chatter_id) => format!("chatter:{}:leaderboard", chatter_id),
+            KeyType::Chatter => String::from("user:"),
+            KeyType::Channel => String::from("channel:#"),
         }
     }
 }
 
-impl From<ChannelKey> for String {
-    fn from(value: ChannelKey) -> Self {
-        match value {
-            ChannelKey::Id(channel_login) => format!("channel:{}:id", channel_login),
-            ChannelKey::Name(channel_id) => format!("channel:{}:id", channel_id),
-            ChannelKey::Score(channel_id) => format!("channel:{}:id", channel_id),
-            ChannelKey::Leaderboard(channel_id) => format!("channel:{}:id", channel_id),
+impl RedisKey {
+    #[instrument]
+    pub fn with_name(&self, name: &str) -> String {
+        match self {
+            RedisKey::Score(prefix) => format!("{}{}:total", prefix, name),
+            RedisKey::Leaderboard(prefix) => format!("{}{}:leaderboard", prefix, name),
+        }
+    }
+
+    #[instrument]
+    pub fn wildcard(&self) -> String {
+        match self {
+            RedisKey::Score(prefix) => format!("{}*:total", prefix),
+            RedisKey::Leaderboard(prefix) => format!("{}*:leaderboard", prefix),
         }
     }
 }
@@ -73,23 +119,26 @@ pub type RedisResult<T> = core::result::Result<T, RedisErr>;
 
 #[derive(Debug, Error)]
 pub enum RedisErr {
-    #[error("{0}")]
+    #[error(transparent)]
     EnvErr(#[from] EnvErr),
 
-    #[error("{0}")]
-    PgError(#[from] pg::PgErr),
+    #[error(transparent)]
+    PgError(#[from] crate::db::PgError),
 
-    #[error("helix fetch error: {0}")]
+    #[error(transparent)]
     HelixError(#[from] HelixErr),
 
-    #[error("redis client error: {0}")]
+    #[error(transparent)]
     RedisClientError(#[from] redis::RedisError),
 
-    #[error("parse error: {0}")]
+    #[error(transparent)]
     ParseError(#[from] redis::ParsingError),
 
     #[error("unable to parse resulting redis key")]
     BadKey,
+
+    #[error(transparent)]
+    SqlxError(#[from] sqlx::error::Error),
 }
 
 pub struct RedisPool {

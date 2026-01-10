@@ -28,14 +28,17 @@
           buildInputs = with pkgs; [
             pkg-config
             openssl
-            cargo
 
+            cargo
             bun
 
             twitch-cli
+            sqlx-cli
+
             postgresql
             redis
 
+            grafana-alloy
             pyPg
           ];
 
