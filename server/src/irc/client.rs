@@ -103,7 +103,7 @@ pub async fn irc_runner(channels: Vec<String>) -> IrcResult<Vec<tokio::task::Joi
         let mut stream = irc_client.client.stream().unwrap();
 
         const MIN_CHECK_DURATION: Duration = Duration::from_secs(30);
-        const MAX_CHECK_DURATION: Duration = Duration::from_secs(300);
+        const MAX_CHECK_DURATION: Duration = Duration::from_secs(480);
         let mut check_interval = MIN_CHECK_DURATION;
 
         let joined_channels = irc_client.get_joined();
@@ -153,12 +153,12 @@ pub async fn irc_runner(channels: Vec<String>) -> IrcResult<Vec<tokio::task::Joi
                                     let new_interval = check_interval.saturating_mul(2).min(MAX_CHECK_DURATION);
                                     if new_interval != check_interval {
                                         check_interval = new_interval;
-                                        tracing::debug!(next_interval = ?check_interval, "increasing check interval");
+                                        tracing::info!(next_interval = ?check_interval, "check interval increased");
                                     }
                                 }
                             }  else {
                                 check_interval = MIN_CHECK_DURATION;
-                                tracing::warn!(check_interval = ?check_interval, "resetting check interval");
+                                tracing::warn!(check_interval = ?check_interval, "check interval reset");
                             }
                         },
                         Err(err) => {
@@ -297,7 +297,13 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
     let tags = &msg.tags;
     let prefix = &msg.prefix;
 
-    tracing::info!(command = ?command, tags = ?tags, prefix = ?prefix, response_target = ?msg.response_target(), "DEBUG MESSAGE PARTS");
+    tracing::trace!(
+        command = ?command,
+        tags = ?tags,
+        prefix = ?prefix,
+        response_target = ?msg.response_target(), 
+        "trace message parts"
+    );
 
     match &msg.command {
         // this is the only command we REALLY care about, but the others
@@ -313,8 +319,6 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
         }
 
         Command::PONG(_, _) | Command::PING(_, _) => {
-            let new_ping_timer = {};
-
             let joined = client.get_joined();
             tracing::info!(
                 current_joined_count = joined.len(),
@@ -493,7 +497,7 @@ pub async fn make_query_response(
 pub async fn increment_score<'a>(pool: &'static sqlx::PgPool, tags: &'a IrcTags) -> IrcResult<()> {
     let chatter_repo = ChatterRepository::new(pool);
     // i kind of dont want to do this for channels for efficiency reasons - seems better to make sure
-    // all channels are present when we initialize the channel list and then assume they are present (right??)
+    // all channels are present when we read in the channel list and then assume they are present (right??)
     if !chatter_repo.exists(&tags.user_id.clone().into()).await? {
         let mut target_id = vec![tags.user_id.clone()];
         let helix_chatter = Helix::fetch_users_by_id(&mut target_id).await?;
@@ -543,13 +547,6 @@ pub async fn increment_score<'a>(pool: &'static sqlx::PgPool, tags: &'a IrcTags)
         }
         _ => (),
     };
-
-    // score_repo
-    //     .increment(
-    //         &tags.channel_id.clone().into(),
-    //         &tags.user_id.clone().into(),
-    //     )
-    //     .await?;
 
     let post_incr = score_repo
         .get_relational_score(

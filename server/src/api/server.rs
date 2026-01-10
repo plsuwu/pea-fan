@@ -223,6 +223,9 @@ pub async fn helix_user_by_login(Path(login): Path<String>) -> JsonResult<Vec<He
 
 #[instrument]
 pub async fn main_server_handler() -> Result<(), RouteError> {
+
+    // TODO:
+    //  perhaps these should be passed into the function as args!
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
 
     tracing::info!("starting server");
@@ -257,25 +260,28 @@ mod test {
     async fn test_run_server() {
         let provider = otlp_trace::build_subscriber().await.unwrap();
 
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
+        // let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
 
-        tracing::info!("starting server");
-        let server_handle = tokio::task::spawn(async move {
-            router(tx).await;
-        });
+        // tracing::info!("starting server");
+        // let server_handle = tokio::task::spawn(async move {
+        //     router(tx).await;
+        // });
+        //
+        // while !rx.is_closed() {
+        //     if let Some(msg) = rx.recv().await {
+        //         tracing::info!(
+        //             server_url = "127.0.0.1",
+        //             server_port = msg.port(),
+        //             "server ready"
+        //         );
+        //         break;
+        //     }
+        // }
+        
+        let server_handle = main_server_handler().await;
+        server_handle.unwrap();
 
-        while !rx.is_closed() {
-            if let Some(msg) = rx.recv().await {
-                tracing::info!(
-                    server_url = "127.0.0.1",
-                    server_port = msg.port(),
-                    "server ready"
-                );
-                break;
-            }
-        }
-
-        _ = server_handle.await;
+        // _ = server_handle.await;
         otlp_trace::destroy_tracer(provider);
     }
 }

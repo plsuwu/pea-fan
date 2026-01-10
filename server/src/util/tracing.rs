@@ -37,16 +37,17 @@ fn create_loki_layer(
 }
 
 pub async fn build_subscriber() -> Result<trace::SdkTracerProvider> {
-    // let provider = init_provider()?;
-    let provider = init_stdout_provider()?;
+    // let provider = init_stdout_provider()?;
+    let provider = init_provider()?;
     let tracer = global::tracer(TRACER_NAME);
 
     let (loki_layer, loki_task) = create_loki_layer(SERVICE_NAME, LOKI_URL)?;
 
     tracing_subscriber::registry()
         .with(loki_layer)
+        .with(tracing_opentelemetry::layer().with_tracer(tracer))
         .with(EnvFilter::new(
-            "server=trace,tower_http=debug,axum=debug,sqlx=info,irc=trace,info",
+            "server=debug,tower_http=debug,axum=debug,sqlx=info,irc=debug,info",
         ))
         .with(
             tracing_subscriber::fmt::layer()
@@ -54,7 +55,6 @@ pub async fn build_subscriber() -> Result<trace::SdkTracerProvider> {
                 .with_thread_ids(true)
                 .with_line_number(true),
         )
-        .with(tracing_opentelemetry::layer().with_tracer(tracer))
         .init();
 
     tokio::spawn(loki_task);
@@ -77,7 +77,7 @@ fn init_stdout_provider() -> Result<trace::SdkTracerProvider> {
 fn init_provider() -> Result<trace::SdkTracerProvider> {
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
-        .with_endpoint("http://localhost:4318")
+        .with_endpoint("http://localhost:4317/v1/traces")
         .with_timeout(Duration::from_secs(5))
         .build()?;
 
