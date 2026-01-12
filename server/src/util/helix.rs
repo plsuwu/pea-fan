@@ -433,8 +433,8 @@ impl Helix {
     }
 }
 
-// pub const HELIX_URI_BASE: &str = "https://api.twitch.tv/helix";
-pub const HELIX_URI_BASE: &str = "http://localhost:8081/mock";
+pub const HELIX_URI_BASE: &str = "https://api.twitch.tv/helix";
+// pub const HELIX_URI_BASE: &str = "http://localhost:8081/mock";
 pub const HELIX_URN_USERS: &str = "users";
 pub const HELIX_URN_STREAMS: &str = "streams";
 pub const HELIX_URN_COLORS: &str = "chat/color";

@@ -27,14 +27,26 @@ mod test {
     use std::net::SocketAddr;
 
     use futures::future::join_all;
+    use tokio::sync::oneshot::Sender;
+
+    use crate::{api::server::start_server, irc::client::start_irc_handler};
 
     use super::*;
 
     #[tokio::test]
     async fn test_hooks() {
         let provider = crate::util::tracing::build_subscriber().await.unwrap();
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
-        let server_handles = crate::api::server::start_server(tx, rx).await.unwrap();
+
+        let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
+        let (tx_from_api, rx_from_api) =
+            tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
+
+        let channels = ["plss", "gibbbons", "chikogaki"]
+            .into_iter()
+            .map(|ch| ch.to_string())
+            .collect();
+        let mut handles = start_server(tx_server, tx_from_api, rx).await.unwrap();
+        handles.extend(start_irc_handler(channels, rx_from_api).await.unwrap());
 
         let ids: [String; 1] = [String::from("103033809")];
 
@@ -44,7 +56,9 @@ mod test {
         tracing::debug!(hooks = ?hooks);
         Helix::delete_subscriptions(&hooks).await.unwrap();
 
-        _ = join_all(server_handles).await;
+        _ = join_all(handles).await;
         crate::util::tracing::destroy_tracer(provider);
+
+
     }
 }

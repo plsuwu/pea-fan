@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use axum::extract::{Path, Query, State};
 use axum::{Json, debug_handler};
+use tokio::sync::oneshot;
 use tracing::instrument;
 
 use crate::api::server::{AppState, JsonResult, RouteError};
@@ -55,6 +56,23 @@ pub async fn channel_by_id(
     {
         Some(ch) => Ok(Json(ch)),
         None => Err(RouteError::InvalidUser(id)),
+    }
+}
+
+#[instrument(skip(state))]
+pub async fn irc_joins(State(state): State<Arc<AppState>>) -> JsonResult<Vec<String>> {
+    let tx = &state.tx_client;
+    let msg = String::from("irc_joins");
+
+    let (tx_oneshot, rx_oneshot) = oneshot::channel::<Vec<String>>();
+
+    tx.send((msg, tx_oneshot))?;
+    match rx_oneshot.await {
+        Ok(data) => Ok(Json(data)),
+        Err(e) => {
+            tracing::error!(error = ?e, "failure during irc_joins query");
+            Err(e.into())
+        }
     }
 }
 

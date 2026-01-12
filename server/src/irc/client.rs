@@ -9,6 +9,7 @@ use irc::proto::message::Tag;
 use thiserror::Error;
 use tokio::sync::OnceCell;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::oneshot::Sender;
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 
@@ -55,7 +56,7 @@ pub struct IrcTags {
 }
 
 const COUNTER_USER: &str = "owoplease";
-const CHANNEL_WHITELIST: [&str; 4] = ["plss", "sleepiebug", "chikogaki", "gibbbons"];
+const CHANNEL_WHITELIST: [&str; 5] = ["plss", "sleepiebug", "chikogaki", "gibbbons", "vacu0usly"];
 const ID_BLACKLIST: [&str; 1] = [
     // "100135110",  // StreamElements
     "1152307157", // owoplease (us)
@@ -88,17 +89,14 @@ async fn ignored_hashset() -> Result<HashSet<&'static str>, ()> {
 #[instrument]
 pub async fn start_irc_handler(
     channels: Vec<String>,
+    mut rx_from_api: UnboundedReceiver<(String, Sender<Vec<String>>)>,
 ) -> IrcResult<Vec<tokio::task::JoinHandle<()>>> {
-    // TODO: i think we get the client struct + mpsc channels into this function with dependency
-    // injection rather than trying  to handle everything internally:
-    //
-    // * we probably want to call this from the server startup function (or pass them in as args)
-    //   so that we can call IRC-related stuff using HTTP request to API endpoints
     let (mut irc_client, channels) = IrcConnection::init(channels).await?;
     let rx_handle = tokio::spawn(async move {
         let mut rx_channel = channels.receiver;
         let mut tx_channel = channels.sender;
-
+        
+        // reads MPSC channel
         loop {
             match read_channel(&mut rx_channel, &mut tx_channel).await {
                 Ok(r) => tracing::warn!(result = ?r, "reader thread returned early"),
@@ -113,25 +111,22 @@ pub async fn start_irc_handler(
         irc_client.connect().await.unwrap();
         let mut stream = irc_client.client.stream().unwrap();
 
-        const MIN_CHECK_DURATION: Duration = Duration::from_secs(30);
+        const MIN_CHECK_DURATION: Duration = Duration::from_secs(25);
         const MAX_CHECK_DURATION: Duration = Duration::from_secs(480);
         let mut check_interval = MIN_CHECK_DURATION;
 
         let joined_channels = irc_client.get_joined();
-        tracing::info!(
+        tracing::warn!(
             joined_count = joined_channels.len(),
             joined_names = ?joined_channels,
-            "joined channel info"
+            "CHANNELS::JOIN_INFO"
         );
 
-        loop {
-            // poller to create a mutable interval timer on which to check for channel join issues.
-            //
-            // `tokio::pin!` pins timer address to a single thread to avoid holding the reference
-            // across awaits that might resolve on another thread
-            let check_timer = tokio::time::sleep(check_interval);
-            tokio::pin!(check_timer);
+        // poller to create a mutable interval timer on which to check for channel 
+        // join issues.
+        let mut check_timer = Box::pin(tokio::time::sleep(check_interval));
 
+        loop {
             tokio::select! {
                 Some(msg_res) = stream.next() => {
                     if let Ok(msg) = msg_res {
@@ -155,8 +150,20 @@ pub async fn start_irc_handler(
                         _ => (),
                     }
                 }
-
-                _ = &mut check_timer => {
+                
+                Some((msg, tx_to_api)) = rx_from_api.recv() => {
+                    tracing::warn!(msg, "CHANNEL_INTL_RX::FROM_API");
+                    match msg.as_str() {
+                        "irc_joins" => {
+                            let joined_channels = irc_client.get_joined();
+                            tx_to_api.send(joined_channels.clone()).unwrap();
+                        },
+                        _ => continue,
+                    }
+                }
+                
+                _ = check_timer.as_mut() => {
+                    tracing::debug!("timer interval elapsed");
                     match rejoin_channels(&mut irc_client).await {
                         Ok(all_joined) => {
                             if all_joined {
@@ -164,18 +171,21 @@ pub async fn start_irc_handler(
                                     let new_interval = check_interval.saturating_mul(2).min(MAX_CHECK_DURATION);
                                     if new_interval != check_interval {
                                         check_interval = new_interval;
-                                        tracing::info!(next_interval = ?check_interval, "check interval increased");
+                                        tracing::info!(next_interval = ?check_interval, "IRC_JOINS::INTERVAL_INC");
                                     }
                                 }
-                            }  else {
-                                check_interval = MIN_CHECK_DURATION;
-                                tracing::warn!(check_interval = ?check_interval, "check interval reset");
+                            } else {
+                               check_interval = MIN_CHECK_DURATION;
+                               tracing::warn!(check_interval = ?check_interval, "IRC_JOINS::INTERVAL_RST");
                             }
                         },
                         Err(err) => {
                             tracing::error!(error = ?err, "channel rejoin failure");
+                            check_interval = MIN_CHECK_DURATION;
                         }
                     }
+                    
+                    check_timer.set(tokio::time::sleep(check_interval));
                 }
             }
         }
@@ -194,6 +204,7 @@ pub async fn start_irc_handler(
 /// this function will return `Ok(false)`
 #[instrument(skip(client))]
 async fn rejoin_channels(client: &mut IrcConnection) -> IrcResult<bool> {
+    tracing::warn!("checking for unjoined channels");
     let expected: HashSet<String> = client.channels.iter().cloned().collect();
     let joined: HashSet<String> = client.get_joined().into_iter().collect();
 
@@ -712,37 +723,44 @@ pub struct IrcConnection {
 
 #[cfg(test)]
 mod test {
+    use std::net::SocketAddr;
+
     use futures::future::join_all;
 
-    use crate::util::channel::{update_channels, update_channels_by_name};
+    use crate::{api::server::start_server, util::channel::update_channels};
 
     use super::*;
 
     #[tokio::test]
-    async fn test_single_channel_handler() {
+    async fn test_channel_handler_small() {
         let provider = crate::util::tracing::build_subscriber().await.unwrap();
-        let channels = vec!["plss".to_string()];
 
-        _ = update_channels_by_name(&channels).await.unwrap();
-        let handles = start_irc_handler(vec!["plss".to_string()]).await.unwrap();
+        let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
+        let (tx_from_api, rx_from_api) =
+            tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
+
+        let channels = ["plss", "gibbbons", "chikogaki"].into_iter().map(|ch| ch.to_string()).collect();
+        let mut handles = start_server(tx_server, tx_from_api, rx).await.unwrap();
+        handles.extend(start_irc_handler(channels, rx_from_api).await.unwrap());
 
         _ = join_all(handles).await;
-
         crate::util::tracing::destroy_tracer(provider);
     }
 
     #[tokio::test]
-    async fn test_all_channels_handler() {
+    async fn test_channel_handler_all() {
         let provider = crate::util::tracing::build_subscriber().await.unwrap();
+        let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
+        let (tx_from_api, rx_from_api) =
+            tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
 
         let tracked_channels = update_channels(None).await.unwrap();
-        let channel_names = tracked_channels.into_iter().map(|(chan, _)| chan).collect();
+        let channels = tracked_channels.into_iter().map(|(chan, _)| chan).collect();
 
-        let handles = start_irc_handler(channel_names).await.unwrap();
+        let mut handles = start_server(tx_server, tx_from_api, rx).await.unwrap();
+        handles.extend(start_irc_handler(channels, rx_from_api).await.unwrap());
 
-        let res = join_all(handles).await;
-
-        tracing::info!(fut_result = ?res, "awaited result");
+        _ = join_all(handles).await;
 
         crate::util::tracing::destroy_tracer(provider);
     }

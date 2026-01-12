@@ -66,12 +66,12 @@ pub async fn update_stored_channels(ids: &[ChatterId]) -> ChannelResult<HashMap<
     //  this SEEMS like it will be somewhat inefficient (i assume we are potentially
     //  iterating over `existing_chatters` and checking values twice here, right?)
     for id in ids {
-        // iter 1
+        // ... iter 1
         if !existing_chatters.iter().any(|e_br| &e_br.id == id) {
             tracing::warn!(channel = id.0, "uncached channel");
             requires_update.push(id.to_string());
 
-        // iter 2
+        // ... iter 2
         } else if let Some(e_br) = existing_chatters
             .iter()
             .find(|e_br| e_br.id == ChatterId(id.to_string()))
