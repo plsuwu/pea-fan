@@ -119,6 +119,94 @@ impl LeaderboardRepository {
     }
 
     #[instrument(skip(self))]
+    pub async fn get_single_channel_leaderboard(
+        &self,
+        id: ChannelId,
+    ) -> SqlxResult<Option<ChannelLeaderboardEntry>> {
+        let channel = sqlx::query_as!(
+            ChannelLeaderboardRow,
+            r#"
+            SELECT 
+                id AS "id!",
+                name AS "name!",
+                login AS "login!",
+                color AS "color!",
+                image AS "image!",
+                total_chatter AS "total_chatter!",
+                total_channel AS "total_channel!",
+                ranking AS "ranking!",
+                created_at AS "created_at!",
+                updated_at AS "updated_at!"
+            FROM channel_leaderboard
+            WHERE id = $1
+            "#,
+            &id.to_string()
+        )
+        .fetch_optional(self.pool)
+        .await?;
+
+        match channel {
+            Some(ch) => {
+                let scores = self.get_chatter_scores_batch(&[id]).await?;
+                let chatter_scores: Vec<ChatterScoreSummary> = scores
+                    .iter()
+                    .filter(|s| s.channel_id == ch.id)
+                    .cloned()
+                    .map(|s| s.into())
+                    .collect();
+
+                Ok(Some(ch.into_leaderboard_entry(chatter_scores)))
+            }
+
+            None => Ok(None),
+        }
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_single_chatter_leaderboard(
+        &self,
+        id: ChatterId,
+    ) -> SqlxResult<Option<ChatterLeaderboardEntry>> {
+        let chatter = sqlx::query_as!(
+            ChatterLeaderboardRow,
+            r#"
+            SELECT 
+                id as "id!",
+                name as "name!",
+                login as "login!",
+                color as "color!",
+                image as "image!",
+                total as "total!",
+                private as "private!",
+                ranking as "ranking!",
+                created_at as "created_at!",
+                updated_at as "updated_at!"
+            FROM chatter_leaderboard
+            WHERE id = $1
+            "#,
+            &id.to_string()
+        )
+        .fetch_optional(self.pool)
+        .await?;
+
+        match chatter {
+            Some(ch) => {
+                let scores = self.get_channel_scores_batch(&[ch.id.clone().0]).await?;
+                let channel_scores: Vec<ChannelScoreSummary> = scores
+                    .iter()
+                    .filter(|s| s.chatter_id == ch.id)
+                    .cloned()
+                    .map(|s| s.into())
+                    .collect();
+
+                Ok(Some(ch.into_leaderboard_entry(channel_scores)))
+            }
+
+            None => Ok(None),
+        }
+    }
+
+    #[instrument(skip(self))]
     pub async fn get_chatter_leaderboard(
         &self,
         limit: i64,
@@ -169,6 +257,7 @@ impl LeaderboardRepository {
                 .map(|s| s.into())
                 .collect();
 
+            // channel_scores.sort_by(|a, b| b.score.cmp(&a.score));
             entries.push(chatter.into_leaderboard_entry(channel_scores));
         }
 
@@ -275,7 +364,7 @@ impl LeaderboardRepository {
             FROM ranked_scores_view_per_channel rs
             JOIN chatter c ON rs.chatter_id = c.id
             WHERE rs.channel_id = ANY($1)
-            ORDER BY rs.channel_id, rs.ranking ASC
+            ORDER BY rs.channel_id, rs.score DESC
             "#,
             &ids,
         )
@@ -330,7 +419,7 @@ impl LeaderboardRepository {
             JOIN channel ch ON rs.channel_id = ch.id
             JOIN chatter ch_chatter ON ch.id = ch_chatter.id
             WHERE rs.chatter_id = ANY($1)
-            ORDER BY rs.chatter_id, rs.ranking ASC
+            ORDER BY rs.chatter_id, rs.score DESC
             "#,
             &ids,
         )

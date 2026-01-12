@@ -19,6 +19,10 @@ async fn get_hmac_struct() -> MiddlewareResult<&'static Hmac> {
     Ok(KEY.get_or_try_init(|| async { Hmac::new() }).await?)
 }
 
+pub async fn get_hmac_key() -> MiddlewareResult<String> {
+    Ok(get_hmac_struct().await?.hex.clone())
+}
+
 pub struct Hmac {
     pub key: Key,
     pub digest: [u8; digest::SHA256_OUTPUT_LEN],

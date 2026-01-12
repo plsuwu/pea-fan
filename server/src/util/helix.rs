@@ -11,13 +11,18 @@ use thiserror::Error;
 use tokio::sync::OnceCell;
 use tracing::{Instrument, error, instrument, warn};
 
+use crate::api::middleware::{MiddlewareErr, verify_external};
+use crate::api::webhook::{
+    StreamGenericRequest, StreamGenericRequestType, SubscriptionGenericData,
+};
+use crate::db::prelude::ChannelId;
 use crate::util::env::{EnvErr, Var};
 use crate::var;
 
 // TODO:
 //  these can probably be removed i think
-pub const NOT_PRESENT_IN_CACHE: &str = "[NOT_PRESENT_IN_CACHE]";
-pub const NOT_VALID_HELIX_USER: &str = "[NOT_VALID_HELIX_USER]";
+// pub const NOT_PRESENT_IN_CACHE: &str = "[NOT_PRESENT_IN_CACHE]";
+// pub const NOT_VALID_HELIX_USER: &str = "[NOT_VALID_HELIX_USER]";
 
 pub struct Helix;
 impl Helix {
@@ -100,7 +105,7 @@ impl Helix {
         Self::fetch_auxilliary_data(&mut retrieved).await
     }
 
-    /// Sends off a request to a given URI
+    /// Makles a request via the `GET` http verb
     #[instrument]
     async fn send(uri: String) -> HelixResult<reqwest::Response> {
         let client = reqwest::Client::new();
@@ -108,6 +113,37 @@ impl Helix {
 
         client
             .get(uri)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| HelixErr::ReqwestError(e))
+    }
+
+    /// Makes a request via the `DELETE` http verb
+    #[instrument]
+    async fn delete(uri: String) -> HelixResult<reqwest::Response> {
+        let client = reqwest::Client::new();
+        let headers = auth_headers().await?.bearer.clone();
+
+        client
+            .delete(uri)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| HelixErr::ReqwestError(e))
+    }
+
+    #[instrument]
+    async fn post<T>(uri: String, body: &T) -> HelixResult<reqwest::Response>
+    where
+        T: Serialize + fmt::Debug + ?Sized,
+    {
+        let client = reqwest::Client::new();
+        let headers = auth_headers().await?.bearer.clone();
+
+        client
+            .post(uri)
+            .json(body)
             .headers(headers)
             .send()
             .await
@@ -168,7 +204,11 @@ impl Helix {
         if let Some(remaining) = rl_remaining
             && let Some(total) = rl_total
         {
-            tracing::info!(ratelimit_available = ?remaining, ratelimit_total = ?total, "rate-limit bucket");
+            tracing::info!(
+                ratelimit_available = ?remaining, 
+                ratelimit_total = ?total, 
+                "rate-limit bucket"
+            );
             // ... implement some kind of backoff if we start to saturate this limit
         }
 
@@ -296,19 +336,119 @@ impl Helix {
         tracing::debug!(color_count = retrieved.len(), "fetched colors for users");
         Ok(retrieved)
     }
+
+    #[instrument]
+    pub async fn get_active_subscriptions() -> HelixResult<Vec<String>> {
+        let params = build_query_params(HelixParamType::Status, &["enabled".to_string()]);
+
+        if params.len() != 1 {
+            return Err(HelixErr::FetchErr(
+                "invalid active_hooks query param".to_string(),
+            ));
+        }
+
+        let uri = format!(
+            "{}{}",
+            String::from(HelixUri::WebhookSubscriptions),
+            params[0]
+        );
+        let result = Self::send(uri).await?;
+        let body = match result.text().await {
+            Ok(val) => val,
+            Err(e) => {
+                tracing::error!(error = ?e, "failed to unwrap result body text");
+                return Err(HelixErr::ReqwestError(e));
+            }
+        };
+
+        let mut deserialized: Value = serde_json::from_str(&body)?;
+        if let Some(total_active) = deserialized["total"].take().as_i64()
+            && total_active > 0
+        {
+            return Ok(serde_json::from_value(deserialized["data"].clone())?);
+        }
+
+        Ok(Vec::new())
+    }
+
+    #[instrument]
+    pub async fn create_subscription(
+        id: ChannelId,
+        notif_type: StreamGenericRequestType,
+    ) -> HelixResult<SubscriptionGenericData> {
+        let key = verify_external::get_hmac_key().await?;
+        let body = StreamGenericRequest::new(&id.to_string(), &CALLBACK_ROUTE, &key, notif_type);
+
+        let uri = String::from(HelixUri::WebhookSubscriptions);
+        let response = Self::post(uri, &body).await?;
+
+        let response_status = response.status();
+        let deserialized_body: Value = serde_json::from_str(&response.text().await?)?;
+
+        tracing::info!(status = ?response_status, body = ?deserialized_body, "RAW RESPONSE");
+
+        if response_status != 200 && response_status != 202 {
+            tracing::error!(
+                ?deserialized_body,
+                status_code = %response_status,
+                "returned error status from sub create POST request"
+            );
+
+            return Err(HelixErr::FetchErr(deserialized_body.to_string()));
+        }
+
+        if let Some(data_status) = &deserialized_body["data"][0]["status"].as_str()
+            && let Some(sub_type) = &deserialized_body["data"][0]["type"].as_str()
+            && let Some(broadcaster_id) =
+                &deserialized_body["data"][0]["condition"]["broadcaster_user_id"].as_str()
+        {
+            tracing::info!(
+                status = data_status,
+                sub_type = sub_type,
+                broadcaster = broadcaster_id,
+                "created subscription"
+            );
+
+            return Ok(serde_json::from_value(deserialized_body)?);
+        }
+
+        tracing::error!(body = ?deserialized_body, "failed to parse sub creation response");
+        return Err(HelixErr::FetchErrWithBody {
+            body: deserialized_body,
+        });
+    }
+
+    #[instrument(skip(subscription_ids), fields(subscription_count = subscription_ids.len()))]
+    pub async fn delete_subscriptions(subscription_ids: &[String]) -> HelixResult<()> {
+        let params = build_query_params(HelixParamType::Id, subscription_ids);
+        for param in params {
+            let uri = format!("{}{}", String::from(HelixUri::WebhookSubscriptions), param);
+            match Self::delete(uri).await {
+                Ok(res) => tracing::info!(response = ?res, "deleted subscription"),
+                Err(e) => tracing::error!(error = ?e, "failed to delete subscription"),
+            }
+        }
+
+        Ok(())
+    }
 }
 
-pub const HELIX_URI_BASE: &str = "https://api.twitch.tv/helix";
+// pub const HELIX_URI_BASE: &str = "https://api.twitch.tv/helix";
+pub const HELIX_URI_BASE: &str = "http://localhost:8081/mock";
 pub const HELIX_URN_USERS: &str = "users";
 pub const HELIX_URN_STREAMS: &str = "streams";
 pub const HELIX_URN_COLORS: &str = "chat/color";
+pub const HELIX_WEBHOOK_SUBS: &str = "eventsub/subscriptions";
 const NUM_WORKER_THREADS: usize = 25;
+
+pub const CALLBACK_ROUTE: &str = "http://localhost:8080/callback";
 
 #[derive(Debug)]
 pub enum HelixUri {
     Users,
     Streams,
     Colors,
+    WebhookSubscriptions,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -317,6 +457,7 @@ pub enum HelixParamType {
     UserId,
     Login,
     Id,
+    Status,
 }
 
 impl From<HelixUri> for String {
@@ -328,6 +469,7 @@ impl From<HelixUri> for String {
                 HelixUri::Users => HELIX_URN_USERS,
                 HelixUri::Streams => HELIX_URN_STREAMS,
                 HelixUri::Colors => HELIX_URN_COLORS,
+                HelixUri::WebhookSubscriptions => HELIX_WEBHOOK_SUBS,
             }
         )
     }
@@ -340,6 +482,7 @@ impl From<HelixParamType> for String {
             HelixParamType::UserId => "user_id=".to_string(),
             HelixParamType::Login => "login=".to_string(),
             HelixParamType::Id => "id=".to_string(),
+            HelixParamType::Status => "status=".to_string(),
         }
     }
 }
@@ -497,6 +640,9 @@ pub type HelixResult<T> = core::result::Result<T, HelixErr>;
 #[derive(Debug, Error)]
 pub enum HelixErr {
     #[error(transparent)]
+    MiddlewareError(#[from] MiddlewareErr),
+
+    #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
 
     #[error("while parsing environment vars: {0}")]
@@ -516,6 +662,9 @@ pub enum HelixErr {
 
     #[error("helix response with empty data field")]
     EmptyDataField,
+
+    #[error(transparent)]
+    SerdeError(#[from] serde_json::Error),
 }
 
 #[cfg(test)]

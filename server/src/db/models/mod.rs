@@ -14,15 +14,25 @@ const fn default_limit() -> i64 {
     50
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Pagination {
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    #[serde(default = "default_offset")]
+    pub page: i64,
+}
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaginatedResponse<T> {
     pub items: Vec<T>,
     pub page: i64,
-    #[serde(default = "default_limit")]
-    pub page_size: i64,
     pub total_items: i64,
     pub total_pages: i64,
+    #[serde(default = "default_limit")]
+    pub page_size: i64,
+    // #[serde(default = "default_offset")]
+    // pub chatter_offset: i64,
 }
 
 impl<T> PaginatedResponse<T> {

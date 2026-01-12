@@ -5,6 +5,8 @@ pub mod tracing;
 
 use std::arch::asm;
 
+/// Performs `&str` comparisons in constant time in an attempt to close any and all side-channels
+/// that might leak information about our key
 pub fn constant_time_cmp(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
@@ -16,6 +18,13 @@ pub fn constant_time_cmp(a: &str, b: &str) -> bool {
 
     // convoluted attempt to avoid optimizations that might do some
     // bullshit to this iterator
+    //
+    // TODO:
+    //  using pointers is probably not amongst god's most efficient methods
+    //  for equality testing but i am not so smart and i don't think perfect
+    //  efficiency is of utmost importance for this function at present.
+    //
+    //  ... plus we want to check out decompilation for this function anyway, right?
     for i in 0..a.len() {
         let left = std::hint::black_box(&a[i]) as *const u8;
         let right = std::hint::black_box(&b[i]) as *const u8;
