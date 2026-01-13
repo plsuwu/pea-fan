@@ -304,15 +304,14 @@ pub trait Repository {
                 Self::TABLE_NAME
             ))
             .bind(id)
-            .fetch_optional(self.pool())
+            .fetch_one(self.pool())
             .await
             {
-                Ok(Some(_)) => true,
-                Ok(None) => false,
+                Ok(v) => v,
                 Err(e) => {
                     tracing::error!(error = ?e, table = ?Self::TABLE_NAME, "failed to check chatter existence");
                     false
-                },
+                }
             },
         )
     }
@@ -359,7 +358,7 @@ pub trait Repository {
             (tx, Ok(result))
         })
         .await?;
-        
+
         Ok(tx_result)
     }
 

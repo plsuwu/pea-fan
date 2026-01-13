@@ -55,11 +55,13 @@ pub struct IrcTags {
     pub msg_id: String,
 }
 
-const COUNTER_USER: &str = "owoplease";
-const CHANNEL_WHITELIST: [&str; 5] = ["plss", "sleepiebug", "chikogaki", "gibbbons", "vacu0usly"];
-const ID_BLACKLIST: [&str; 1] = [
-    // "100135110",  // StreamElements
-    "1152307157", // owoplease (us)
+const COUNTER_USER: &str = "pee_liker";
+const CHANNEL_WHITELIST: [&str; 5] = ["plss", "chikogaki", "lcolonq", "madmad01", "aaallycat"];
+const ID_BLACKLIST: [&str; 3] = [
+    "19264788",  // Nightbot
+    "100135110", // StreamElements
+    "1152307157", // us!!!
+                 // ... other bots ...
 ];
 
 static IGNORED_USER_IDS: LazyLock<OnceCell<HashSet<&str>>> = LazyLock::new(OnceCell::new);
@@ -95,7 +97,7 @@ pub async fn start_irc_handler(
     let rx_handle = tokio::spawn(async move {
         let mut rx_channel = channels.receiver;
         let mut tx_channel = channels.sender;
-        
+
         // reads MPSC channel
         loop {
             match read_channel(&mut rx_channel, &mut tx_channel).await {
@@ -122,7 +124,7 @@ pub async fn start_irc_handler(
             "CHANNELS::JOIN_INFO"
         );
 
-        // poller to create a mutable interval timer on which to check for channel 
+        // poller to create a mutable interval timer on which to check for channel
         // join issues.
         let mut check_timer = Box::pin(tokio::time::sleep(check_interval));
 
@@ -150,7 +152,7 @@ pub async fn start_irc_handler(
                         _ => (),
                     }
                 }
-                
+
                 Some((msg, tx_to_api)) = rx_from_api.recv() => {
                     tracing::warn!(msg, "CHANNEL_INTL_RX::FROM_API");
                     match msg.as_str() {
@@ -161,8 +163,11 @@ pub async fn start_irc_handler(
                         _ => continue,
                     }
                 }
-                
+
                 _ = check_timer.as_mut() => {
+                    // TODO: I think perhaps we also set this to send a keepalive if the handler
+                    // keeps "randomly" disconnecting...
+
                     tracing::debug!("timer interval elapsed");
                     match rejoin_channels(&mut irc_client).await {
                         Ok(all_joined) => {
@@ -184,7 +189,7 @@ pub async fn start_irc_handler(
                             check_interval = MIN_CHECK_DURATION;
                         }
                     }
-                    
+
                     check_timer.set(tokio::time::sleep(check_interval));
                 }
             }
@@ -246,7 +251,7 @@ impl IrcConnection {
 
             server: Some(TTV_IRC_URI.to_string()),
             port: Some(TTV_IRC_PORT),
-            ping_time: Some(300),
+            ping_time: Some(280),
             ..Config::default()
         };
 
@@ -348,9 +353,10 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
             send_to_reader(&client.sender, data).await;
         }
 
-        Command::PONG(_, _) | Command::PING(_, _) => {
+        Command::PONG(data, _) | Command::PING(data, _) => {
             let joined = client.get_joined();
             tracing::debug!(
+                info = data,
                 current_joined_count = joined.len(),
                 total_tracked_count = client.channels.len(),
                 "RX::PING",
@@ -493,8 +499,10 @@ pub async fn make_query_response(
     message: &str,
     tags: &IrcTags,
 ) -> IrcResult<String> {
-    let parts = message.split(' ').collect::<Vec<_>>();
+    let mut parts = message.split(' ').collect::<Vec<_>>();
     let target = if parts.len() > 1 {
+        parts[1] = parts[1].trim_start_matches('@'); 
+
         // our count is always going to be 0 but we have fun around here
         if parts[1].to_lowercase() == COUNTER_USER {
             return Ok(ReplyReason::BotCountQueried.get_reply().to_string());
@@ -545,14 +553,14 @@ pub async fn increment_score<'a>(pool: &'static sqlx::PgPool, tags: &'a IrcTags)
         chatter_repo.insert(&chatter).await?;
     }
 
-    let score_repo = LeaderboardRepository::new(pool);
-    let pre_incr = score_repo
-        .get_relational_score(
-            &tags.user_id.clone().into(),
-            &tags.channel_id.clone().into(),
-        )
-        .await?;
-    tracing::debug!(pre_incr = ?pre_incr, "score prior to incrementing");
+    // let score_repo = LeaderboardRepository::new(pool);
+    // let pre_incr = score_repo
+    //     .get_relational_score(
+    //         &tags.user_id.clone().into(),
+    //         &tags.channel_id.clone().into(),
+    //     )
+    //     .await?;
+    // tracing::debug!(pre_incr = ?pre_incr, "score prior to incrementing");
 
     // do transaction
     match Tx::with_tx(&pool, |mut tx| async move {
@@ -582,16 +590,22 @@ pub async fn increment_score<'a>(pool: &'static sqlx::PgPool, tags: &'a IrcTags)
 
             return Err(IrcClientErr::SqlxError(e));
         }
-        _ => (),
+        _ => tracing::info!(
+            channel = tags.channel_id,
+            chatter = tags.user_id,
+            channel_name = tags.channel_name,
+            login = tags.user_login,
+            "increment ok"
+        ),
     };
 
-    let post_incr = score_repo
-        .get_relational_score(
-            &tags.user_id.clone().into(),
-            &tags.channel_id.clone().into(),
-        )
-        .await?;
-    tracing::debug!(post_incr = ?post_incr, "score after incrementing");
+    // let post_incr = score_repo
+    //     .get_relational_score(
+    //         &tags.user_id.clone().into(),
+    //         &tags.channel_id.clone().into(),
+    //     )
+    //     .await?;
+    // tracing::debug!(post_incr = ?post_incr, "score after incrementing");
 
     Ok(())
 }
@@ -739,7 +753,10 @@ mod test {
         let (tx_from_api, rx_from_api) =
             tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
 
-        let channels = ["plss", "gibbbons", "chikogaki"].into_iter().map(|ch| ch.to_string()).collect();
+        let channels = ["plss", "gibbbons", "chikogaki"]
+            .into_iter()
+            .map(|ch| ch.to_string())
+            .collect();
         let mut handles = start_server(tx_server, tx_from_api, rx).await.unwrap();
         handles.extend(start_irc_handler(channels, rx_from_api).await.unwrap());
 
