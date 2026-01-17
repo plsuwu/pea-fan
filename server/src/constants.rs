@@ -39,7 +39,7 @@ pub const IRC_COMMAND_JOIN: &str = "JOIN";
 pub const KEEPALIVE_RESPONSE: &str = "PONG :tmi.twitch.tv";
 
 #[cfg(feature = "production")]
-pub const TRACKED_CHANNELS_COUNT: usize = 38;
+pub const TRACKED_CHANNELS_COUNT: usize = 42;
 
 #[cfg(not(feature = "production"))]
 pub const TRACKED_CHANNELS_COUNT: usize = 1;
@@ -60,6 +60,7 @@ pub const CHANNELS: TrackedChannels = [
     "flippersphd",
     "gibbbons",
     "haelpc",
+    "harupi",
     "hempievt",
     "kokopimento",
     "krumroll",
@@ -68,7 +69,9 @@ pub const CHANNELS: TrackedChannels = [
     "lcolonq",
     "liljuju",
     "madmad01",
+    "meiya",
     "miaelou",
+    "milia",
     "miffygeist",
     "misspeggyx",
     "myramors",
@@ -76,6 +79,7 @@ pub const CHANNELS: TrackedChannels = [
     "nanolather",
     "niupao",
     "noi_vt",
+    "pachi",
     "parasi",
     "rena_chuu",
     "saltae",
