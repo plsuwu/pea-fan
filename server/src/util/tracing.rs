@@ -15,10 +15,6 @@ use crate::var;
 
 pub type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
-pub const SERVICE_NAME: &str = "piss-fan-api";
-pub const TRACER_NAME: &str = "pissfan-tracer";
-pub const LOKI_URL: &str = "http://localhost:3100";
-
 fn create_loki_layer(
     service_name: &str,
     loki_url: &str,
@@ -26,7 +22,6 @@ fn create_loki_layer(
     impl Layer<tracing_subscriber::Registry>,
     impl std::future::Future<Output = ()>,
 )> {
-    use tracing_loki::BackgroundTask;
     let (layer, task) = tracing_loki::builder()
         .label("service_name", service_name)?
         .label("environment", "development".to_string())?
@@ -38,10 +33,14 @@ fn create_loki_layer(
 
 pub async fn build_subscriber() -> Result<trace::SdkTracerProvider> {
     // let provider = init_stdout_provider()?;
-    let provider = init_provider()?;
-    let tracer = global::tracer(TRACER_NAME);
+    let api_service_name = var!(Var::ApiServiceName).await?;
+    let loki_url = var!(Var::OtelLokiHttp).await?;
+    let tracer_name = var!(Var::ApiTracerName).await?;
+    let api_tracer_name = "api_root_tracer";
+    let provider = init_provider(api_service_name)?;
+    let tracer = global::tracer(api_tracer_name);
 
-    let (loki_layer, loki_task) = create_loki_layer(SERVICE_NAME, LOKI_URL)?;
+    let (loki_layer, loki_task) = create_loki_layer(api_service_name, loki_url)?;
 
     tracing_subscriber::registry()
         .with(loki_layer)
@@ -74,7 +73,7 @@ fn init_stdout_provider() -> Result<trace::SdkTracerProvider> {
     Ok(provider)
 }
 
-fn init_provider() -> Result<trace::SdkTracerProvider> {
+fn init_provider(service_name: &'static str) -> Result<trace::SdkTracerProvider> {
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
         .with_endpoint("http://localhost:4317/v1/traces")
@@ -88,7 +87,7 @@ fn init_provider() -> Result<trace::SdkTracerProvider> {
         .with_resource(
             Resource::builder()
                 .with_attributes([
-                    KeyValue::new("service.name", SERVICE_NAME),
+                    KeyValue::new("service.name", service_name),
                     KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
                 ])
                 .build(),

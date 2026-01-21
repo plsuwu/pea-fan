@@ -1,5 +1,7 @@
 use std::collections::HashSet;
-use std::sync::LazyLock;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock, Mutex, RwLock};
 use std::time::Duration;
 
 use futures::StreamExt;
@@ -10,6 +12,7 @@ use thiserror::Error;
 use tokio::sync::OnceCell;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot::Sender;
+use tokio::time::Interval;
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 
@@ -56,7 +59,14 @@ pub struct IrcTags {
 }
 
 const COUNTER_USER: &str = "pee_liker";
-const CHANNEL_WHITELIST: [&str; 5] = ["plss", "chikogaki", "lcolonq", "madmad01", "aaallycat"];
+const CHANNEL_WHITELIST: [&str; 6] = [
+    "plss",
+    "chikogaki",
+    "lcolonq",
+    "madmad01",
+    "aaallycat",
+    "gibbbons",
+];
 const ID_BLACKLIST: [&str; 3] = [
     "19264788",  // Nightbot
     "100135110", // StreamElements
@@ -88,17 +98,57 @@ async fn ignored_hashset() -> Result<HashSet<&'static str>, ()> {
     Ok(HashSet::from_iter(ID_BLACKLIST))
 }
 
+pub struct ReplyCooldown {
+    can_reply: Arc<RwLock<AtomicBool>>,
+}
+
+impl ReplyCooldown {
+    pub async fn new() -> Result<Self, ()> {
+        Ok(Self {
+            can_reply: Arc::new(RwLock::new(AtomicBool::new(true))),
+        })
+    }
+}
+
+static REPLY_TIMER: LazyLock<OnceCell<ReplyCooldown>> = LazyLock::new(OnceCell::new);
+async fn get_reply_timer() -> &'static ReplyCooldown {
+    REPLY_TIMER
+        .get_or_try_init(|| async { ReplyCooldown::new().await })
+        .await
+        .unwrap()
+}
+async fn can_reply() -> bool {
+    let reply_timer = get_reply_timer().await;
+    reply_timer
+        .can_reply
+        .read()
+        .unwrap()
+        .load(Ordering::Relaxed)
+}
+
+async fn set_can_reply(val: bool) {
+    let reply_timer = get_reply_timer().await;
+
+    reply_timer
+        .can_reply
+        .write()
+        .unwrap()
+        .store(val, Ordering::Relaxed);
+}
+
+// async fn reply_interval(reply_timer: &'static ReplyCooldown) {
+// }
+
 #[instrument]
 pub async fn start_irc_handler(
     channels: Vec<String>,
     mut rx_from_api: UnboundedReceiver<(String, Sender<Vec<String>>)>,
 ) -> IrcResult<Vec<tokio::task::JoinHandle<()>>> {
     let (mut irc_client, channels) = IrcConnection::init(channels).await?;
+
     let rx_handle = tokio::spawn(async move {
         let mut rx_channel = channels.receiver;
         let mut tx_channel = channels.sender;
-
-        // reads MPSC channel
         loop {
             match read_channel(&mut rx_channel, &mut tx_channel).await {
                 Ok(r) => tracing::warn!(result = ?r, "reader thread returned early"),
@@ -106,6 +156,16 @@ pub async fn start_irc_handler(
             }
 
             tracing::warn!("reader thread restarting");
+        }
+    });
+
+    const REPLY_TIMER_DURATION: Duration = Duration::from_millis(2350);
+    let reply_cooldown_handle = tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(REPLY_TIMER_DURATION).await;
+            if !can_reply().await {
+                set_can_reply(true).await;
+            }
         }
     });
 
@@ -124,10 +184,7 @@ pub async fn start_irc_handler(
             "CHANNELS::JOIN_INFO"
         );
 
-        // poller to create a mutable interval timer on which to check for channel
-        // join issues.
         let mut check_timer = Box::pin(tokio::time::sleep(check_interval));
-
         loop {
             tokio::select! {
                 Some(msg_res) = stream.next() => {
@@ -143,18 +200,18 @@ pub async fn start_irc_handler(
                             let fmt_channel = format!("{}", channel);
                             let tagged_message =
                                 Message::with_tags(Some(reply_tag), None, "PRIVMSG", vec![&fmt_channel, &message])
-                                    .unwrap();
+                                        .unwrap();
                             match irc_client.client.send(tagged_message) {
-                                Ok(val) => tracing::debug!(val = ?val, "send ok"),
+                                Ok(_) => tracing::debug!("send ok"),
                                 Err(e) => tracing::error!(error = ?e, "error while trying to send reply to IRC"),
                             }
-                        }
+                        },
                         _ => (),
                     }
                 }
 
                 Some((msg, tx_to_api)) = rx_from_api.recv() => {
-                    tracing::warn!(msg, "CHANNEL_INTL_RX::FROM_API");
+                    tracing::debug!(msg, "CHANNEL_INTL_RX::FROM_API");
                     match msg.as_str() {
                         "irc_joins" => {
                             let joined_channels = irc_client.get_joined();
@@ -165,9 +222,6 @@ pub async fn start_irc_handler(
                 }
 
                 _ = check_timer.as_mut() => {
-                    // TODO: I think perhaps we also set this to send a keepalive if the handler
-                    // keeps "randomly" disconnecting...
-
                     tracing::debug!("timer interval elapsed");
                     match rejoin_channels(&mut irc_client).await {
                         Ok(all_joined) => {
@@ -196,7 +250,7 @@ pub async fn start_irc_handler(
         }
     });
 
-    Ok(vec![client_stream_reader, rx_handle])
+    Ok(vec![client_stream_reader, rx_handle, reply_cooldown_handle])
 }
 
 /// Checks whether any tracked channels are *not* currently joined and attempts to join them
@@ -382,7 +436,7 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
         },
 
         Command::NOTICE(msg_id, target) => {
-            tracing::warn!(target, msg_id, "RX::NOTICE");
+            tracing::warn!(target, msg_id, ?msg, "RX::NOTICE");
 
             // TODO:
             //  'duplicate message' NOTICE; we circumvent this by appending invisible
@@ -454,6 +508,11 @@ pub async fn read_channel(
                     if message.starts_with("!pisscount")
                         && CHANNEL_WHITELIST.contains(&tags.channel_name.as_str())
                     {
+                        if !can_reply().await {
+                            tracing::warn!("reply cooldown not yet elapsed");
+                            continue;
+                        }
+
                         let chatter_repo = ChatterRepository::new(pool);
                         let message = make_query_response(&chatter_repo, &message, &tags).await?;
                         let channel = format!("#{}", tags.channel_name);
@@ -466,6 +525,7 @@ pub async fn read_channel(
                             "responding to query"
                         );
 
+                        set_can_reply(false).await;
                         tx.send(IrcCommand::ReplyPm {
                             channel,
                             reply_id,
@@ -501,7 +561,7 @@ pub async fn make_query_response(
 ) -> IrcResult<String> {
     let mut parts = message.split(' ').collect::<Vec<_>>();
     let target = if parts.len() > 1 {
-        parts[1] = parts[1].trim_start_matches('@'); 
+        parts[1] = parts[1].trim_start_matches('@');
 
         // our count is always going to be 0 but we have fun around here
         if parts[1].to_lowercase() == COUNTER_USER {

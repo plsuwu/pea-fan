@@ -43,3 +43,7 @@ vite.config.ts.timestamp-*
 .container
 
 grafana/obsv-data/
+redis_data/
+.redis-backup/
+*.old
+*.old/

@@ -40,9 +40,9 @@ impl ReplyReason {
     const ROW_NOT_FOUND_QUERY: [&'static str; 6] = [
         "no idea who that is but i bet you already knew that you creep",
         "no data on that one which is suspicious what are they hiding",
-        "why would you ask about someone who isnt on my list are you working together",
-        "oh so now we're just inventing chatters great just what i needed",
-        "cant find anything but im sure youll keep trying because thats what you people do",
-        "they have said piss exactly 0 times because they dont exist you ghoul",
+        "why would you ask about someone who isnt on my list are you working with the cia",
+        "oh so now youre just making up chatters great just what i needed",
+        "i cant find them but im sure youll keep trying anyway because thats what you people do",
+        "they have said piss exactly 0 times because they dont exist you freak",
     ];
 }

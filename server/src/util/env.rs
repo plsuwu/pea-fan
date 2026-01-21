@@ -30,8 +30,11 @@ pub async fn get_var(var: Var) -> EnvResult<&'static str> {
         Var::CorsAllowOrigins => &vars.cors_allow_origins,
         Var::DiscordWebhookUrl => &vars.discord_webhook_url,
         Var::ServerApiPort => &vars.server_api_port,
-        Var::OtelExporterEndpoint => &vars.otel_exporter_otlp_endpoint,
+        Var::OtelTempoGrpc => &vars.otel_tempo_grpc,
+        Var::OtelLokiHttp => &vars.otel_loki_http,
         Var::OtelExporterProto => &vars.otel_exporter_otlp_protocol,
+        Var::ApiServiceName => &vars.api_service_name,
+        Var::ApiTracerName => &vars.api_tracer_name,
     })
 }
 
@@ -49,8 +52,12 @@ pub struct Env {
     pub cors_allow_origins: String,
     pub discord_webhook_url: String,
     pub server_api_port: String,
-    pub otel_exporter_otlp_endpoint: String,
     pub otel_exporter_otlp_protocol: String,
+    pub otel_tempo_grpc: String,
+    pub otel_loki_http: String,
+    pub api_service_name: String,
+    pub api_tracer_name: String,
+    // pub otel_exporter_otlp_endpoint: String,
 }
 
 impl Env {
@@ -72,8 +79,11 @@ pub enum Var {
     CorsAllowOrigins,
     DiscordWebhookUrl,
     ServerApiPort,
-    OtelExporterEndpoint,
+    OtelTempoGrpc,
     OtelExporterProto,
+    OtelLokiHttp,
+    ApiServiceName,
+    ApiTracerName,
 }
 
 #[macro_export]

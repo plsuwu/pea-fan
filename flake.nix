@@ -31,6 +31,7 @@
 
             cargo
             bun
+            deno
 
             twitch-cli
             sqlx-cli

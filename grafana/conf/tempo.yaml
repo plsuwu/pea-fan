@@ -1,5 +1,6 @@
 server:
   http_listen_port: 3200
+  grpc_listen_port: 9095
 
 distributor:
   receivers:
@@ -42,3 +43,10 @@ metrics_generator:
       source: tempo
   storage:
     path: /tmp/tempo/generator/wal
+  processor:
+    span_metrics:
+      dimensions:
+        - service.name
+        - span.name
+        - span.kind
+        - status.code
