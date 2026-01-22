@@ -34,26 +34,26 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 };
 
-export const handleError: HandleServerError = async ({
-	error,
-	event,
-	status,
-	message
-}) => {
-	const { traceId } = getTraceContext();
-
-	logger.error(
-		{
-			error,
-			path: event.url.pathname,
-			status,
-			traceId
-		},
-		message || "unhandled server error"
-	);
-
-	return {
-		message: "an unexpected error has occurred",
-		traceId
-	};
-};
+// export const handleError: HandleServerError = async ({
+// 	error,
+// 	event,
+// 	status,
+// 	message
+// }) => {
+// 	const { traceId } = getTraceContext();
+//
+// 	logger.error(
+// 		{
+// 			error,
+// 			path: event.url.pathname,
+// 			status,
+// 			traceId
+// 		},
+// 		message || "unhandled server error"
+// 	);
+//
+// 	return {
+// 		message: "an unexpected error has occurred",
+// 		traceId
+// 	};
+// };

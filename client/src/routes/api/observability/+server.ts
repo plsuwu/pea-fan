@@ -27,7 +27,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			if (typeof logger[level] === "function") {
 				(logger as any)[level](logData, entry.message);
 			} else {
-				logger.info(logData, entry.message);
+				logger.debug(logData, entry.message);
 			}
 		}
 

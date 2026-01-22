@@ -16,9 +16,9 @@ interface ClientLoggerConfig {
 }
 
 const DEFAULT_CONFIG: ClientLoggerConfig = {
-	level: "trace",
+	level: "debug",
 	endpoint: "/api/observability",
-	batchSize: 1024,
+	batchSize: 10,
 	flushInterval: 5000,
 	maxRetries: 3
 };
@@ -108,7 +108,9 @@ export class ClientLogger {
 
 		if (import.meta.env.DEV) {
 			const consoleFn = level === "fatal" ? "error" : level;
-			console[consoleFn as "log"](`[${level.toUpperCase()}]`, message, data);
+			console[consoleFn as "log"](`[${level.toUpperCase()}]`, message + "\n", {
+				data
+			});
 		}
 
 		if (this.buffer.length >= this.config.batchSize) {

@@ -1,11 +1,11 @@
 import type { ApiError } from "$lib/types/error";
 export const LOG_LEVEL = {
-	trace: "trace",
-	debug: "debug",
-	info: "info",
-	warn: "warn",
+	fatal: "fatal",
 	error: "error",
-	fatal: "fatal"
+	warn: "warn",
+	info: "info",
+	debug: "debug",
+	trace: "trace"
 } as const;
 
 export type LogLevel = (typeof LOG_LEVEL)[keyof typeof LOG_LEVEL];
