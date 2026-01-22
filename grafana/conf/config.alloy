@@ -36,19 +36,6 @@ otelcol.exporter.otlp "tempo" {
   }
 }
 
-// adds loki label hints to logs
-otelcol.processor.attributes "default" {
-    action {
-        key     = "loki.attribute.labels"
-        value   = "service.name, severity"
-        action  = "insert"
-    }
-
-    output {
-        logs = [otelcol.processor.batch.default.input]
-    }
-}
-
 // logs -> loki
 otelcol.exporter.loki "default" {
   forward_to = [loki.write.default.receiver]
@@ -69,4 +56,8 @@ prometheus.remote_write "default" {
   endpoint {
     url = "http://prometheus:9090/api/v1/write"
   }
+}
+
+livedebugging {
+    enabled = true
 }
