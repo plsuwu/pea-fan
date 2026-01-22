@@ -1,5 +1,6 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
-import type { Logger } from "$lib/observability/server/logger";
+//
+import type { Logger } from "$lib/observability/instrumentation";
 
 // for information about these interfaces
 declare global {

@@ -1,5 +1,4 @@
-import type { ApiError } from "$lib/types/error";
-import type { LogLevel } from "./types";
+import type { LogLevel, ApiError } from "./types";
 import { browser } from "$app/environment";
 
 export class ObservableErrorBuilder {

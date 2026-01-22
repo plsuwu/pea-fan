@@ -17,9 +17,9 @@ interface ClientLoggerConfig {
 
 const DEFAULT_CONFIG: ClientLoggerConfig = {
 	level: "debug",
-	endpoint: "/api/observability",
-	batchSize: 10,
-	flushInterval: 5000,
+	endpoint: "/api/otel",
+	batchSize: 1024,
+	flushInterval: 10000,
 	maxRetries: 3
 };
 
@@ -142,11 +142,11 @@ export class ClientLogger {
 		try {
 			await this.sendWithRetry(payload);
 		} catch (err) {
-			if (this.buffer.length < 100) {
-				this.buffer.unshift(...logs);
-			}
-
-			console.error("failed to send otel data:", err);
+			console.error(
+				"failed to send otel to server; clearing logs.",
+				"\nerr:",
+				err
+			);
 		}
 	}
 
@@ -163,11 +163,24 @@ export class ClientLogger {
 
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}`);
+			} else {
+				console.info(`OTEL collection OK`);
 			}
 		} catch (err) {
-			if (attempt < this.config.maxRetries) {
-				await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 100));
-				return this.sendWithRetry(payload, attempt + 1);
+			if (attempt <= this.config.maxRetries) {
+				const timeout = attempt * 5 * 1000;
+				console.log(
+					`OTEL send failure; retrying in ${timeout / 1000} secs`,
+					`(attempt ${attempt}/${this.config.maxRetries})`
+				);
+				return await new Promise(() => {
+					return setTimeout(
+						() => {
+							this.sendWithRetry(payload, attempt + 1);
+						},
+						Math.pow(2, attempt) * 2000
+					);
+				});
 			}
 
 			throw err;
@@ -198,7 +211,7 @@ export class ClientLogger {
 		this.log("fatal", message, data);
 	}
 
-	child(bindings: LogContext): ClientLogger {
+	child(bindings?: LogContext): ClientLogger {
 		const child = new ClientLogger(this.config);
 		child.context = { ...this.context, ...bindings };
 

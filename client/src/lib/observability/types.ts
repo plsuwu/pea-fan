@@ -1,4 +1,11 @@
-import type { ApiError } from "$lib/types/error";
+export type ApiError = {
+	code: string | number;
+	message: string;
+	details: Record<string, unknown>;
+	silent?: boolean;
+	displayMessage?: string;
+};
+
 export const LOG_LEVEL = {
 	fatal: "fatal",
 	error: "error",

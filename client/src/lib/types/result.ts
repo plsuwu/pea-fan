@@ -1,4 +1,4 @@
-import type { ApiError } from "./error";
+import type { ApiError } from "$lib/observability";
 import type { EnumType } from "./match";
 
 type ResultVariants<T, E> = {

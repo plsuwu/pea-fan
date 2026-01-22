@@ -1,5 +1,7 @@
 import { Enum, type EnumType } from "./match";
 
+export const TRACER_NAME = "client-tracer";
+
 export type ChannelEntry = {
 	id: string;
 	name: string;

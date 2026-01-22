@@ -1,11 +1,12 @@
 import { Result, Ok, Err } from "$lib/types/result";
-import type { ApiError } from "$lib/types/error";
+import type { ApiError } from "$lib/observability/types";
 import { browser } from "$app/environment";
 
-import { type Logger as ServerLogger, logger as serverLogger } from "./server/logger";
+import { logger as serverLogger } from "./server/logger";
 import { type ClientLogger, clientLogger } from "./client/logger";
 import * as serverTracer from "./server/tracing";
 
+type ServerLogger = typeof serverLogger;
 let logger: ClientLogger | ServerLogger | any | null = null;
 let tracer: typeof serverTracer | null = null;
 

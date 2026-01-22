@@ -1,12 +1,11 @@
-import type { ApiError } from "$lib/types/error";
+import type { ApiError } from "$lib/observability/types";
+import { TRACER_NAME } from "$lib/types";
 import {
 	trace,
 	SpanStatusCode,
 	type Span,
 	type Tracer
 } from "@opentelemetry/api";
-
-const TRACER_NAME = "client_tracer";
 
 export function getTracer(): Tracer {
 	return trace.getTracer(TRACER_NAME);
@@ -69,20 +68,20 @@ export async function withSpan<T>(
 	});
 }
 
-export function traced(spanName?: string) {
-	return function <T extends (...args: Array<any>) => Promise<any>>(
-		target: any,
-		propertyKey: string,
-		descriptor: TypedPropertyDescriptor<T>
-	) {
-		const originalMethod = descriptor.value!;
-		descriptor.value = async function (...args: Array<any>) {
-			return withSpan(
-				spanName || `${target.constructor.name}.${propertyKey}`,
-				() => originalMethod.apply(this, args)
-			);
-		} as T;
-
-		return descriptor;
-	};
-}
+// export function traced(spanName?: string) {
+// 	return function <T extends (...args: Array<any>) => Promise<any>>(
+// 		target: any,
+// 		propertyKey: string,
+// 		descriptor: TypedPropertyDescriptor<T>
+// 	) {
+// 		const originalMethod = descriptor.value!;
+// 		descriptor.value = async function (...args: Array<any>) {
+// 			return withSpan(
+// 				spanName || `${target.constructor.name}.${propertyKey}`,
+// 				() => originalMethod.apply(this, args)
+// 			);
+// 		} as T;
+//
+// 		return descriptor;
+// 	};
+// }

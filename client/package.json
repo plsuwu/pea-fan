@@ -42,11 +42,8 @@
 	},
 	"dependencies": {
 		"@opentelemetry/api": "^1.9.0",
-		"@opentelemetry/auto-instrumentations-node": "^0.68.0",
 		"@opentelemetry/exporter-logs-otlp-http": "^0.210.0",
-		"@opentelemetry/exporter-logs-otlp-proto": "^0.210.0",
 		"@opentelemetry/exporter-metrics-otlp-http": "^0.210.0",
-		"@opentelemetry/exporter-trace-otlp-proto": "^0.210.0",
 		"@opentelemetry/instrumentation-fetch": "^0.210.0",
 		"@opentelemetry/instrumentation-http": "^0.210.0",
 		"@opentelemetry/instrumentation-pino": "^0.56.0",
@@ -58,6 +55,6 @@
 		"@opentelemetry/semantic-conventions": "^1.39.0",
 		"import-in-the-middle": "^2.0.4",
 		"pino": "^10.2.1",
-		"pino-loki": "^3.0.0"
+		"pino-opentelemetry-transport": "^2.0.0"
 	}
 }
