@@ -6,7 +6,7 @@ register("import-in-the-middle", import.meta.url, registerOptions);
 await waitForAllMessagesAcknowledged();
 
 import { diag, DiagConsoleLogger, DiagLogLevel } from "@opentelemetry/api";
-diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
+diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.ALL);
 
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
@@ -25,18 +25,8 @@ import {
 	PUBLIC_CLIENT_SERVICE_NAME,
 	PUBLIC_CLIENT_SERVICE_VERSION
 } from "$env/static/public";
-import {
-	ATTR_SERVICE_NAME,
-	ATTR_SERVICE_VERSION
-} from "@opentelemetry/semantic-conventions";
 
-const DEFAULT_RESOURCE = resourceFromAttributes({
-	[ATTR_SERVICE_NAME]: PUBLIC_CLIENT_SERVICE_NAME ?? "client",
-	[ATTR_SERVICE_VERSION]: PUBLIC_CLIENT_SERVICE_VERSION ?? "0.0.1",
-	[ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: import.meta.env.DEV
-		? "development"
-		: "production"
-});
+// const DEFAULT_RESOURCE =
 
 const SPAN_EXPORTER = new OTLPTraceExporter({
 	url: `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces`,
@@ -54,7 +44,14 @@ const LOG_EXPORTER = new OTLPLogExporter({
 });
 
 let sdk = new NodeSDK({
-	resource: DEFAULT_RESOURCE,
+	serviceName: PUBLIC_CLIENT_SERVICE_NAME,
+	resource: resourceFromAttributes({
+		"service.name": PUBLIC_CLIENT_SERVICE_NAME || "piss-fan-client",
+		"service.version": PUBLIC_CLIENT_SERVICE_VERSION || "0.0.1",
+		"deployment.environment.name": import.meta.env.DEV
+			? "development"
+			: "production"
+	}),
 	spanProcessors: [new BatchSpanProcessor(SPAN_EXPORTER)],
 	logRecordProcessors: [new BatchLogRecordProcessor(LOG_EXPORTER)],
 	metricReaders: [
@@ -63,15 +60,34 @@ let sdk = new NodeSDK({
 		})
 	],
 	instrumentations: [
-		new PinoInstrumentation({
-			logHook: (_, record) => {
-				record["service_name"] = DEFAULT_RESOURCE.attributes["service.name"];
-			},
-			disableLogCorrelation: false,
-			disableLogSending: false
-		}),
+		// new PinoInstrumentation({
+		// 	disableLogCorrelation: false,
+		// 	disableLogSending: false,
+		// 	logHook: (span, record) => {
+		// 		record["service_name"] = PUBLIC_CLIENT_SERVICE_NAME;
+		// 		record["traceId"] = span.spanContext().traceId;
+		// 		record["spanId"] = span.spanContext().spanId;
+		// 	}
+		// }),
 		new HttpInstrumentation()
 	]
 });
 
+const shutdown = () => {
+	process.removeAllListeners();
+	let status = 0;
+
+	sdk
+		.shutdown()
+		.then(() => console.log("tracing terminated"))
+		.catch((error) => {
+			console.log("error during tracing termination", error);
+			status = 1;
+		})
+		.finally(() => process.exit(status));
+};
+
 sdk.start();
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

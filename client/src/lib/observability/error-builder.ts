@@ -1,5 +1,6 @@
 import type { LogLevel, ApiError } from "./types";
 import { browser } from "$app/environment";
+import { TraceHandler, traceHandler as tracer } from ".";
 
 export class ObservableErrorBuilder {
 	private error: ApiError & { logLevel?: LogLevel };
@@ -15,7 +16,7 @@ export class ObservableErrorBuilder {
 
 		if (!browser) {
 			import("./server/tracing").then((tracing) => {
-				const ctx = tracing.getTraceContext();
+				const ctx = tracing.traceHandler.context!;
 				this.traceId = ctx.traceId;
 				this.spanId = ctx.spanId;
 			});
@@ -77,10 +78,13 @@ export class ObservableErrorBuilder {
 					details: error.details
 				});
 			} else {
-				const { logger } = await import("./server/logger");
+				const { logger } = await import("./server/logger.svelte");
 				const level = this.error.logLevel || "error";
 
-				logger[level](
+				const { spanId, traceId } = tracer.context;
+				const childLogger = logger.child({ spanId, traceId });
+
+				childLogger[level](
 					{ code: error.code, details: error.details },
 					error.message
 				);

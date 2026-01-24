@@ -10,7 +10,7 @@ declare global {
 			traceId?: string;
 		}
 		interface Locals {
-			channel: string;
+			channel: string | null;
 
 			// telemetry
 			traceId?: string;

@@ -55,6 +55,8 @@
 		"@opentelemetry/semantic-conventions": "^1.39.0",
 		"import-in-the-middle": "^2.0.4",
 		"pino": "^10.2.1",
-		"pino-opentelemetry-transport": "^2.0.0"
+		"pino-opentelemetry-transport": "^2.0.0",
+		"pino-std-serializers": "^7.1.0",
+		"svelte-adapter-bun": "^1.0.1"
 	}
 }

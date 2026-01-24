@@ -1,7 +1,7 @@
 import { trace, SpanStatusCode } from "@opentelemetry/api";
 import { json, type RequestHandler } from "@sveltejs/kit";
 import { type TelemetryPayload } from "$lib/observability";
-import { logger } from "$lib/observability/server/logger";
+import { logger } from "$lib/observability/server/logger.svelte";
 
 function isValidLogPayload(payload: TelemetryPayload): boolean {
 	return payload.logs != null && Array.isArray(payload.logs);

@@ -9,8 +9,8 @@ otelcol.receiver.otlp "default" {
   }
 
   output {
-    // logs    = [otelcol.processor.batch.default.input]
-    logs    = [otelcol.processor.attributes.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+    // logs    = [otelcol.processor.attributes.default.input]
 
     metrics = [otelcol.processor.batch.default.input]
     traces  = [otelcol.processor.batch.default.input]

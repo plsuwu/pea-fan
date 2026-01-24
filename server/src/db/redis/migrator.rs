@@ -365,6 +365,7 @@ impl Migrator {
                         "cchiko_" => "chikogaki".to_string(),
                         "pekoe_bunny" => "dearpekoe".to_string(),
                         "sheriff_baiken" => "baikenvt".to_string(),
+                        "haelpc" => "netaccount".to_string(),
 
                         // unknown key (realistically should never match this arm!!)
                         _ => {
@@ -391,7 +392,7 @@ impl Migrator {
 
                         if let Ok(score_value) = score[1].parse::<i32>() {
                             mapped_scores.insert(channel_data.id.to_string(), score_value);
-                        } 
+                        }
                     } else {
                         tracing::error!(
                             chatter = %chatters[i].login,

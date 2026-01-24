@@ -1,7 +1,3 @@
-import { Enum, type EnumType } from "./match";
-
-export const TRACER_NAME = "client-tracer";
-
 export type ChannelEntry = {
 	id: string;
 	name: string;
@@ -11,7 +7,7 @@ export type ChannelEntry = {
 	ranking: number;
 	total_chatter: number;
 	total_channel: number;
-	chatter_scores?: Array<_ChatterScore>;
+	chatter_scores?: Array<ChatterScore>;
 };
 
 export type ChatterEntry = {
@@ -22,12 +18,12 @@ export type ChatterEntry = {
 	image: string;
 	ranking: number;
 	total: number;
-	channel_scores?: Array<_ChannelScore>;
+	channel_scores?: Array<ChannelScore>;
 };
 
 //
 
-export type _ChannelScore = {
+export type ChannelScore = {
 	channel_id: string;
 	chatter_id: string;
 	score: number;
@@ -38,7 +34,7 @@ export type _ChannelScore = {
 	channel_image: string;
 };
 
-export type _ChatterScore = {
+export type ChatterScore = {
 	channel_id: string;
 	chatter_id: string;
 	score: number;
@@ -51,31 +47,12 @@ export type _ChatterScore = {
 
 //
 
-export type EntryVariant = {
-	Channel: ChannelEntry;
-	Chatter: ChatterEntry;
-};
+export type Entry =
+	| { _tag: "Channel"; data: ChannelEntry }
+	| { _tag: "Chatter"; data: ChatterEntry };
 
-const EntryEnum = Enum<EntryVariant>("Entry");
-EntryEnum.variant("Channel");
-EntryEnum.variant("Chatter");
+export type Score =
+	| { _tag: "Channel"; data: ChannelScore }
+	| { _tag: "Chatter"; data: ChatterScore };
 
-export const Entry = EntryEnum.constructors();
-export type Entry = EnumType<EntryVariant>;
-
-export type ScoreVariants = {
-	ChannelScore: _ChannelScore;
-	ChatterScore: _ChatterScore;
-};
-
-const ScoreEnum = Enum<ScoreVariants>("Score");
-ScoreEnum.variant("ChannelScore");
-ScoreEnum.variant("ChatterScore");
-
-export const Score = ScoreEnum.constructors();
-export type Score = EnumType<ScoreVariants>;
-export type ChannelScore = Extract<Score, { _tag: "ChannelScore" }>;
-export type ChatterScore = Extract<Score, { _tag: "ChatterScore" }>;
-
-export { Result, Ok, Err } from "./result";
-export { type EnumType, Enum } from "./match";
+export { Result, Err, Ok } from "./result";
