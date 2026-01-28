@@ -5,8 +5,8 @@ const { registerOptions, waitForAllMessagesAcknowledged } =
 register("import-in-the-middle", import.meta.url, registerOptions);
 await waitForAllMessagesAcknowledged();
 
-import { diag, DiagConsoleLogger, DiagLogLevel } from "@opentelemetry/api";
-diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.ALL);
+// import { diag, DiagConsoleLogger, DiagLogLevel } from "@opentelemetry/api";
+// diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
@@ -14,10 +14,9 @@ import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { OTEL_EXPORTER_OTLP_ENDPOINT } from "$env/static/private";
-import { ATTR_DEPLOYMENT_ENVIRONMENT_NAME } from "@opentelemetry/semantic-conventions/incubating";
 
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
-import { PinoInstrumentation } from "@opentelemetry/instrumentation-pino";
+// import { PinoInstrumentation } from "@opentelemetry/instrumentation-pino";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
@@ -25,8 +24,6 @@ import {
 	PUBLIC_CLIENT_SERVICE_NAME,
 	PUBLIC_CLIENT_SERVICE_VERSION
 } from "$env/static/public";
-
-// const DEFAULT_RESOURCE =
 
 const SPAN_EXPORTER = new OTLPTraceExporter({
 	url: `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces`,
@@ -64,7 +61,6 @@ let sdk = new NodeSDK({
 		// 	disableLogCorrelation: false,
 		// 	disableLogSending: false,
 		// 	logHook: (span, record) => {
-		// 		record["service_name"] = PUBLIC_CLIENT_SERVICE_NAME;
 		// 		record["traceId"] = span.spanContext().traceId;
 		// 		record["spanId"] = span.spanContext().spanId;
 		// 	}

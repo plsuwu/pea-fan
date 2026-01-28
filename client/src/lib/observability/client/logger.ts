@@ -18,8 +18,8 @@ interface ClientLoggerConfig {
 const DEFAULT_CONFIG: ClientLoggerConfig = {
 	level: "debug",
 	endpoint: "/api/otel",
-	batchSize: 1024,
-	flushInterval: 10000,
+	batchSize: 2048,
+	flushInterval: 15000,
 	maxRetries: 3
 };
 

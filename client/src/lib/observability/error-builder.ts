@@ -1,6 +1,6 @@
 import type { LogLevel, ApiError } from "./types";
 import { browser } from "$app/environment";
-import { TraceHandler, traceHandler as tracer } from ".";
+import { traceHandler as tracer } from ".";
 
 export class ObservableErrorBuilder {
 	private error: ApiError & { logLevel?: LogLevel };

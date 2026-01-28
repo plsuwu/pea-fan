@@ -1,3 +1,5 @@
+import { logger } from "$lib/observability/server/logger.svelte";
+import type { Span } from "@opentelemetry/api";
 import { Ok, Err } from ".";
 
 export interface ResultPattern<T, E, R> {
@@ -38,10 +40,12 @@ export const Result = {
 	err<T = never, E = unknown>(err: E): Result<T, E> {
 		return new Err(err);
 	},
-    
-	from<T>(fn: () => T): Result<T, Error> {
+
+    // from<T>()
+
+	from<T>(fn: (...args: any[]) => T, ...args: any[]): Result<T, Error> {
 		try {
-			return new Ok(fn());
+			return new Ok(fn(args));
 		} catch (e) {
 			return new Err(e instanceof Error ? e : new Error(String(e)));
 		}
@@ -52,7 +56,8 @@ export const Result = {
 			const val = await promise;
 			return new Ok(val);
 		} catch (e) {
-			return new Err(e instanceof Error ? e : new Error(String(e)));
+			logger.error(e as Error);
+			return new Err(e as unknown as Error);
 		}
 	},
 

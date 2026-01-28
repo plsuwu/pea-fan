@@ -45,7 +45,22 @@ export type ChatterScore = {
 	chatter_image: string;
 };
 
+export type PaginatedResponse = {
+	page: number;
+	total_items: number;
+	total_pages: number;
+	page_size: number;
+	items: Array<ChatterEntry | ChannelEntry>;
+};
+
+export type PaginatedRequest = {
+	limit: string;
+	page: string;
+};
+
 //
+
+export type EntryOption = ChannelEntry | ChatterEntry;
 
 export type Entry =
 	| { _tag: "Channel"; data: ChannelEntry }
@@ -56,3 +71,15 @@ export type Score =
 	| { _tag: "Chatter"; data: ChatterScore };
 
 export { Result, Err, Ok } from "./result";
+
+export const TWITCH_IMAGE_SIZE = {
+	XXL: "600x600",
+	XL: "300x300",
+	LG: "150x150",
+	MD: "70x70",
+	SM: "50x50",
+	XS: "28x28"
+} as const;
+
+export const DEFAULT_ICON_SIZE = TWITCH_IMAGE_SIZE.XL;
+export type TwitchImageSize = keyof typeof TWITCH_IMAGE_SIZE;

@@ -1,58 +1,79 @@
-import { trace, SpanStatusCode } from "@opentelemetry/api";
-import { json, type RequestHandler } from "@sveltejs/kit";
+import { traceHandler as tracer } from "$lib/observability";
+import { json, type RequestEvent, type RequestHandler } from "@sveltejs/kit";
 import { type TelemetryPayload } from "$lib/observability";
 import { logger } from "$lib/observability/server/logger.svelte";
+
+// import type { DecoratedSpanAttributes } from "$lib/observability/server/tracing";
 
 function isValidLogPayload(payload: TelemetryPayload): boolean {
 	return payload.logs != null && Array.isArray(payload.logs);
 }
 
-export const POST: RequestHandler = async ({ request }) => {
-	const tracer = trace.getTracer("sveltekit");
-	return tracer.startActiveSpan("process-client-logs", async (span) => {
+// const buildAttributes = (attrs: DecoratedSpanAttributes) => {
+//
+// }
+
+export const POST: RequestHandler = async (event: RequestEvent) => {
+	return tracer.withAsyncSpan("process-client-logs", async (span) => {
+		const { request } = event;
 		try {
 			const payload: TelemetryPayload = await request.json();
 			if (!isValidLogPayload(payload)) {
-				span.setStatus({ code: 2, message: "invalid_payload" });
-				return json({ error: "invalid_payload" }, { status: 400 });
-			}
-
-			span.setAttribute("client.id", payload.clientId);
-			span.setAttribute("client.session_id", payload.sessionId);
-			span.setAttribute("logs.count", payload.logs.length);
-
-			for (const entry of payload.logs) {
-				entry.context = { ...entry.context, ...span.spanContext() };
-				const logData = {
-					...entry.context,
-					clientId: payload.clientId,
-					sessionId: payload.sessionId,
-					url: payload.url,
-					clientTimestamp: entry.timestamp,
-					source: "client"
+				tracer.exception = {
+					msg: "invalid log payload",
+					span
 				};
 
-				console.log(logData);
-				logger[entry.level](logData, entry.message);
+                span.end();
+
+				return json({ error: "invalid payload" }, { status: 400 });
 			}
 
-			span.setStatus({
-				code: SpanStatusCode.OK,
-				message: "processing_success"
-			});
+			const attributes = {
+				"client.addr": event.getClientAddress(),
+				"client.id": payload.clientId,
+				"client.session": payload.sessionId,
+				"logs.count": payload.logs.length
+			};
 
-			span.end();
+			span.setAttributes({ ...attributes });
+
+			for (const entry of payload.logs) {
+				const clientLogEntry = {
+					span,
+					entry,
+					payload,
+					addr: attributes["client.addr"]
+				};
+				logger[entry.level](
+					{ clientLogEntry, message: entry.message },
+					`"${entry.message}"`
+				);
+			}
+
+            span.end();
 			return json({ success: true, processed: payload.logs.length });
 		} catch (err) {
-			span.recordException(err as Error);
-			span.setStatus({
-				code: SpanStatusCode.ERROR,
-				message: "processing_failure"
-			});
+			logger.error(
+				{ error: err, timestamp: Date.now() },
+				"unhandled error during client OTEL write"
+			);
+			tracer.exception = {
+				msg:
+					err instanceof Error
+						? err
+						: "unhandled error during client OTEL write" + `(ts=${Date.now()})`,
+				span
+			};
 
-			span.end();
-			logger.error({ error: err }, "failed to process client telemetry batch");
-			return json({ error: "processing_failure" }, { status: 500 });
+            span.end();
+			return json(
+				{
+					error: "unhandled error during client OTEL write",
+					timestamp: Date.now()
+				},
+				{ status: 500 }
+			);
 		}
 	});
 };

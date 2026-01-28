@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { onMount } from "svelte";
-	import { clientLogger } from "$lib/observability/client/logger";
-	import type { PageProps } from "./$types";
+	import { page } from "$app/state";
+	import clientLogger from "$lib/observability/client/logger";
+    
+    let error = $derived(page.error);
 
-	let { data, error } = $props();
-
-	onMount(() => {
-		clientLogger.error("CLIENT_ERRORED", { data: error });
+	$effect(() => {
+        if (error) {
+		    clientLogger.error("CLIENT_ERROR", { error });
+        }
 	});
 </script>

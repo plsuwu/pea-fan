@@ -20,7 +20,6 @@ export type LogLevel = (typeof LOG_LEVEL)[keyof typeof LOG_LEVEL];
 export interface LogContext {
 	traceId?: string;
 	spanId?: string;
-	userId?: string;
 	requestId?: string;
 	[key: string]: unknown;
 }
@@ -30,7 +29,7 @@ export interface LogEntry {
 	message: string;
 	timestamp: number;
 	context?: LogContext;
-	error?: ApiError | Error;
+	error?: Error | string;
 	[key: string]: unknown;
 }
 

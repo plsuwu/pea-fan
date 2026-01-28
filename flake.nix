@@ -28,6 +28,10 @@
           buildInputs = with pkgs; [
             pkg-config
             openssl
+            jq
+
+            feroxbuster
+            seclists
 
             cargo
             bun
