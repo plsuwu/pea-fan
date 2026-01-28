@@ -129,3 +129,12 @@ pub async fn helix_user_by_login(Path(login): Path<String>) -> JsonResult<Vec<He
 
     Ok(Json(helix_user))
 }
+
+#[instrument]
+#[debug_handler]
+pub async fn helix_user_by_id(Path(id): Path<String>) -> JsonResult<Vec<HelixUser>> {
+    let mut ids = vec![id];
+    let helix_user = Helix::fetch_users_by_id(&mut ids).await?;
+
+    Ok(Json(helix_user))
+}

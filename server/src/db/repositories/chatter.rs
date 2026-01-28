@@ -48,7 +48,12 @@ impl Repository for ChatterRepository {
             )
             VALUES ($1, $2, $3, $4, $5, 0, false, $6, $7)
             ON CONFLICT (id)
-            DO NOTHING
+            DO UPDATE SET 
+                login = $2,
+                name = $3,
+                color = $4,
+                image = $5,
+                updated_at = NOW()
             "#,
             &item.id.to_string(),
             item.login,
@@ -111,10 +116,10 @@ impl Repository for ChatterRepository {
             VALUES ($1, $2, $3, $4, $5, 1, false, $6, $7)
             ON CONFLICT (id)
             DO UPDATE SET
-                name = EXCLUDED.name,
-                login = EXCLUDED.login,
-                color = EXCLUDED.color,
-                image = EXCLUDED.image,
+                name = $2,
+                login = $3,
+                color = $4,
+                image = $5,
                 total = chatter.total + 1,
                 created_at = EXCLUDED.created_at,
                 updated_at = NOW()

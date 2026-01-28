@@ -59,13 +59,14 @@ pub struct IrcTags {
 }
 
 const COUNTER_USER: &str = "pee_liker";
-const CHANNEL_WHITELIST: [&str; 6] = [
+const CHANNEL_WHITELIST: [&str; 7] = [
     "plss",
     "chikogaki",
     "lcolonq",
     "madmad01",
     "aaallycat",
     "gibbbons",
+    "sleepiebug",
 ];
 const ID_BLACKLIST: [&str; 3] = [
     "19264788",  // Nightbot
@@ -601,9 +602,12 @@ pub async fn make_query_response(
 #[instrument(skip(pool, tags))]
 pub async fn increment_score<'a>(pool: &'static sqlx::PgPool, tags: &'a IrcTags) -> IrcResult<()> {
     let chatter_repo = ChatterRepository::new(pool);
+    let chatter = chatter_repo.get_by_id(&tags.user_id.clone().into()).await?;
+    let exists = chatter.is_some();
+
     // i kind of dont want to do this for channels for efficiency reasons - seems better to make sure
     // all channels are present when we read in the channel list and then assume they are present (right??)
-    if !chatter_repo.exists(&tags.user_id.clone().into()).await? {
+    if !exists {
         let mut target_id = vec![tags.user_id.clone()];
         let helix_chatter = Helix::fetch_users_by_id(&mut target_id).await?;
 

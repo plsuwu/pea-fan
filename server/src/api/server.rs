@@ -75,6 +75,7 @@ pub async fn router(
         //
         // proxied helix requests
         .route("/helix/by-login/{login}", get(helix_user_by_login))
+        .route("/helix/by-id/{id}", get(helix_user_by_id))
         .layer(
             TraceLayer::new_for_http().make_span_with(|req: &axum::http::Request<_>| {
                 let method = req.method();
@@ -297,12 +298,18 @@ mod test {
         let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
         let (tx_from_api, rx_from_api) =
             tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
-        
-        let channels = ["vacu0usly", "plss", "chikogaki"].into_iter().map(|ch| ch.to_string()).collect();
+
+        let channels = ["vacu0usly", "plss", "chikogaki"]
+            .into_iter()
+            .map(|ch| ch.to_string())
+            .collect();
 
         let mut handles = start_server(tx_server, tx_from_api, rx).await.unwrap();
-        handles.extend(crate::irc::client::start_irc_handler(channels, rx_from_api).await.unwrap());
-        
+        handles.extend(
+            crate::irc::client::start_irc_handler(channels, rx_from_api)
+                .await
+                .unwrap(),
+        );
 
         _ = join_all(handles).await;
 

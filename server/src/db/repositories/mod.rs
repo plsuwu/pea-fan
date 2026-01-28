@@ -64,7 +64,12 @@ impl<'a> Tx<'a> {
             )
             VALUES ($1, $2, $3, $4, $5, $6, false, $7, $8)
             ON CONFLICT (id)
-            DO NOTHING
+            DO UPDATE SET
+                login = $2,
+                name = $3,
+                color = $4,
+                image = $5,
+                updated_at = NOW()
             "#,
             &item.id.to_string(),
             item.login,
