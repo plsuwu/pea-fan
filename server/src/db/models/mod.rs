@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::db::repositories::leaderboard::ScorePagination;
+
 pub mod channel;
 pub mod chatter;
 pub mod leaderboard;
@@ -14,14 +16,22 @@ const fn default_limit() -> i64 {
     50
 }
 
+#[inline]
+fn default_score_pagination() -> ScorePagination {
+    ScorePagination::new(50, 0)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Pagination {
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default = "default_offset")]
     pub page: i64,
+    #[serde(default = "default_limit")]
+    pub score_limit: i64,
+    #[serde(default = "default_offset")]
+    pub score_page: i64,
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaginatedResponse<T> {
@@ -31,6 +41,7 @@ pub struct PaginatedResponse<T> {
     pub total_pages: i64,
     #[serde(default = "default_limit")]
     pub page_size: i64,
+    
     // #[serde(default = "default_offset")]
     // pub chatter_offset: i64,
 }
@@ -48,5 +59,4 @@ impl<T> PaginatedResponse<T> {
     }
 }
 
-pub mod prelude {
-}
+pub mod prelude {}

@@ -33,6 +33,7 @@ pub struct ChannelLeaderboardEntry {
     pub ranking: i64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub chatter_scores: Vec<super::chatter::ChatterScoreSummary>,
+    pub total_scores: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -57,6 +58,7 @@ pub struct ChannelLeaderboardRow {
     pub total_chatter: i64,
     pub total_channel: i64,
     pub ranking: i64,
+    pub total_scores: i64,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -75,6 +77,7 @@ impl ChannelLeaderboardRow {
             ranking: self.ranking,
             total_channel: self.total_channel,
             total_chatter: self.total_chatter,
+            total_scores: self.total_scores,
             chatter_scores,
         }
     }

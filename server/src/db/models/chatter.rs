@@ -4,7 +4,10 @@ use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    db::models::channel::{ChannelId, ChannelScoreSummary},
+    db::{
+        models::channel::{ChannelId, ChannelScoreSummary},
+        repositories::leaderboard::ScorePagination,
+    },
     util::helix::HelixUser,
 };
 
@@ -37,6 +40,7 @@ pub struct ChatterLeaderboardEntry {
     pub ranking: i64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub channel_scores: Vec<super::channel::ChannelScoreSummary>,
+    pub total_scores: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -61,6 +65,7 @@ pub struct ChatterLeaderboardRow {
     pub total: i64,
     pub private: bool,
     pub ranking: i64,
+    pub total_scores: i64,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -78,6 +83,7 @@ impl ChatterLeaderboardRow {
             image: self.image,
             total: self.total,
             ranking: self.ranking,
+            total_scores: self.total_scores,
             channel_scores,
         }
     }

@@ -9,6 +9,7 @@ use crate::api::server::{AppState, JsonResult, RouteError};
 use crate::db::models::{PaginatedResponse, Pagination};
 use crate::db::prelude::{ChannelLeaderboardEntry, Repository};
 use crate::db::prelude::{ChatterLeaderboardEntry, ChatterRepository, LeaderboardRepository};
+use crate::db::repositories::leaderboard::ScorePagination;
 use crate::util::helix::{Helix, HelixUser};
 
 #[instrument(skip(state))]
@@ -18,9 +19,17 @@ pub async fn global_channels(
 ) -> JsonResult<PaginatedResponse<ChannelLeaderboardEntry>> {
     let limit = param.limit;
     let offset = param.page * limit;
+    let score_limit = param.score_limit;
+    let score_offset = param.score_page * score_limit;
 
     let lb_repo = LeaderboardRepository::new(state.db_pool);
-    let segment = lb_repo.get_channel_leaderboard(limit, offset).await?;
+    let segment = lb_repo
+        .get_channel_leaderboard(
+            limit,
+            offset,
+            &ScorePagination::new(score_limit, score_offset),
+        )
+        .await?;
 
     Ok(Json(segment))
 }
@@ -29,6 +38,7 @@ pub async fn global_channels(
 pub async fn channel_by_login(
     State(state): State<Arc<AppState>>,
     Path(login): Path<String>,
+    Query(param): Query<Pagination>,
 ) -> JsonResult<ChannelLeaderboardEntry> {
     let (ch_repo, lb_repo) = (
         ChatterRepository::new(state.db_pool),
@@ -37,7 +47,10 @@ pub async fn channel_by_login(
 
     let channel = ch_repo.get_by_login(login.clone()).await?;
     match lb_repo
-        .get_single_channel_leaderboard(channel.id.into())
+        .get_single_channel_leaderboard(
+            channel.id.into(),
+            ScorePagination::new(param.score_limit, param.score_page * param.score_limit),
+        )
         .await?
     {
         Some(ch) => Ok(Json(ch)),
@@ -49,9 +62,13 @@ pub async fn channel_by_login(
 pub async fn channel_by_id(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
+    Query(param): Query<Pagination>,
 ) -> JsonResult<ChannelLeaderboardEntry> {
     match LeaderboardRepository::new(state.db_pool)
-        .get_single_channel_leaderboard(id.clone().into())
+        .get_single_channel_leaderboard(
+            id.clone().into(),
+            ScorePagination::new(param.score_limit, param.score_page * param.score_limit),
+        )
         .await?
     {
         Some(ch) => Ok(Json(ch)),
@@ -84,8 +101,17 @@ pub async fn global_chatters(
     let limit = param.limit;
     let offset = param.page * limit;
 
+    let score_limit = param.score_limit;
+    let score_offset = param.score_page * score_limit;
+
     let lb_repo = LeaderboardRepository::new(state.db_pool);
-    let segment = lb_repo.get_chatter_leaderboard(limit, offset).await?;
+    let segment = lb_repo
+        .get_chatter_leaderboard(
+            limit,
+            offset,
+            ScorePagination::new(score_limit, score_offset),
+        )
+        .await?;
 
     Ok(Json(segment))
 }
@@ -94,6 +120,7 @@ pub async fn global_chatters(
 pub async fn chatter_by_login(
     State(state): State<Arc<AppState>>,
     Path(login): Path<String>,
+    Query(param): Query<Pagination>,
 ) -> JsonResult<ChatterLeaderboardEntry> {
     let (ch_repo, lb_repo) = (
         ChatterRepository::new(state.db_pool),
@@ -101,7 +128,13 @@ pub async fn chatter_by_login(
     );
 
     let chatter = ch_repo.get_by_login(login.clone()).await?;
-    match lb_repo.get_single_chatter_leaderboard(chatter.id).await? {
+    match lb_repo
+        .get_single_chatter_leaderboard(
+            chatter.id,
+            ScorePagination::new(param.score_limit, param.score_page * param.score_limit),
+        )
+        .await?
+    {
         Some(ch) => Ok(Json(ch)),
         None => Err(RouteError::InvalidUser(login)),
     }
@@ -111,9 +144,13 @@ pub async fn chatter_by_login(
 pub async fn chatter_by_id(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
+    Query(param): Query<Pagination>,
 ) -> JsonResult<ChatterLeaderboardEntry> {
     match LeaderboardRepository::new(state.db_pool)
-        .get_single_chatter_leaderboard(id.clone().into())
+        .get_single_chatter_leaderboard(
+            id.clone().into(),
+            ScorePagination::new(param.score_limit, param.score_page * param.score_limit),
+        )
         .await?
     {
         Some(ch) => Ok(Json(ch)),

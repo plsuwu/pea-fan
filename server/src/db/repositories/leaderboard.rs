@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres, Result as SqlxResult};
 use tracing::instrument;
 
@@ -9,11 +10,29 @@ use crate::db::models::chatter::{
     ChatterId, ChatterLeaderboardEntry, ChatterLeaderboardRow, ChatterScoreSummary,
 };
 use crate::db::prelude::{
-    Channel, ChannelRepository, Chatter, ChatterRepository, Repository, Score, ScoreSummary,
+    Channel, ChannelRepository, Chatter, ChatterRepository, Repository, Score, ScoreSummary, Tx,
 };
 
 pub struct LeaderboardRepository {
     pool: &'static Pool<Postgres>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ScorePagination {
+    pub limit: i64,
+    pub offset: i64,
+}
+
+impl ScorePagination {
+    pub fn new(limit: i64, offset: i64) -> Self {
+        Self { limit, offset }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ScorePaginationResponse {
+    pub limit: i64,
+    pub offset: i64,
 }
 
 impl LeaderboardRepository {
@@ -122,23 +141,29 @@ impl LeaderboardRepository {
     pub async fn get_single_channel_leaderboard(
         &self,
         id: ChannelId,
+        score_pagination: ScorePagination,
     ) -> SqlxResult<Option<ChannelLeaderboardEntry>> {
         let channel = sqlx::query_as!(
             ChannelLeaderboardRow,
             r#"
             SELECT 
-                id AS "id!",
-                name AS "name!",
-                login AS "login!",
-                color AS "color!",
-                image AS "image!",
-                total_chatter AS "total_chatter!",
-                total_channel AS "total_channel!",
-                ranking AS "ranking!",
-                created_at AS "created_at!",
-                updated_at AS "updated_at!"
-            FROM channel_leaderboard
-            WHERE id = $1
+                ch.id AS "id!",
+                ch.name AS "name!",
+                ch.login AS "login!",
+                ch.color AS "color!",
+                ch.image AS "image!",
+                ch.total_chatter AS "total_chatter!",
+                ch.total_channel AS "total_channel!",
+                ch.ranking AS "ranking!",
+                (
+                    SELECT COUNT(*) 
+                    FROM ranked_scores_view_per_channel 
+                    WHERE channel_id = ch.id
+                ) as "total_scores!",
+                ch.created_at AS "created_at!",
+                ch.updated_at AS "updated_at!"
+            FROM channel_leaderboard ch
+            WHERE ch.id = $1
             "#,
             &id.to_string()
         )
@@ -147,7 +172,9 @@ impl LeaderboardRepository {
 
         match channel {
             Some(ch) => {
-                let scores = self.get_chatter_scores_batch(&[id]).await?;
+                let scores = self
+                    .get_chatter_scores_batch(&[id], &score_pagination)
+                    .await?;
                 let chatter_scores: Vec<ChatterScoreSummary> = scores
                     .iter()
                     .filter(|s| s.channel_id == ch.id)
@@ -166,23 +193,29 @@ impl LeaderboardRepository {
     pub async fn get_single_chatter_leaderboard(
         &self,
         id: ChatterId,
+        score_pagination: ScorePagination,
     ) -> SqlxResult<Option<ChatterLeaderboardEntry>> {
         let chatter = sqlx::query_as!(
             ChatterLeaderboardRow,
             r#"
             SELECT 
-                id as "id!",
-                name as "name!",
-                login as "login!",
-                color as "color!",
-                image as "image!",
-                total as "total!",
-                private as "private!",
-                ranking as "ranking!",
-                created_at as "created_at!",
-                updated_at as "updated_at!"
-            FROM chatter_leaderboard
-            WHERE id = $1
+                ch.id as "id!",
+                ch.name as "name!",
+                ch.login as "login!",
+                ch.color as "color!",
+                ch.image as "image!",
+                ch.total as "total!",
+                ch.private as "private!",
+                ch.ranking as "ranking!",
+                (
+                    SELECT COUNT(*)
+                    FROM ranked_scores_view_per_channel 
+                    WHERE channel_id = ch.id
+                ) as "total_scores!",
+                ch.created_at as "created_at!",
+                ch.updated_at as "updated_at!"
+            FROM chatter_leaderboard ch
+            WHERE ch.id = $1
             "#,
             &id.to_string()
         )
@@ -191,15 +224,17 @@ impl LeaderboardRepository {
 
         match chatter {
             Some(ch) => {
-                let scores = self.get_channel_scores_batch(&[ch.id.clone().0]).await?;
-                let channel_scores: Vec<ChannelScoreSummary> = scores
+                let scores = self
+                    .get_channel_scores_batch(&[ch.id.clone()], &score_pagination)
+                    .await?;
+                let score_summaries: Vec<ChannelScoreSummary> = scores
                     .iter()
                     .filter(|s| s.chatter_id == ch.id)
                     .cloned()
                     .map(|s| s.into())
                     .collect();
 
-                Ok(Some(ch.into_leaderboard_entry(channel_scores)))
+                Ok(Some(ch.into_leaderboard_entry(score_summaries)))
             }
 
             None => Ok(None),
@@ -211,6 +246,7 @@ impl LeaderboardRepository {
         &self,
         limit: i64,
         offset: i64,
+        score_pagination: ScorePagination,
     ) -> SqlxResult<PaginatedResponse<ChatterLeaderboardEntry>> {
         let total_items: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM chatter")
             .fetch_one(self.pool)
@@ -229,6 +265,11 @@ impl LeaderboardRepository {
                 total as "total!",
                 private as "private!",
                 ranking as "ranking!",
+                (
+                    SELECT COUNT (*) 
+                    FROM ranked_scores_view_per_channel
+                    WHERE chatter_id = id
+                ) as "total_scores!",
                 created_at as "created_at!",
                 updated_at as "updated_at!"
             FROM chatter_leaderboard
@@ -241,24 +282,27 @@ impl LeaderboardRepository {
         .fetch_all(self.pool)
         .await?;
 
-        let ids: &[String] = &chatters.iter().map(|c| c.id.clone().0).collect::<Vec<_>>();
+        let ids = &chatters
+            .iter()
+            .map(|c| c.id.clone().into())
+            .collect::<Vec<_>>();
         let scores = if !ids.is_empty() {
-            self.get_channel_scores_batch(&ids).await?
+            self.get_channel_scores_batch(&ids, &score_pagination)
+                .await?
         } else {
             Vec::new()
         };
 
         let mut entries = Vec::new();
         for chatter in chatters {
-            let channel_scores: Vec<ChannelScoreSummary> = scores
+            let score_summaries: Vec<ChannelScoreSummary> = scores
                 .iter()
                 .filter(|s| s.chatter_id == chatter.id)
                 .cloned()
                 .map(|s| s.into())
                 .collect();
 
-            // channel_scores.sort_by(|a, b| b.score.cmp(&a.score));
-            entries.push(chatter.into_leaderboard_entry(channel_scores));
+            entries.push(chatter.into_leaderboard_entry(score_summaries));
         }
 
         Ok(PaginatedResponse::new(
@@ -274,6 +318,7 @@ impl LeaderboardRepository {
         &self,
         limit: i64,
         offset: i64,
+        score_pagination: &ScorePagination,
     ) -> SqlxResult<PaginatedResponse<ChannelLeaderboardEntry>> {
         let total_items: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM channel")
             .fetch_one(self.pool)
@@ -291,6 +336,11 @@ impl LeaderboardRepository {
                 total_chatter AS "total_chatter!",
                 total_channel AS "total_channel!",
                 ranking AS "ranking!",
+                (
+                    SELECT COUNT (*) 
+                    FROM ranked_scores_view_per_channel 
+                    WHERE channel_id = id
+                ) as "total_scores!",
                 created_at AS "created_at!",
                 updated_at AS "updated_at!"
             FROM channel_leaderboard
@@ -305,21 +355,22 @@ impl LeaderboardRepository {
 
         let ids: Vec<ChannelId> = channels.iter().map(|ch| ch.id.clone().into()).collect();
         let scores = if !ids.is_empty() {
-            self.get_chatter_scores_batch(&ids).await?
+            self.get_chatter_scores_batch(&ids, score_pagination)
+                .await?
         } else {
             Vec::new()
         };
 
         let mut entries = Vec::new();
         for channel in channels {
-            let scores: Vec<ChatterScoreSummary> = scores
+            let score_summaries: Vec<ChatterScoreSummary> = scores
                 .iter()
                 .filter(|s| s.channel_id == channel.id)
                 .cloned()
                 .map(|s| s.into())
                 .collect();
 
-            entries.push(channel.into_leaderboard_entry(scores));
+            entries.push(channel.into_leaderboard_entry(score_summaries));
         }
 
         Ok(PaginatedResponse::new(
@@ -330,10 +381,11 @@ impl LeaderboardRepository {
         ))
     }
 
-    #[instrument(skip(self, ids))]
+    #[instrument(skip(self, ids, score_pagination))]
     async fn get_chatter_scores_batch(
         &self,
         ids: &[ChannelId],
+        score_pagination: &ScorePagination,
     ) -> SqlxResult<Vec<ChatterScoreSummary>> {
         let ids: &[String] = &ids.iter().map(|id| id.0.clone().into()).collect::<Vec<_>>();
 
@@ -353,20 +405,27 @@ impl LeaderboardRepository {
             TempRow,
             r#"
             SELECT 
-                rs.chatter_id as "chatter_id!",
-                rs.channel_id as "channel_id!",
+                scores.chatter_id as "chatter_id!",
+                scores.channel_id as "channel_id!",
                 c.name as "chatter_name!",
                 c.login as "chatter_login!",
                 c.color as "chatter_color!",
                 c.image as "chatter_image!",
-                rs.score as "score!",
-                rs.ranking as "ranking!"
-            FROM ranked_scores_view_per_channel rs
-            JOIN chatter c ON rs.chatter_id = c.id
-            WHERE rs.channel_id = ANY($1)
-            ORDER BY rs.channel_id, rs.score DESC
+                scores.score as "score!",
+                scores.ranking as "ranking!"
+            FROM UNNEST($1::text[]) AS channel_ids(id)
+            CROSS JOIN LATERAL (
+                SELECT rs.*
+                FROM ranked_scores_view_per_channel rs
+                WHERE rs.channel_id = channel_ids.id
+                ORDER BY rs.score DESC 
+                LIMIT $2 OFFSET $3
+            ) scores
+            JOIN chatter c ON scores.chatter_id = c.id
             "#,
             &ids,
+            score_pagination.limit,
+            score_pagination.offset
         )
         .fetch_all(self.pool)
         .await?;
@@ -386,11 +445,14 @@ impl LeaderboardRepository {
             .collect())
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, ids, score_pagination))]
     async fn get_channel_scores_batch(
         &self,
-        ids: &[String],
+        ids: &[ChatterId],
+        score_pagination: &ScorePagination,
     ) -> SqlxResult<Vec<ChannelScoreSummary>> {
+        let ids: &[String] = &ids.iter().map(|id| id.0.clone().into()).collect::<Vec<_>>();
+
         #[derive(sqlx::FromRow)]
         struct TempRow {
             channel_id: String,
@@ -402,24 +464,22 @@ impl LeaderboardRepository {
             score: i64,
             ranking: i64,
         }
-
         let rows = sqlx::query_as!(
             TempRow,
             r#"
-            SELECT 
-                rs.channel_id as "channel_id!",
+            SELECT
                 rs.chatter_id as "chatter_id!",
-                ch_chatter.name as "channel_name!",
-                ch_chatter.login as "channel_login!",
-                ch_chatter.color as "channel_color!",
-                ch_chatter.image as "channel_image!",
+                rs.channel_id as "channel_id!",
+                c.name as "channel_name!",
+                c.login as "channel_login!",
+                c.color as "channel_color!",
+                c.image as "channel_image!",
                 rs.score as "score!",
                 rs.ranking as "ranking!"
             FROM ranked_scores_view_per_channel rs
-            JOIN channel ch ON rs.channel_id = ch.id
-            JOIN chatter ch_chatter ON ch.id = ch_chatter.id
+            JOIN chatter c ON rs.channel_id = c.id
             WHERE rs.chatter_id = ANY($1)
-            ORDER BY rs.chatter_id, rs.score DESC
+            ORDER BY rs.ranking ASC
             "#,
             &ids,
         )
