@@ -35,7 +35,6 @@
                 (serverDir + "/Cargo.toml")
                 (serverDir + "/Cargo.lock")
                 (serverDir + "/src")
-                (serverDir + "/.sqlx")
                 (serverDir + "/migrations")
               ]
             );
