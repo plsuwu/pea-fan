@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO channel (\n                id,\n                channel_total,\n                created_at, \n                updated_at\n            )\n            VALUES ($1, 1, NOW(), NOW())\n            ON CONFLICT (id)\n            DO UPDATE SET\n                channel_total = channel.channel_total + 1,\n                created_at = EXCLUDED.created_at,\n                updated_at = NOW()\n            RETURNING channel_total\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_total",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e5756f87eecf901e584d964747695ca9db045b71c5ea118ff57e3eb0b273b8e3"
+}

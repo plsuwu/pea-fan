@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                ch.id as \"id!\",\n                ch.name as \"name!\",\n                ch.login as \"login!\",\n                ch.color as \"color!\",\n                ch.image as \"image!\",\n                ch.total as \"total!\",\n                ch.private as \"private!\",\n                ch.ranking as \"ranking!\",\n                (\n                    SELECT COUNT(*)\n                    FROM ranked_scores_view_per_channel \n                    WHERE channel_id = ch.id\n                ) as \"total_scores!\",\n                ch.created_at as \"created_at!\",\n                ch.updated_at as \"updated_at!\"\n            FROM chatter_leaderboard ch\n            WHERE ch.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "login!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "color!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "image!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "total!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "private!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "ranking!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "total_scores!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at!",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at!",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      null,
+      true,
+      true
+    ]
+  },
+  "hash": "bbc16fd85752bf52ba43382a654396058c605523b85aec5ca5b6f2a0058416f2"
+}

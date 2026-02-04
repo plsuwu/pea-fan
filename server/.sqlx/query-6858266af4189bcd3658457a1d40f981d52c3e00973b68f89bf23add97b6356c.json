@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                scores.chatter_id as \"chatter_id!\",\n                scores.channel_id as \"channel_id!\",\n                c.name as \"chatter_name!\",\n                c.login as \"chatter_login!\",\n                c.color as \"chatter_color!\",\n                c.image as \"chatter_image!\",\n                scores.score as \"score!\",\n                scores.ranking as \"ranking!\"\n            FROM UNNEST($1::text[]) AS channel_ids(id)\n            CROSS JOIN LATERAL (\n                SELECT rs.*\n                FROM ranked_scores_view_per_channel rs\n                WHERE rs.channel_id = channel_ids.id\n                ORDER BY rs.score DESC \n                LIMIT $2 OFFSET $3\n            ) scores\n            JOIN chatter c ON scores.chatter_id = c.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chatter_id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "chatter_name!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "chatter_login!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "chatter_color!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "chatter_image!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "score!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "ranking!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "6858266af4189bcd3658457a1d40f981d52c3e00973b68f89bf23add97b6356c"
+}

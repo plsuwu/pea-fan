@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                rs.chatter_id as \"chatter_id!\",\n                rs.channel_id as \"channel_id!\",\n                c.name as \"channel_name!\",\n                c.login as \"channel_login!\",\n                c.color as \"channel_color!\",\n                c.image as \"channel_image!\",\n                rs.score as \"score!\",\n                rs.ranking as \"ranking!\"\n            FROM ranked_scores_view_per_channel rs\n            JOIN chatter c ON rs.channel_id = c.id\n            WHERE rs.chatter_id = ANY($1)\n            ORDER BY rs.ranking ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chatter_id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_name!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "channel_login!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "channel_color!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "channel_image!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "score!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "ranking!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "ba3c8af12b97da1b79ab5fc70d86462009fc90ebf99ba899c68e0e77db0d9141"
+}
