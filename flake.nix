@@ -43,28 +43,29 @@
           }
         );
 
-        client = pkgs.stdenv.mkDerivation {
-          pname = "piss-fan-client";
-          version = "1.0.0";
-          src = ./client;
-
-          nativeBuildInputs = [ pkgs.bun ];
-
-          buildPhase = ''
-            export HOME=$TMPDIR
-            bun install --frozen-lockfile
-            bun run build
-          '';
-
-          installPhase = ''
-            mkdir -p $out
-            cp -r dist/* $out/
-          '';
-        };
+        # client = pkgs.stdenv.mkDerivation {
+        #   pname = "piss-fan-client";
+        #   version = "1.0.0";
+        #   src = ./client;
+        #
+        #   nativeBuildInputs = [ pkgs.bun ];
+        #
+        #   buildPhase = ''
+        #     export HOME=$TMPDIR
+        #     bun install --frozen-lockfile
+        #     bun run build
+        #   '';
+        #
+        #   installPhase = ''
+        #     mkdir -p $out
+        #     cp -r dist/* $out/
+        #   '';
+        # };
       in
       {
         packages = {
-          inherit client api;
+          # inherit client;
+          inherit api;
           default = api;
         };
 
