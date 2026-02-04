@@ -39,7 +39,10 @@
           commonArgs
           // {
             inherit cargoArtifacts;
+
             SQLX_OFFLINE = "true";
+            SQLX_OFFLINE_DIR = "./.sqlx";
+            doCheck = false;
           }
         );
 
