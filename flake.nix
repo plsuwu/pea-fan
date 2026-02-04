@@ -3,7 +3,6 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     crane.url = "github:ipetkov/crane";
-    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
   outputs =
@@ -12,16 +11,13 @@
       nixpkgs,
       flake-utils,
       crane,
-      rust-overlay,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        overlays = [ (import rust-overlay) ];
-        pkgs = import nixpkgs { inherit system overlays; };
+        pkgs = import nixpkgs { inherit system; };
 
-        rustToolchain = pkgs.rust-bin.stable.latest.default;
-        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+        craneLib = crane.mkLib pkgs;
 
         src =
           let
@@ -34,6 +30,7 @@
               fs.unions [
                 (serverDir + "/Cargo.toml")
                 (serverDir + "/Cargo.lock")
+                (serverDir + "/.sqlx")
                 (serverDir + "/src")
                 (serverDir + "/migrations")
               ]
