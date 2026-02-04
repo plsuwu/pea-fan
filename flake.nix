@@ -16,26 +16,36 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
+        inherit (pkgs) lib;
 
         craneLib = crane.mkLib pkgs;
 
-        src =
-          let
-            fs = pkgs.lib.fileset;
-            serverDir = ./server;
-          in
-          fs.toSource {
-            root = serverDir;
-            fileset = fs.intersection (fs.gitTracked serverDir) (
-              fs.unions [
-                (serverDir + "/Cargo.toml")
-                (serverDir + "/Cargo.lock")
-                (serverDir + "/.sqlx")
-                (serverDir + "/src")
-                (serverDir + "/migrations")
-              ]
-            );
-          };
+        unfilteredRoot = ./server;
+        src = lib.fileset.toSource {
+          root = unfilteredRoot;
+          fileset = lib.fileset.unions [
+            (craneLib.fileset.commonCargoSources unfilteredRoot)
+            ./server/migrations
+            ./server/.sqlx
+          ];
+        };
+
+        # let
+        #   fs = pkgs.lib.fileset;
+        #   serverDir = ./server;
+        # in
+        # fs.toSource {
+        #   root = serverDir;
+        #   fileset = fs.intersection (fs.gitTracked serverDir) (
+        #     fs.unions [
+        #       (serverDir + "/Cargo.toml")
+        #       (serverDir + "/Cargo.lock")
+        #       (serverDir + "/.sqlx")
+        #       (serverDir + "/src")
+        #       (serverDir + "/migrations")
+        #     ]
+        #   );
+        # };
 
         # let
         #   sqlxFilter = fpath: _type: builtins.match ".*\.sqlx/.*" fpath != null;
@@ -51,7 +61,8 @@
         commonArgs = {
           inherit src;
           strictDeps = true;
-          SQLX_OFFLINE = "true";
+          SQLX_OFFLINE = true;
+          SQLX_OFFLINE_DIR = ./server/.sqlx;
 
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = with pkgs; [
@@ -60,10 +71,15 @@
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
         api = craneLib.buildPackage (
           commonArgs
           // {
             inherit cargoArtifacts;
+
+            nativeBuildInputs = (commonArgs.nativeBuildInputs or [ ]) ++ [
+              pkgs.sqlx-cli
+            ];
 
             # don't run tests because i didnt write any meaningful ones
             doCheck = false;
