@@ -23,15 +23,27 @@
         rustToolchain = pkgs.rust-bin.stable.latest.default;
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-        src = craneLib.cleanCargoSource ./server;
+        src =
+          let
+            sqlxFilter = fpath: _type: builtins.match ".*\.sqlx/.*" fpath != null;
+            sourceFilter =
+              fpath: type:
+              (sqlxFilter fpath type) || (craneLib.filterCargoSources fpath type);
+          in
+          pkgs.lib.cleanSourceWith {
+            src = ./server;
+            filter = sourceFilter;
+          };
+
         commonArgs = {
           inherit src;
           strictDeps = true;
+          nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = with pkgs; [
             openssl
           ];
 
-          nativeBuildInputs = with pkgs; [ pkg-config ];
+          SQLX_OFFLINE = "true";
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -40,8 +52,7 @@
           // {
             inherit cargoArtifacts;
 
-            SQLX_OFFLINE = "true";
-            SQLX_OFFLINE_DIR = "./.sqlx";
+            # don't run tests because i didnt write any meaningful ones
             doCheck = false;
           }
         );
