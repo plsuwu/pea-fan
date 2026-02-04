@@ -1,31 +1,25 @@
 services: 
-  # ---
-  # TEMPO
-  # ---
   tempo:
     image: grafana/tempo:latest
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - ./conf/tempo.yaml:/etc/tempo.yaml
       - ./obsv-data/tempo:/tmp/tempo
-    ports:
-      - "3200:3200"   # tempo frontend
-      - "3201:3201"   # tempo metrics
+    networks:
+      - observability
+    # ports:
+    #   - "3200:3200"   # tempo frontend
+    #   - "3201:3201"   # tempo metrics
   
-  # ---
-  # LOKI
-  # ---
   loki:
     image: grafana/loki:latest
-    # command: -config.file=/etc/loki/local-config.yaml
-    ports:
-      - "3100:3100"
     volumes:
       - ./obsv-data/loki:/loki
+    networks:
+      - observability
+    # ports:
+    #   - "3100:3100"
 
-  # --- 
-  # PROMETHEUS
-  # ---
   prometheus:
     image: prom/prometheus:latest
     command:
@@ -35,12 +29,11 @@ services:
     volumes:
       - ./conf/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./obsv-data/prometheus:/prometheus
-    ports:
-      - "9090:9090"
+    networks:
+      - observability
+    # ports:
+    #   - "9090:9090"
 
-  # ---
-  # ALLOY
-  # ---
   alloy:
     image: grafana/alloy:latest
     command:
@@ -49,29 +42,42 @@ services:
       - --server.http.listen-addr=0.0.0.0:12345
     volumes:
       - ./conf/config.alloy:/etc/alloy/config.alloy
-    ports:
-      - "12345:12345"  # alloy interface
-      - "4317:4317"    # otlp grpc receiver
-      - "4318:4318"    # otlp http receiver
+    networks: 
+      - observability
+      - ingest
     depends_on:
       - loki
       - tempo
       - prometheus
+    # ports:
+    #   # - "12345:12345"  # alloy interface
+    #   - "127.0.0.1:4317:4317"    # otlp grpc receiver
+    #   - "127.0.0.1:4318:4318"    # otlp http receiver
   
-  # --- 
-  # GRAFANA
-  # ---
   grafana:
     image: grafana/grafana:latest
     ports:
       - "3000:3000"
     environment:
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+
     volumes:
       - ./obsv-data/grafana:/var/lib/grafana
       - ./conf/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+    networks:
+      - observability
+      - ingest
     depends_on:
       - loki
       - tempo
       - prometheus
+
+networks:
+  observability:
+    internal: true
+  ingest:
+    external: true
+    name: otel-ingest

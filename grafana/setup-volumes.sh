@@ -16,4 +16,6 @@ sudo chmod -R 755 obsv-data/tempo
 sudo chown -R 472:472 obsv-data/grafana
 sudo chmod -R 755 obsv-data/grafana
 
-docker compose up -d --remove-orphans
+docker network create otel-ingest
+
+docker compose up -d --remove-orphans && reset

@@ -1,62 +1,57 @@
-// OTLP trace ingest
 otelcol.receiver.otlp "default" {
   grpc {
-    endpoint = "0.0.0.0:4317"
+    endpoint    = "0.0.0.0:4317"
   }
   
   http {
-    endpoint = "0.0.0.0:4318"
+    endpoint    = "0.0.0.0:4318"
   }
 
   output {
-    logs    = [otelcol.processor.batch.default.input]
-    // logs    = [otelcol.processor.attributes.default.input]
-
-    metrics = [otelcol.processor.batch.default.input]
-    traces  = [otelcol.processor.batch.default.input]
+    metrics     = [otelcol.processor.batch.default.input]
+    traces      = [otelcol.processor.batch.default.input]
+    logs        = [otelcol.processor.batch.default.input]
   }
 }
 
-// batch processing
 otelcol.processor.batch "default" {
   output {
-    logs    = [otelcol.exporter.loki.default.input]
-    metrics = [otelcol.exporter.prometheus.default.input]
-    traces  = [otelcol.exporter.otlp.tempo.input]
+    metrics     = [otelcol.exporter.prometheus.default.input]
+    logs        = [otelcol.exporter.loki.default.input]
+    traces      = [otelcol.exporter.otlp.tempo.input]
   }
 }
 
-// trace data -> tempo
 otelcol.exporter.otlp "tempo" {
   client {
-    endpoint = "tempo:4317"
+    endpoint    = "tempo:4317"
+
     tls {
-      insecure = true
+      insecure  = true
     }
   }
 }
 
-// logs -> loki
 otelcol.exporter.loki "default" {
-  forward_to = [loki.write.default.receiver]
+  forward_to    = [loki.write.default.receiver]
+}
+
+otelcol.exporter.prometheus "default" {
+  forward_to    = [prometheus.remote_write.default.receiver]
 }
 
 loki.write "default" {
   endpoint {
-    url = "http://loki:3100/loki/api/v1/push"
+    url         = "http://loki:3100/loki/api/v1/push"
   }
-}
-
-// metrics -> prom
-otelcol.exporter.prometheus "default" {
-  forward_to = [prometheus.remote_write.default.receiver]
 }
 
 prometheus.remote_write "default" {
   endpoint {
-    url = "http://prometheus:9090/api/v1/write"
+    url         = "http://prometheus:9090/api/v1/write"
   }
 }
+
 
 livedebugging {
     enabled = true
