@@ -1,6 +1,6 @@
 import type { Entry, PaginatedRequest, PaginatedResponse } from "$lib/types";
 import type { RequestEvent } from "@sveltejs/kit";
-import { clamp, strToNum } from ".";
+import { capitalize, clamp, strToNum } from ".";
 import { URLS } from "$lib";
 import { logger } from "$lib/observability/server/logger.svelte";
 import { traced } from "$lib/observability/server/tracing";
@@ -25,13 +25,21 @@ export class FetchUtil {
 	): Promise<PaginatedResponse> {
 		let url = new URL(`${this.proto}://${this.api}/${variant}/leaderboard`);
 
-		const limit = strToNum(pagination.limit);
-		const page = strToNum(pagination.page);
+		logger.info({ pageinfo: { ...pagination } }, "pagination");
+
+		const scoreLimit = 7;
+		url.searchParams.append("score_limit", String(scoreLimit));
+
+		const limit = strToNum(pagination.limit) || 25;
+		const page = strToNum(pagination.page) || 0;
 
 		if (limit) url.searchParams.append("limit", String(limit));
 		if (page) url.searchParams.append("page", String(clamp(page - 1, 0)));
 
+		logger.info({ url }, "performing leaderboard fetch");
 		const response = await fetch!(url, { method: "GET" });
+
+		logger.info({ response }, "query response");
 
 		if (!response.ok) {
 			// the server SHOULD return some error info on error in its
@@ -40,6 +48,7 @@ export class FetchUtil {
 		}
 
 		const body = (await response.json()) as PaginatedResponse;
+		logger.debug({ _body: body }, "raw json response body");
 		logger.info({ leaderboard: { leaderboard: body, variant } });
 
 		if (body.total_pages < Number(pagination.page)) {
@@ -60,7 +69,7 @@ export class FetchUtil {
 		{ fetch }: Partial<RequestEvent>,
 		variant: "channel" | "chatter",
 		identVariant: "id" | "login",
-		ident: string,
+		ident: string
 		// pagination: PaginatedRequest
 	): Promise<Entry> {
 		const url = new URL(
@@ -68,12 +77,15 @@ export class FetchUtil {
 		);
 
 		const response = await fetch!(url, { method: "GET" });
+		const body = await response.json();
+
 		if (!response.ok) {
 			logger.error({ response }, "received error response from API");
+			return body;
 		}
 
-		const body = (await response.json()) as Entry;
-		logger.info({ entry: body });
+		const entry: Entry = { _tag: capitalize(variant), data: body };
+		logger.info({ entry }, "retrieved entry ok");
 
 		return body;
 	}

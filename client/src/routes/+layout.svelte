@@ -4,22 +4,67 @@
 	import favicon from "$lib/assets/favicon.svg";
 	import Menubar from "$lib/components/menu/menubar.svelte";
 	import { ModeWatcher } from "mode-watcher";
-	import { ChannelEntry } from "$lib/types/index.js";
+	import { type ChannelEntry } from "$lib/types/index";
 	import Channel from "$lib/components/channel/channel.svelte";
+	import { page } from "$app/state";
+	import { onMount } from "svelte";
 
 	let { data, children } = $props();
 	let { channel } = $derived(data);
+	let pageTitle = $derived.by(() => {
+		let title: string = "piss";
+		if (channel) {
+			title = `${channel} | ${title}`;
+		} else {
+			const currPath = page.url.pathname
+				.trim()
+				.split("/")
+				.filter((p) => p !== "");
+
+			if (currPath[1]) {
+				title = `${currPath[1]}s | ${title}`;
+			}
+		}
+
+		return title;
+	});
+
+	let shortcutHandler: HTMLDivElement;
+	onMount(() => {
+		if (shortcutHandler) {
+			console.log("focusing shortcut handler div");
+			shortcutHandler.focus();
+		}
+	});
+
+	function handleShortcut(event: KeyboardEvent) {
+		if (event.ctrlKey) {
+			if (event.key === "!") {
+				event.preventDefault();
+				console.log("!!!!!!");
+			} else if (event.key === "@") {
+				event.preventDefault();
+				console.log("@@@@@@");
+			}
+		}
+	}
 </script>
 
 <ModeWatcher />
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>"a"</title>
+	<title>{pageTitle}</title>
 </svelte:head>
 
-<div class="flex h-full w-full flex-col font-iosevka">
-	<div class="flex justify-end px-8 py-4">
+<div
+	class="flex h-full w-full flex-col font-iosevka focus:outline-0"
+	bind:this={shortcutHandler}
+	onkeydown={handleShortcut}
+	role="button"
+	tabindex="0"
+>
+	<div class="flex px-8 py-4">
 		<Menubar />
 	</div>
 	{#if channel}
@@ -28,5 +73,10 @@
 			leaderboard={data.leaderboard as unknown as ChannelEntry}
 		/>
 	{/if}
-	{@render children()}
+	<div class="flex h-full w-full flex-1 flex-col">
+		{@render children()}
+	</div>
+	<div class="mt-24 min-h-[250px] flex shrink items-end justify-center">
+		<div class=" text-center">placeholder</div>
+	</div>
 </div>

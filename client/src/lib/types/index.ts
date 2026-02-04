@@ -8,6 +8,7 @@ export type ChannelEntry = {
 	total_chatter: number;
 	total_channel: number;
 	chatter_scores?: Array<ChatterScore>;
+    total_scores: number;
 };
 
 export type ChatterEntry = {
@@ -19,6 +20,7 @@ export type ChatterEntry = {
 	ranking: number;
 	total: number;
 	channel_scores?: Array<ChannelScore>;
+    total_scores: number;
 };
 
 //
@@ -56,6 +58,8 @@ export type PaginatedResponse = {
 export type PaginatedRequest = {
 	limit: string;
 	page: string;
+    scoreLimit?: string;
+    scorePage?: string;
 };
 
 //

@@ -10,10 +10,18 @@ export const load: PageServerLoad = async ({
 	route,
 	url
 }) => {
+	if (locals.channel) {
+		locals.logger.warn(
+			{ variant: params.variant, route: route.id },
+			"global leaderboard routes invalid while on tenant"
+		);
+		redirect(302, "/");
+	}
+
 	if (!isValidVariant(params.variant)) {
 		locals.logger.warn(
 			{ variant: params.variant, route: route.id },
-			`using fallback route '/leaderboard/channel' (RX invalid URN variant '${params.variant}')`
+			`using fallback route '/leaderboard/channel' (invalid URN variant '${params.variant}')`
 		);
 
 		const newRoute = route.id.replace("[variant]", "channel");
@@ -21,6 +29,7 @@ export const load: PageServerLoad = async ({
 	}
 
 	let { limit, page } = Object.fromEntries(url.searchParams);
+
 	const result = await fetchUtil.fetchLeaderboard(
 		{ fetch },
 		params.variant as "channel" | "chatter",

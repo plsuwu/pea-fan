@@ -1,13 +1,9 @@
-import {
-	PUBLIC_CLIENT_SERVICE_NAME,
-	PUBLIC_CLIENT_SERVICE_VERSION
-} from "$env/static/public";
+import { PUBLIC_CLIENT_SERVICE_VERSION } from "$env/static/public";
 import pino, { type Logger, type LoggerOptions } from "pino";
 import type { Cache } from "./cache.svelte";
 import type { Span } from "@opentelemetry/api";
 import type { LogEntry, TelemetryPayload } from "../types";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
-import { traced } from "./tracing";
 import type {
 	ChannelEntry,
 	ChatterEntry,
@@ -15,6 +11,9 @@ import type {
 	PaginatedResponse,
 	Score
 } from "$lib/types";
+
+const TRUNC_BOARD_LEN = 3;
+const TRUNC_NESTED_LEN = 5;
 
 export type SerializableClientLogBatch = {
 	traceId: string;
@@ -98,26 +97,33 @@ export const serializeHandlers = {
 		if (entry._tag === "Channel") {
 			const len = entry.data.chatter_scores?.length || 0;
 			const scores =
-				entry.data.chatter_scores?.slice(0, 5).map((s) => {
+				entry.data.chatter_scores?.slice(0, TRUNC_NESTED_LEN).map((s) => {
 					const score: Score = { _tag: "Chatter", data: s };
 					return serializeHandlers.score(score);
 				}) || [];
+
+			if (len - TRUNC_NESTED_LEN > 0) {
+				scores.push(`...(${len - TRUNC_NESTED_LEN} more)`);
+			}
 			return {
 				channel: `${entry.data.login}:${entry.data.id}`,
-				scores: scores.length == 0 ? [] : [...scores, `...(${len - 5} more)`],
+				scores: scores.length == 0 ? [] : scores,
 				totalChannel: entry.data.total_channel
 			};
 		} else if (entry._tag === "Chatter") {
 			const len = entry.data.channel_scores?.length || 0;
 			const scores =
-				entry.data.channel_scores?.slice(0, 5).map((s) => {
+				entry.data.channel_scores?.slice(0, TRUNC_NESTED_LEN).map((s) => {
 					const score: Score = { _tag: "Channel", data: s };
 					return serializeHandlers.score(score);
 				}) || [];
 
+			if (len - TRUNC_NESTED_LEN > 0) {
+				scores.push(`...(${len - TRUNC_NESTED_LEN} more)`);
+			}
 			return {
 				chatter: `${entry.data.login}:${entry.data.id}`,
-				scores: scores.length == 0 ? [] : [...scores, `...(${len - 5} more)`],
+				scores: scores.length == 0 ? [] : scores,
 				total: entry.data.total
 			};
 		}
@@ -140,11 +146,11 @@ export const serializeHandlers = {
 	}) => {
 		const leaderboardSlice = new Array();
 		if (!leaderboard || !leaderboard.items) {
-			return "empty_leaderboard";
+			return "[EMPTY_LEADERBOARD]";
 		}
 
 		if (variant === "chatter") {
-			leaderboard.items?.slice(0, 3).forEach((item) => {
+			leaderboard.items?.slice(0, TRUNC_BOARD_LEN).forEach((item) => {
 				const entry: Entry = {
 					_tag: "Chatter",
 					data: item as ChatterEntry
@@ -153,7 +159,7 @@ export const serializeHandlers = {
 				leaderboardSlice.push(serializeHandlers.entry(entry));
 			});
 		} else {
-			leaderboard.items?.slice(0, 3).forEach((item) => {
+			leaderboard.items?.slice(0, TRUNC_BOARD_LEN).forEach((item) => {
 				const entry: Entry = {
 					_tag: "Channel",
 					data: item as ChannelEntry
@@ -227,6 +233,7 @@ const pinoLogger = (() => {
 			cache: (cache) => serializeHandlers.cache(cache),
 			span: (span) => serializeHandlers.span(span),
 			response: (res: Response) => serializeHandlers.response(res),
+			entry: (entry) => serializeHandlers.entry(entry),
 			leaderboard: ({ leaderboard, variant }) =>
 				serializeHandlers.leaderboard({ leaderboard, variant }),
 			clientLogEntry: ({ span, entry, payload, addr }) => {
