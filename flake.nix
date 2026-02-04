@@ -61,8 +61,8 @@
         commonArgs = {
           inherit src;
           strictDeps = true;
-          SQLX_OFFLINE = true;
-          SQLX_OFFLINE_DIR = ./server/.sqlx;
+          # SQLX_OFFLINE = true;
+          # SQLX_OFFLINE_DIR = ./server/.sqlx;
 
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = with pkgs; [
