@@ -1,9 +1,9 @@
 {
-  description = "piss.fan flake";
-
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    crane.url = "github:ipetkov/crane";
+    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
   outputs =
@@ -11,20 +11,64 @@
       self,
       nixpkgs,
       flake-utils,
+      crane,
+      rust-overlay,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        overlays = [ (import rust-overlay) ];
+        pkgs = import nixpkgs { inherit system overlays; };
 
-        pyPg = pkgs.python313.withPackages (
-          ps: with ps; [
-            psycopg
-          ]
+        rustToolchain = pkgs.rust-bin.stable.latest.default;
+        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+
+        src = craneLib.cleanCargoSource ./server;
+        commonArgs = {
+          inherit src;
+          strictDeps = true;
+          buildInputs = with pkgs; [
+            openssl
+          ];
+
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+        };
+
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        api = craneLib.buildPackage (
+          commonArgs
+          // {
+            inherit cargoArtifacts;
+            SQLX_OFFLINE = "true";
+          }
         );
+
+        client = pkgs.stdenv.mkDerivation {
+          pname = "piss-fan-client";
+          version = "1.0.0";
+          src = ./client;
+
+          nativeBuildInputs = [ pkgs.bun ];
+
+          buildPhase = ''
+            export HOME=$TMPDIR
+            bun install --frozen-lockfile
+            bun run build
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp -r dist/* $out/
+          '';
+        };
       in
       {
-        devShells.default = pkgs.mkShell {
+        packages = {
+          inherit client api;
+          default = api;
+        };
+
+        devShells.default = craneLib.devShell {
           buildInputs = with pkgs; [
             pkg-config
             openssl
@@ -44,7 +88,6 @@
             redis
 
             grafana-alloy
-            pyPg
           ];
 
           shellHook = ''
@@ -69,4 +112,3 @@
       }
     );
 }
-
