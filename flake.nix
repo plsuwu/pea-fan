@@ -25,25 +25,42 @@
 
         src =
           let
-            sqlxFilter = fpath: _type: builtins.match ".*\.sqlx/.*" fpath != null;
-            sourceFilter =
-              fpath: type:
-              (sqlxFilter fpath type) || (craneLib.filterCargoSources fpath type);
+            fs = pkgs.lib.fileset;
+            serverDir = ./server;
           in
-          pkgs.lib.cleanSourceWith {
-            src = ./server;
-            filter = sourceFilter;
+          fs.toSource {
+            root = serverDir;
+            fileset = fs.intersection (fs.gitTracked serverDir) (
+              fs.unions [
+                (serverDir + "/Cargo.toml")
+                (serverDir + "/Cargo.lock")
+                (serverDir + "/src")
+                (serverDir + "/.sqlx")
+                (serverDir + "/migrations")
+              ]
+            );
           };
+
+        # let
+        #   sqlxFilter = fpath: _type: builtins.match ".*\.sqlx/.*" fpath != null;
+        #   sourceFilter =
+        #     fpath: type:
+        #     (sqlxFilter fpath type) || (craneLib.filterCargoSources fpath type);
+        # in
+        # pkgs.lib.cleanSourceWith {
+        #   src = ./server;
+        #   filter = sourceFilter;
+        # };
 
         commonArgs = {
           inherit src;
           strictDeps = true;
+          SQLX_OFFLINE = "true";
+
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = with pkgs; [
             openssl
           ];
-
-          SQLX_OFFLINE = "true";
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
