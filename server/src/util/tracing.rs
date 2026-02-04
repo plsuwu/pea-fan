@@ -34,13 +34,13 @@ fn create_loki_layer(
 pub async fn build_subscriber() -> Result<trace::SdkTracerProvider> {
     // let provider = init_stdout_provider()?;
     let api_service_name = var!(Var::ApiServiceName).await?;
-    let loki_url = var!(Var::OtelLokiHttp).await?;
+    let otelcol_endpoint = var!(Var::OtelExporterEndpoint).await?;
     let tracer_name = var!(Var::ApiTracerName).await?;
     let api_tracer_name = "api_root_tracer";
-    let provider = init_provider(api_service_name)?;
+    let provider = init_provider(api_service_name, &otelcol_endpoint)?;
     let tracer = global::tracer(api_tracer_name);
 
-    let (loki_layer, loki_task) = create_loki_layer(api_service_name, loki_url)?;
+    let (loki_layer, loki_task) = create_loki_layer(api_service_name, &otelcol_endpoint)?;
 
     tracing_subscriber::registry()
         .with(loki_layer)
@@ -73,10 +73,10 @@ fn init_stdout_provider() -> Result<trace::SdkTracerProvider> {
     Ok(provider)
 }
 
-fn init_provider(service_name: &'static str) -> Result<trace::SdkTracerProvider> {
+fn init_provider(service_name: &'static str, endpoint: &str) -> Result<trace::SdkTracerProvider> {
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
-        .with_endpoint("http://localhost:4317/v1/traces")
+        .with_endpoint(endpoint)
         .with_timeout(Duration::from_secs(5))
         .build()?;
 
