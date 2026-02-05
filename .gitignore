@@ -47,3 +47,5 @@ redis_data/
 .redis-backup/
 *.old
 *.old/
+
+result/

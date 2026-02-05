@@ -16,53 +16,30 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        inherit (pkgs) lib;
-
         craneLib = crane.mkLib pkgs;
 
-        unfilteredRoot = ./server;
-        src = lib.fileset.toSource {
-          root = unfilteredRoot;
-          fileset = lib.fileset.unions [
-            (craneLib.fileset.commonCargoSources unfilteredRoot)
-            ./server/migrations
-            ./server/.sqlx
-          ];
-        };
-
-        # let
-        #   fs = pkgs.lib.fileset;
-        #   serverDir = ./server;
-        # in
-        # fs.toSource {
-        #   root = serverDir;
-        #   fileset = fs.intersection (fs.gitTracked serverDir) (
-        #     fs.unions [
-        #       (serverDir + "/Cargo.toml")
-        #       (serverDir + "/Cargo.lock")
-        #       (serverDir + "/.sqlx")
-        #       (serverDir + "/src")
-        #       (serverDir + "/migrations")
-        #     ]
-        #   );
-        # };
-
-        # let
-        #   sqlxFilter = fpath: _type: builtins.match ".*\.sqlx/.*" fpath != null;
-        #   sourceFilter =
-        #     fpath: type:
-        #     (sqlxFilter fpath type) || (craneLib.filterCargoSources fpath type);
-        # in
-        # pkgs.lib.cleanSourceWith {
-        #   src = ./server;
-        #   filter = sourceFilter;
-        # };
+        src =
+          let
+            fs = pkgs.lib.fileset;
+            unfilteredRoot = ./server;
+          in
+          fs.toSource {
+            root = unfilteredRoot;
+            fileset = fs.intersection (fs.gitTracked unfilteredRoot) (
+              fs.unions [
+                (unfilteredRoot + "/Cargo.toml")
+                (unfilteredRoot + "/Cargo.lock")
+                (unfilteredRoot + "/.sqlx")
+                (unfilteredRoot + "/src")
+                (unfilteredRoot + "/migrations")
+              ]
+            );
+          };
 
         commonArgs = {
           inherit src;
           strictDeps = true;
-          # SQLX_OFFLINE = true;
-          # SQLX_OFFLINE_DIR = ./server/.sqlx;
+          SQLX_OFFLINE = true;
 
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = with pkgs; [
@@ -76,10 +53,14 @@
           commonArgs
           // {
             inherit cargoArtifacts;
-
             nativeBuildInputs = (commonArgs.nativeBuildInputs or [ ]) ++ [
               pkgs.sqlx-cli
             ];
+
+            # unnecessary, perhaps
+            prebuild = ''
+              export SQLX_OFFLINE_DIR="./server/.sqlx" 
+            '';
 
             # don't run tests because i didnt write any meaningful ones
             doCheck = false;
@@ -104,10 +85,11 @@
         #     cp -r dist/* $out/
         #   '';
         # };
+
       in
       {
         packages = {
-          # inherit client;
+          # inherit api client;
           inherit api;
           default = api;
         };
