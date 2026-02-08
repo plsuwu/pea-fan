@@ -91,7 +91,7 @@ pub enum Var {
 #[macro_export]
 macro_rules! var {
     ($ev:expr) => {
-        crate::util::env::get_var($ev)
+        $crate::util::env::get_var($ev)
     };
 }
 
@@ -327,6 +327,7 @@ impl serde::de::Error for EnvDeserializeError {
 }
 
 impl<'a> Prefixed<'a> {
+    #[allow(clippy::wrong_self_convention)]
     pub fn from_env<T>(&self) -> Result<T, EnvDeserializeError>
     where
         T: serde::de::DeserializeOwned,
@@ -334,6 +335,7 @@ impl<'a> Prefixed<'a> {
         self.from_iter(dotenvy::vars())
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub fn from_iter<Iter, T>(&self, iter: Iter) -> Result<T, EnvDeserializeError>
     where
         T: serde::de::DeserializeOwned,

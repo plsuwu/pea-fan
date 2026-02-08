@@ -88,16 +88,16 @@ impl RedisKey {
     #[instrument]
     pub fn with_name(&self, name: &str) -> String {
         match self {
-            RedisKey::Score(prefix) => format!("{}{}:total", prefix, name),
-            RedisKey::Leaderboard(prefix) => format!("{}{}:leaderboard", prefix, name),
+            RedisKey::Score(prefix) => format!("{prefix}{name}:total"),
+            RedisKey::Leaderboard(prefix) => format!("{prefix}{name}:leaderboard"),
         }
     }
 
     #[instrument]
     pub fn wildcard(&self) -> String {
         match self {
-            RedisKey::Score(prefix) => format!("{}*:total", prefix),
-            RedisKey::Leaderboard(prefix) => format!("{}*:leaderboard", prefix),
+            RedisKey::Score(prefix) => format!("{prefix}*:total"),
+            RedisKey::Leaderboard(prefix) => format!("{prefix}*:leaderboard"),
         }
     }
 }
@@ -134,8 +134,8 @@ pub enum RedisErr {
     #[error(transparent)]
     ParseError(#[from] redis::ParsingError),
 
-    #[error("unable to parse resulting redis key")]
-    BadKey,
+    // #[error("unable to parse resulting redis key")]
+    // BadKey,
 
     #[error(transparent)]
     SqlxError(#[from] sqlx::error::Error),

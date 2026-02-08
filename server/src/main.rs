@@ -14,7 +14,8 @@ async fn main() -> Result<(), std::io::Error> {
     tracing::info!("starting main application");
 
     let channels_updated = util::channel::update_channels(None).await.unwrap();
-    let channel_names: Vec<String> = channels_updated.into_iter().map(|(chan, _)| chan).collect();
+    // let channel_names: Vec<String> = channels_updated.into_iter().map(|(chan, _)| chan).collect();
+    let channel_names: Vec<String> = channels_updated.into_keys().collect();
 
     let (tx_server_ready, rx_server_ready) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
     let (tx_to_client, rx_from_api) =

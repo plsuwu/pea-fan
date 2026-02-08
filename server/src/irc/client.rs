@@ -1,18 +1,16 @@
 use std::collections::HashSet;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, LazyLock, Mutex, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 use std::time::Duration;
 
 use futures::StreamExt;
-use irc::client::{ClientStream, prelude::*};
+use irc::client::prelude::*;
 use irc::proto::CapSubCommand;
 use irc::proto::message::Tag;
 use thiserror::Error;
 use tokio::sync::OnceCell;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot::Sender;
-use tokio::time::Interval;
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 
@@ -31,10 +29,10 @@ pub struct MpscChannels {
 
 #[derive(Debug)]
 pub enum IrcCommand {
-    Privmsg {
-        channel: String,
-        data: String,
-    },
+    // Privmsg {
+    //     channel: String,
+    //     data: String,
+    // },
     ReplyPm {
         channel: String,
         message: String,
@@ -195,20 +193,20 @@ pub async fn start_irc_handler(
                 }
 
                 Some(cmd) = irc_client.receiver.recv() => {
-                    match cmd {
-                        IrcCommand::ReplyPm { channel, message, reply_id } => {
+                    // match cmd {
+                        if let IrcCommand::ReplyPm { channel, message, reply_id } = cmd {
                             let reply_tag = vec![Tag(String::from("reply-parent-msg-id"), Some(reply_id))];
-                            let fmt_channel = format!("{}", channel);
+                            // let fmt_channel = channel;
                             let tagged_message =
-                                Message::with_tags(Some(reply_tag), None, "PRIVMSG", vec![&fmt_channel, &message])
+                                Message::with_tags(Some(reply_tag), None, "PRIVMSG", vec![&channel, &message])
                                         .unwrap();
                             match irc_client.client.send(tagged_message) {
                                 Ok(_) => tracing::debug!("send ok"),
                                 Err(e) => tracing::error!(error = ?e, "error while trying to send reply to IRC"),
                             }
-                        },
-                        _ => (),
-                    }
+                        }
+                    //     _ => (),
+                    // }
                 }
 
                 Some((msg, tx_to_api)) = rx_from_api.recv() => {
@@ -296,7 +294,7 @@ impl IrcConnection {
     /// ```
     #[instrument(skip(channels))]
     pub async fn init(channels: Vec<String>) -> IrcResult<(Self, MpscChannels)> {
-        let channel_rooms: Vec<String> = channels.iter().map(|chan| format!("#{}", chan)).collect();
+        let channel_rooms: Vec<String> = channels.iter().map(|chan| format!("#{chan}")).collect();
         tracing::info!(channels = ?channels, "channel list");
 
         let config = Config {
@@ -317,8 +315,8 @@ impl IrcConnection {
 
         let client = (
             Self {
-                config,
-                curr_jitter: 0,
+                // config,
+                // curr_jitter: 0,
                 client: connection,
                 channels: channel_rooms,
                 sender: msg_tx,
@@ -424,7 +422,7 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
                     tracing::info!(capabilities = ?caps, "RX::CAP_ACK");
                 }
 
-                if client.get_joined().len() == 0 {
+                if client.get_joined().is_empty() {
                     client.join_all_channels()?;
                 }
             }
@@ -479,18 +477,16 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
 
 #[instrument(skip(repo, chatter_id))]
 pub async fn chatter_by_id(repo: &ChatterRepository, chatter_id: &str) -> IrcResult<Chatter> {
-    Ok(repo
-        .get_by_id(&ChatterId(chatter_id.to_string()))
+    repo.get_by_id(&ChatterId(chatter_id.to_string()))
         .await?
-        .ok_or_else(|| IrcClientErr::SqlxError(sqlx::Error::RowNotFound))?)
+        .ok_or_else(|| IrcClientErr::SqlxError(sqlx::Error::RowNotFound))
 }
 
 #[instrument(skip(login))]
 pub async fn chatter_by_login(repo: &ChatterRepository, login: &str) -> IrcResult<Chatter> {
-    Ok(repo
-        .get_by_login(login.to_string())
+    repo.get_by_login(login.to_string())
         .await
-        .map_err(|err| IrcClientErr::SqlxError(err))?)
+        .map_err(IrcClientErr::SqlxError)
 }
 
 #[instrument(skip(rx, tx))]
@@ -538,9 +534,8 @@ pub async fn read_channel(
                     else if message.contains("piss")
                         && !ID_BLACKLIST.contains(&tags.user_id.as_str())
                     {
-                        let res = increment_score(pool, &tags).await?;
+                        increment_score(pool, &tags).await?;
                         tracing::info!(
-                            increment_result = ?res,
                             chatter = tags.user_login,
                             channel = tags.channel_name,
                             "incremented counter"
@@ -600,7 +595,7 @@ pub async fn make_query_response(
 }
 
 #[instrument(skip(pool, tags))]
-pub async fn increment_score<'a>(pool: &'static sqlx::PgPool, tags: &'a IrcTags) -> IrcResult<()> {
+pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> IrcResult<()> {
     let chatter_repo = ChatterRepository::new(pool);
     let chatter = chatter_repo.get_by_id(&tags.user_id.clone().into()).await?;
     let exists = chatter.is_some();
@@ -627,7 +622,7 @@ pub async fn increment_score<'a>(pool: &'static sqlx::PgPool, tags: &'a IrcTags)
     // tracing::debug!(pre_incr = ?pre_incr, "score prior to incrementing");
 
     // do transaction
-    match Tx::with_tx(&pool, |mut tx| async move {
+    match Tx::with_tx(pool, |mut tx| async move {
         let chatter_id = tags.user_id.clone().into();
         let channel_id = tags.channel_id.clone().into();
 
@@ -685,21 +680,23 @@ pub async fn send_to_reader(tx: &UnboundedSender<IrcMessage>, data: IrcMessage) 
     }
 }
 
-#[instrument(skip(rx))]
-pub async fn read_commands_channel(rx: &mut UnboundedReceiver<IrcCommand>) -> IrcResult<()> {
-    if let Some(msg) = rx.recv().await {
-        warn!(msg = ?msg, "RX (IN CLIENT)");
-    }
-
-    Ok(())
-}
+// #[instrument(skip(rx))]
+// pub async fn read_commands_channel(rx: &mut UnboundedReceiver<IrcCommand>) -> IrcResult<()> {
+//     if let Some(msg) = rx.recv().await {
+//         warn!(msg = ?msg, "RX (IN CLIENT)");
+//     }
+//
+//     Ok(())
+// }
 
 #[instrument(skip(msg, channel))]
 pub fn parse_tags(msg: &Message, channel: &str) -> IrcTags {
-    let mut result = IrcTags::default();
+    let mut result = IrcTags {
+        channel_name: channel.rsplit('#').next().unwrap_or("UNKNOWN").to_string(),
+        ..Default::default()
+    };
 
-    result.channel_name = channel.rsplit('#').next().unwrap_or("UNKNOWN").to_string();
-    for tag in msg.tags.clone().unwrap_or(Vec::new()) {
+    for tag in msg.tags.clone().unwrap_or_default() {
         match (tag.0.as_str(), tag.1) {
             ("room-id", Some(room_id)) => result.channel_id = room_id,
             ("display-name", Some(name)) => result.user_login = name.to_lowercase(),
@@ -713,17 +710,19 @@ pub fn parse_tags(msg: &Message, channel: &str) -> IrcTags {
     result
 }
 
-#[instrument(skip(command, channels, msg))]
+#[instrument(skip(command))]
 #[inline]
-pub fn parse_ttv_command(command: &str, channels: &Vec<String>, msg: &Message) {
+pub fn parse_ttv_command(command: &str, _: &Vec<String>, _: &Message) {
+    #[allow(clippy::match_single_binding)]
     match command {
         _ => (),
     }
 }
 
-#[instrument(skip(response, parts, msg))]
+#[instrument(skip(response, parts))]
 #[inline]
-pub fn parse_ttv_response(response: &Response, parts: &Vec<String>, msg: &Message) {
+pub fn parse_ttv_response(response: &Response, parts: &[String], _: &Message) {
+    #[allow(clippy::single_match)]
     match response {
         Response::RPL_MOTD => {
             info!(username = parts[0], motd = parts[1], "MOTD RX");
@@ -733,14 +732,14 @@ pub fn parse_ttv_response(response: &Response, parts: &Vec<String>, msg: &Messag
     }
 }
 
-#[instrument(skip(stream))]
-pub async fn read_incoming(stream: &mut ClientStream) -> Option<Message> {
-    if let Ok(incoming) = stream.select_next_some().await {
-        return Some(incoming);
-    }
-
-    None
-}
+// #[instrument(skip(stream))]
+// pub async fn read_incoming(stream: &mut ClientStream) -> Option<Message> {
+//     if let Ok(incoming) = stream.select_next_some().await {
+//         return Some(incoming);
+//     }
+//
+//     None
+// }
 
 const TTV_IRC_URI: &str = "irc.chat.twitch.tv";
 const TTV_IRC_PORT: u16 = 6697;
@@ -790,8 +789,8 @@ impl From<TtvCap> for Capability {
 
 #[derive(Debug)]
 pub struct IrcConnection {
-    pub config: Config,
-    pub curr_jitter: u8,
+    // pub config: Config,
+    // pub curr_jitter: u8,
     pub client: Client,
     pub channels: Vec<String>,
     pub sender: UnboundedSender<IrcMessage>,
@@ -836,7 +835,8 @@ mod test {
             tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
 
         let tracked_channels = update_channels(None).await.unwrap();
-        let channels = tracked_channels.into_iter().map(|(chan, _)| chan).collect();
+        let channels = tracked_channels.into_keys().collect();
+        // let channels = tracked_channels.into_iter().map(|(chan, _)| chan).collect();
 
         let mut handles = start_server(tx_server, tx_from_api, rx).await.unwrap();
         handles.extend(start_irc_handler(channels, rx_from_api).await.unwrap());

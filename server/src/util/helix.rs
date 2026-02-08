@@ -33,7 +33,7 @@ impl Helix {
     /// This is the preferred method for fetching a user's information, as an account's ID cannot
     /// be changed.
     #[instrument(skip(users), fields(user_count = users.len()))]
-    pub async fn fetch_users_by_id(users: &mut Vec<String>) -> HelixResult<Vec<HelixUser>> {
+    pub async fn fetch_users_by_id(users: &mut [String]) -> HelixResult<Vec<HelixUser>> {
         let mut retrieved = Vec::new();
         let uri_params = build_query_params(HelixParamType::Id, users);
 
@@ -58,9 +58,9 @@ impl Helix {
     /// Fetching via a login is far more fragile due to the impermanence of Twitch usernames. As such,
     /// `Helix::fetch_users_by_id` is preferred over this function.
     #[instrument(skip(users), fields(user_count = users.len()))]
-    pub async fn fetch_users_by_login(mut users: Vec<String>) -> HelixResult<Vec<HelixUser>> {
+    pub async fn fetch_users_by_login(users: Vec<String>) -> HelixResult<Vec<HelixUser>> {
         let mut retrieved = Vec::new();
-        let uri_params = build_query_params(HelixParamType::Login, &mut users);
+        let uri_params = build_query_params(HelixParamType::Login, &users);
 
         for (i, param) in uri_params.iter().enumerate() {
             let uri_users = format!("{}{}", String::from(HelixUri::Users), param);
@@ -116,7 +116,7 @@ impl Helix {
             .headers(headers)
             .send()
             .await
-            .map_err(|e| HelixErr::ReqwestError(e))
+            .map_err(HelixErr::ReqwestError)
     }
 
     /// Makes a request via the `DELETE` http verb
@@ -130,7 +130,7 @@ impl Helix {
             .headers(headers)
             .send()
             .await
-            .map_err(|e| HelixErr::ReqwestError(e))
+            .map_err(HelixErr::ReqwestError)
     }
 
     #[instrument]
@@ -147,7 +147,7 @@ impl Helix {
             .headers(headers)
             .send()
             .await
-            .map_err(|e| HelixErr::ReqwestError(e))
+            .map_err(HelixErr::ReqwestError)
     }
 
     /// Performs a GET request to a given URI and parses the response according to the specified
@@ -212,8 +212,7 @@ impl Helix {
             // ... implement some kind of backoff if we start to saturate this limit
         }
 
-        let res_body = res.json::<T>().await.map_err(|e| HelixErr::ReqwestError(e));
-        res_body
+        res.json::<T>().await.map_err(HelixErr::ReqwestError)
     }
 
     /// Attempts to refetch user data one-by-one for failed user fetch batches
@@ -227,9 +226,9 @@ impl Helix {
             users.into_iter().map(|user| {
                 //
                 // perform a copy of the param type here prior to move later
-                let param_type = param_type;
+                // let param_type = param_type;
                 async move {
-                    let params = build_query_params(param_type, &mut vec![user.to_string()]);
+                    let params = build_query_params(param_type, &[user.to_string()]);
                     let uri = format!("{}{}", String::from(HelixUri::Users), params[0]);
                     match Self::fetch_users::<HelixDataResponse<HelixUser>>(uri).await {
                         Ok(r) => {
@@ -241,7 +240,7 @@ impl Helix {
                             //   this appears to be due to querying for a user's `display_name` rather
                             //   than their `login`, but this is still probably a good sanity check to
                             //   have just in case.
-                            if r.data.len() > 0 {
+                            if !r.data.is_empty() {
                                 return Ok((r.data, user));
                             }
 
@@ -294,7 +293,7 @@ impl Helix {
     /// example, a user's chat color (if one is set).
     #[instrument(skip(users), fields(users_count = users.len()))]
     async fn fetch_auxilliary_data(users: &mut Vec<HelixUser>) -> HelixResult<Vec<HelixUser>> {
-        let mut colors = Self::fetch_colors(&users).await?;
+        let mut colors = Self::fetch_colors(users).await?;
 
         // ... space for future aux data fetching function calls :3
 
@@ -321,7 +320,7 @@ impl Helix {
 
     /// Fetches user chat colors if set.
     #[instrument(skip(users), fields(users_count = users.len()))]
-    pub async fn fetch_colors(users: &Vec<HelixUser>) -> HelixResult<Vec<HelixColor>> {
+    pub async fn fetch_colors(users: &[HelixUser]) -> HelixResult<Vec<HelixColor>> {
         let mut retrieved = Vec::new();
         let ids = users.iter().map(|user| user.id.clone()).collect::<Vec<_>>();
 
@@ -377,7 +376,7 @@ impl Helix {
         notif_type: StreamGenericRequestType,
     ) -> HelixResult<SubscriptionGenericData> {
         let key = verify_external::get_hmac_key().await?;
-        let body = StreamGenericRequest::new(&id.to_string(), &CALLBACK_ROUTE, &key, notif_type);
+        let body = StreamGenericRequest::new(&id.to_string(), CALLBACK_ROUTE, &key, notif_type);
 
         let uri = String::from(HelixUri::WebhookSubscriptions);
         let response = Self::post(uri, &body).await?;
@@ -494,13 +493,13 @@ pub fn build_query_params(param_type: HelixParamType, items: &[String]) -> Vec<S
         .map(|chunk| {
             let mut query = format!(
                 "?{}{}",
-                String::from(param_type.clone()),
+                String::from(param_type),
                 chunk[0].to_lowercase()
             );
             for val in &chunk[1..] {
                 query.push_str(&format!(
                     "&{}{}",
-                    String::from(param_type.clone()),
+                    String::from(param_type),
                     val.to_string().to_lowercase()
                 ));
             }
@@ -632,7 +631,7 @@ impl AuthHeaders {
 
 static HEADERS: LazyLock<OnceCell<AuthHeaders>> = LazyLock::new(OnceCell::new);
 pub async fn auth_headers() -> HelixResult<&'static AuthHeaders> {
-    HEADERS.get_or_try_init(|| AuthHeaders::new()).await
+    HEADERS.get_or_try_init(AuthHeaders::new).await
 }
 
 pub type HelixResult<T> = core::result::Result<T, HelixErr>;
@@ -679,12 +678,9 @@ mod test {
             let _span = tracing::info_span!("test_span").entered();
 
             let mut user_ids = vec![
-                "188503312", /* milia */
-                "478187203", /* myramors */
-            ]
-            .into_iter()
-            .map(|item| item.to_string())
-            .collect();
+                String::from("188503312"), /* milia */
+                String::from("478187203"), /* myramors */
+            ];
 
             let user_details = Helix::fetch_users_by_id(&mut user_ids).await.unwrap();
             assert_eq!(user_details.len(), user_ids.len());

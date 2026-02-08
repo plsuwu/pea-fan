@@ -38,7 +38,7 @@ pub fn constant_time_cmp(a: &str, b: &str) -> bool {
                 b_ptr = in(reg) right,
                 tmp = out(reg_byte) _,
                 res = inout(reg_byte) res,
-                options(pure, nomem, nostack)
+                options(nostack)
             );
         }
     }

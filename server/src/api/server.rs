@@ -8,7 +8,6 @@ use axum::middleware::{self, Next, from_fn};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use futures::future::join_all;
 use http::StatusCode;
 use redis::aio::ConnectionManager;
 use serde::Serialize;
@@ -32,6 +31,7 @@ use crate::var;
 
 pub type JsonResult<T> = core::result::Result<Json<T>, RouteError>;
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct AppState {
     pub db_pool: &'static PgPool,
@@ -71,7 +71,7 @@ pub async fn router(
         // chatter-related routes
         .route("/chatter/leaderboard", get(global_chatters))
         .route("/chatter/by-login/{login}", get(chatter_by_login))
-        .route("/chatter/by-id/{id}", get(channel_by_id))
+        .route("/chatter/by-id/{id}", get(chatter_by_id))
         //
         // proxied helix requests
         .route("/helix/by-login/{login}", get(helix_user_by_login))
@@ -101,7 +101,7 @@ pub async fn router(
     let socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
     let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
 
-    _ = tx.send(socket_addr).unwrap();
+    tx.send(socket_addr).unwrap();
     axum::serve(listener, app).await.unwrap()
 }
 
@@ -110,7 +110,7 @@ pub async fn router(
 /// # Notes
 ///
 /// Currently using this as a replacement for default axum route error handling, but perhaps this
-/// is better if implemented in a complementary manner...
+/// is better if implemented in a complementary manner?
 #[instrument(skip(request, next), fields(uri = request.uri().to_string()))]
 async fn log_route_errors(request: Request, next: Next) -> Response {
     let res = next.run(request).await;
@@ -148,6 +148,7 @@ pub async fn start_server(
     Ok(handles)
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum RouteError {
     #[error(transparent)]
@@ -203,7 +204,7 @@ impl IntoResponse for RouteError {
 
             RouteError::InvalidUser(ident) => (
                 StatusCode::BAD_REQUEST,
-                format!("invalid login or id '{}'", ident),
+                format!("invalid login or id '{ident}'"),
                 Some(self),
             ),
 
@@ -289,6 +290,7 @@ impl IntoResponse for RouteError {
 mod test {
     use super::*;
     use crate::util::tracing as otlp_trace;
+    use futures_util::future::join_all;
     use tokio::sync::oneshot::Sender;
 
     #[tokio::test]

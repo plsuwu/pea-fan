@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod dispatch;
 
 use axum::body::Body;

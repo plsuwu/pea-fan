@@ -69,7 +69,7 @@ impl ChannelLeaderboardRow {
         chatter_scores: Vec<ChatterScoreSummary>,
     ) -> ChannelLeaderboardEntry {
         ChannelLeaderboardEntry {
-            id: self.id.into(),
+            id: self.id,
             login: self.login,
             name: self.name,
             color: self.color,

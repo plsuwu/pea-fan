@@ -21,6 +21,7 @@ pub enum MiddlewareErr {
     UnspecifiedRingErr,
 }
 
+#[allow(dead_code)]
 pub async fn cors() -> MiddlewareResult<CorsLayer> {
     let cors_allowed = var!(Var::CorsAllowOrigins).await?;
 

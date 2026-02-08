@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use tracing::{self, instrument};
 
 use crate::api::webhook::{StreamGenericRequestType, WebhookError};
@@ -10,7 +12,7 @@ pub async fn reset_hooks(ids: &[String]) -> Result<()> {
     let active_hooks = Helix::get_active_subscriptions().await?;
     tracing::debug!(?active_hooks, "ACTIVE_HOOKS");
 
-    if active_hooks.len() != 0 {
+    if !active_hooks.is_empty() {
         Helix::delete_subscriptions(&active_hooks).await?;
     }
 

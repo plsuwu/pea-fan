@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// Base score table model
 #[derive(Debug, Clone, sqlx::FromRow)]
+#[allow(dead_code)]
 pub struct Score {
     pub channel_id: super::channel::ChannelId,
     pub chatter_id: super::chatter::ChatterId,

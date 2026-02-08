@@ -25,9 +25,9 @@ pub async fn update_channels(from_url: Option<&str>) -> ChannelResult<HashMap<St
 
 #[instrument(skip(channels))]
 pub async fn update_channels_by_name(
-    channels: &Vec<String>,
+    channels: &[String],
 ) -> ChannelResult<HashMap<String, Chatter>> {
-    let helix_users: Vec<HelixUser> = Helix::fetch_users_by_login(channels.clone()).await?;
+    let helix_users: Vec<HelixUser> = Helix::fetch_users_by_login(channels.to_owned()).await?;
     let ids: Vec<ChatterId> = helix_users.into_iter().map(|u| u.id.into()).collect();
 
     update_stored_channels(&ids).await
@@ -63,8 +63,10 @@ pub async fn update_stored_channels(ids: &[ChatterId]) -> ChannelResult<HashMap<
     let mut existing_chatters = chatter_repo.get_many_by_id(ids).await?;
 
     // TODO:
-    //  this SEEMS like it will be somewhat inefficient (i assume we are potentially
-    //  iterating over `existing_chatters` and checking values twice here, right?)
+    //  this SEEMS like it will be somewhat inefficient?? 
+    //
+    //  i assume we are potentially iterating over `existing_chatters` and
+    //  checking values twice here, right?
     for id in ids {
         // ... iter 1
         if !existing_chatters.iter().any(|e_br| &e_br.id == id) {
@@ -81,7 +83,7 @@ pub async fn update_stored_channels(ids: &[ChatterId]) -> ChannelResult<HashMap<
         }
     }
 
-    let channel_list = if requires_update.len() != 0 {
+    let channel_list = if !requires_update.is_empty() {
         tracing::info!(count = requires_update.len(), "refreshing channel data");
         get_and_refresh_chatter_data(&chatter_repo, &mut existing_chatters, &mut requires_update)
             .await?
@@ -115,7 +117,7 @@ pub async fn update_stored_channels(ids: &[ChatterId]) -> ChannelResult<HashMap<
 pub async fn get_and_refresh_chatter_data(
     repo: &ChatterRepository,
     existing: &mut Vec<Chatter>,
-    requires_update: &mut Vec<String>,
+    requires_update: &mut [String],
 ) -> ChannelResult<Vec<Chatter>> {
     let fetched = Helix::fetch_users_by_id(requires_update)
         .await?
@@ -133,7 +135,7 @@ pub async fn get_and_refresh_chatter_data(
     existing.retain(|e_br| !fetched.iter().any(|f_br| f_br.id == e_br.id));
     existing.extend_from_slice(&fetched);
 
-    repo.insert_many(&existing).await?;
+    repo.insert_many(existing).await?;
     tracing::debug!(
         refreshed_count = fetched.len(),
         old_total_count = pre_retain,

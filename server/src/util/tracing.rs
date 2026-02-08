@@ -4,10 +4,8 @@ use opentelemetry::{KeyValue, global};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::trace::{self, RandomIdGenerator, Sampler, SdkTracerProvider};
-use tracing::instrument::WithSubscriber;
 use tracing_loki::url;
 use tracing_subscriber::Layer;
-use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::util::env::Var;
@@ -24,7 +22,7 @@ fn create_loki_layer(
 )> {
     let (layer, task) = tracing_loki::builder()
         .label("service_name", service_name)?
-        .label("environment", "development".to_string())?
+        .label("environment", "development")?
         .extra_field("pid", format!("{}", std::process::id()))?
         .build_url(url::Url::parse(loki_url)?)?;
 
@@ -32,15 +30,21 @@ fn create_loki_layer(
 }
 
 pub async fn build_subscriber() -> Result<trace::SdkTracerProvider> {
-    // let provider = init_stdout_provider()?;
     let api_service_name = var!(Var::ApiServiceName).await?;
     let otelcol_endpoint = var!(Var::OtelExporterEndpoint).await?;
-    let tracer_name = var!(Var::ApiTracerName).await?;
-    let api_tracer_name = "api_root_tracer";
-    let provider = init_provider(api_service_name, &otelcol_endpoint)?;
+    let api_tracer_name = var!(Var::ApiTracerName).await?;
+        
+    // NOTE: 
+    //  if debugging without telemetry collection, use `init_stdout_provider`
+    //  over `init_provider`:
+    //
+    // ```
+    // let provider = init_stdout_provider()?;
+    // ```
+    let provider = init_provider(api_service_name, otelcol_endpoint)?;
     let tracer = global::tracer(api_tracer_name);
 
-    let (loki_layer, loki_task) = create_loki_layer(api_service_name, &otelcol_endpoint)?;
+    let (loki_layer, loki_task) = create_loki_layer(api_service_name, otelcol_endpoint)?;
 
     tracing_subscriber::registry()
         .with(loki_layer)
@@ -61,6 +65,9 @@ pub async fn build_subscriber() -> Result<trace::SdkTracerProvider> {
     Ok(provider)
 }
 
+/// Intended for development purposes to enable tracing + logging to console without 
+/// requiring external OTEL collection
+#[allow(dead_code)]
 fn init_stdout_provider() -> Result<trace::SdkTracerProvider> {
     let exporter = opentelemetry_stdout::SpanExporter::default();
     let provider = SdkTracerProvider::builder()
@@ -100,6 +107,6 @@ fn init_provider(service_name: &'static str, endpoint: &str) -> Result<trace::Sd
 
 pub fn destroy_tracer(provider: SdkTracerProvider) {
     if let Err(err) = provider.shutdown() {
-        eprintln!("error during tracer provider shutdown: {:#?}", err);
+        eprintln!("error during tracer provider shutdown: {err:#?}");
     }
 }

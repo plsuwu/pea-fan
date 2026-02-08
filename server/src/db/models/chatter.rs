@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use core::fmt;
 
 use chrono::{NaiveDateTime, Utc};
@@ -6,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     db::{
         models::channel::{ChannelId, ChannelScoreSummary},
-        repositories::leaderboard::ScorePagination,
+        // repositories::leaderboard::ScorePagination,
     },
     util::helix::HelixUser,
 };

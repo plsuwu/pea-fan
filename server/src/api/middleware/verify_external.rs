@@ -16,13 +16,14 @@ use crate::util::constant_time_cmp;
 
 static KEY: LazyLock<OnceCell<Hmac>> = LazyLock::new(OnceCell::new);
 async fn get_hmac_struct() -> MiddlewareResult<&'static Hmac> {
-    Ok(KEY.get_or_try_init(|| async { Hmac::new() }).await?)
+    KEY.get_or_try_init(|| async { Hmac::new() }).await
 }
 
 pub async fn get_hmac_key() -> MiddlewareResult<String> {
     Ok(get_hmac_struct().await?.hex.clone())
 }
 
+#[allow(dead_code)]
 pub struct Hmac {
     pub key: Key,
     pub digest: [u8; digest::SHA256_OUTPUT_LEN],
@@ -54,9 +55,9 @@ impl fmt::Display for Hmac {
 pub struct VerifiedBody(pub Bytes);
 
 impl VerifiedBody {
-    pub fn as_bytes(&self) -> &Bytes {
-        &self.0
-    }
+    // pub fn as_bytes(&self) -> &Bytes {
+    //     &self.0
+    // }
 
     pub fn as_json<T>(&self) -> Result<T, serde_json::Error>
     where
@@ -98,10 +99,10 @@ async fn verify_signature(headers: &HeaderMap, body: &Bytes) -> Result<(), Statu
             .key;
 
         let signed = hmac::sign(key, &rebuilt_message);
-        format!("{}{}", HMAC_PREFIX, hex::encode(&signed))
+        format!("{}{}", HMAC_PREFIX, hex::encode(signed))
     };
 
-    if constant_time_cmp(&extern_signature, &expected_signature) {
+    if constant_time_cmp(extern_signature, &expected_signature) {
         return Ok(());
     }
 
@@ -150,8 +151,8 @@ where
     }
 }
 
-pub const HMAC_PREFIX: &'static str = "sha256=";
-pub const TWITCH_MESSAGE_ID: &'static str = "Twitch-Eventsub-Message-Id";
-pub const TWITCH_MESSAGE_TIMESTAMP: &'static str = "Twitch-Eventsub-Message-Timestamp";
-pub const TWITCH_MESSAGE_SIGNATURE: &'static str = "Twitch-Eventsub-Message-Signature";
+pub const HMAC_PREFIX: &str = "sha256=";
+pub const TWITCH_MESSAGE_ID: &str = "Twitch-Eventsub-Message-Id";
+pub const TWITCH_MESSAGE_TIMESTAMP: &str = "Twitch-Eventsub-Message-Timestamp";
+pub const TWITCH_MESSAGE_SIGNATURE: &str = "Twitch-Eventsub-Message-Signature";
 pub const TWITCH_MESSAGE_TYPE_HEADER: &str = "Twitch-Eventsub-Message-Type";

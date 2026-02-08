@@ -10,7 +10,7 @@ use crate::db::models::chatter::{
     ChatterId, ChatterLeaderboardEntry, ChatterLeaderboardRow, ChatterScoreSummary,
 };
 use crate::db::prelude::{
-    Channel, ChannelRepository, Chatter, ChatterRepository, Repository, Score, ScoreSummary, Tx,
+    Channel, ChannelRepository, Chatter, ChatterRepository, Repository, Score, ScoreSummary,
 };
 
 pub struct LeaderboardRepository {
@@ -179,7 +179,6 @@ impl LeaderboardRepository {
                     .iter()
                     .filter(|s| s.channel_id == ch.id)
                     .cloned()
-                    .map(|s| s.into())
                     .collect();
 
                 Ok(Some(ch.into_leaderboard_entry(chatter_scores)))
@@ -231,7 +230,6 @@ impl LeaderboardRepository {
                     .iter()
                     .filter(|s| s.chatter_id == ch.id)
                     .cloned()
-                    .map(|s| s.into())
                     .collect();
 
                 Ok(Some(ch.into_leaderboard_entry(score_summaries)))
@@ -284,10 +282,10 @@ impl LeaderboardRepository {
 
         let ids = &chatters
             .iter()
-            .map(|c| c.id.clone().into())
+            .map(|c| c.id.clone())
             .collect::<Vec<_>>();
         let scores = if !ids.is_empty() {
-            self.get_channel_scores_batch(&ids, &score_pagination)
+            self.get_channel_scores_batch(ids, &score_pagination)
                 .await?
         } else {
             Vec::new()
@@ -299,7 +297,6 @@ impl LeaderboardRepository {
                 .iter()
                 .filter(|s| s.chatter_id == chatter.id)
                 .cloned()
-                .map(|s| s.into())
                 .collect();
 
             entries.push(chatter.into_leaderboard_entry(score_summaries));
@@ -353,7 +350,7 @@ impl LeaderboardRepository {
         .fetch_all(self.pool)
         .await?;
 
-        let ids: Vec<ChannelId> = channels.iter().map(|ch| ch.id.clone().into()).collect();
+        let ids: Vec<ChannelId> = channels.iter().map(|ch| ch.id.clone()).collect();
         let scores = if !ids.is_empty() {
             self.get_chatter_scores_batch(&ids, score_pagination)
                 .await?
@@ -367,7 +364,6 @@ impl LeaderboardRepository {
                 .iter()
                 .filter(|s| s.channel_id == channel.id)
                 .cloned()
-                .map(|s| s.into())
                 .collect();
 
             entries.push(channel.into_leaderboard_entry(score_summaries));
@@ -387,7 +383,7 @@ impl LeaderboardRepository {
         ids: &[ChannelId],
         score_pagination: &ScorePagination,
     ) -> SqlxResult<Vec<ChatterScoreSummary>> {
-        let ids: &[String] = &ids.iter().map(|id| id.0.clone().into()).collect::<Vec<_>>();
+        let ids: &[String] = &ids.iter().map(|id| id.0.clone()).collect::<Vec<_>>();
 
         #[derive(sqlx::FromRow)]
         struct TempRow {
@@ -445,13 +441,13 @@ impl LeaderboardRepository {
             .collect())
     }
 
-    #[instrument(skip(self, ids, score_pagination))]
+    #[instrument(skip(self, ids))]
     async fn get_channel_scores_batch(
         &self,
         ids: &[ChatterId],
-        score_pagination: &ScorePagination,
+        _: &ScorePagination,
     ) -> SqlxResult<Vec<ChannelScoreSummary>> {
-        let ids: &[String] = &ids.iter().map(|id| id.0.clone().into()).collect::<Vec<_>>();
+        let ids: &[String] = &ids.iter().map(|id| id.0.clone()).collect::<Vec<_>>();
 
         #[derive(sqlx::FromRow)]
         struct TempRow {

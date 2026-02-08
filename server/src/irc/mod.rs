@@ -2,10 +2,9 @@ use tinyrand::{Rand, RandRange, Seeded, StdRand};
 use tinyrand_std::ClockSeed;
 
 pub mod client;
-pub mod jitter;
 
 pub fn idx(max: usize) -> usize {
-    let seed = ClockSeed::default().next_u64();
+    let seed = ClockSeed.next_u64();
     let mut rng = StdRand::seed(seed);
 
     rng.next_range(0..max)
@@ -14,7 +13,7 @@ pub fn idx(max: usize) -> usize {
 pub enum ReplyReason {
     RowNotFound,
     BotCountQueried,
-    FoundChatter,
+    // FoundChatter,
 }
 
 impl ReplyReason {
@@ -22,7 +21,7 @@ impl ReplyReason {
         let reasons = match self {
             ReplyReason::BotCountQueried => Self::BOT_COUNT_QUERY,
             ReplyReason::RowNotFound => Self::ROW_NOT_FOUND_QUERY,
-            ReplyReason::FoundChatter => todo!(),
+            // ReplyReason::FoundChatter => todo!(),
         };
 
         reasons[idx(reasons.len() - 1)]

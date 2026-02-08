@@ -3,9 +3,7 @@
 use core::fmt;
 
 use async_trait::async_trait;
-use futures::future::BoxFuture;
-use sqlx::{Database, Pool, Postgres, Result as SqlxResult, Transaction};
-use sqlx::{Encode, Executor, IntoArguments};
+use sqlx::{Pool, Postgres, Result as SqlxResult, Transaction};
 use tracing::instrument;
 
 use crate::db::models::channel::ChannelId;

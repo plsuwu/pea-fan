@@ -1,4 +1,6 @@
-use std::collections::{HashMap, HashSet};
+#![allow(dead_code)]
+
+use std::collections::HashMap;
 
 use redis::{AsyncCommands, CopyOptions, from_redis_value};
 use tracing::{instrument, warn};
@@ -81,7 +83,7 @@ impl Migrator {
 
         let chatter_repo = ChatterRepository::new(pool);
         let channel_repo = ChannelRepository::new(pool);
-        let score_repo = LeaderboardRepository::new(pool);
+        // let score_repo = LeaderboardRepository::new(pool);
 
         chatter_repo.insert_many(&broadcasters).await?;
         tracing::info!(
@@ -127,7 +129,7 @@ impl Migrator {
         // --
         {
             let _span = tracing::debug_span!("sort_and_validate").entered();
-            chatter_logins.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+            chatter_logins.sort_by_key(|a| a.to_lowercase());
             fetched.sort_by(|a, b| a.login.to_lowercase().cmp(&b.login.to_lowercase()));
 
             assert_eq!(chatter_logins.len(), fetched.len());
@@ -144,8 +146,7 @@ impl Migrator {
                     assert_eq!(
                         chatter_logins[i].to_lowercase(),
                         fetched[i].login.to_lowercase(),
-                        "(at index {}) alignment check failed",
-                        i
+                        "(at index {i}) alignment check failed"
                     );
                 }
                 tracing::debug!("validated chatter-login alignment");
@@ -156,8 +157,7 @@ impl Migrator {
                         assert_eq!(
                             chatter_logins[i].to_lowercase(),
                             fetched[i].login.to_lowercase(),
-                            "(at index {}) sample alignment check failed",
-                            i
+                            "(at index {i}) sample alignment check failed"
                         );
                     }
                 }
@@ -250,7 +250,7 @@ impl Migrator {
             );
         }
 
-        processed_keys.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        processed_keys.sort_by_key(|a| a.to_lowercase());
         let pre_dedup = processed_keys.len();
         processed_keys.dedup_by(|a, b| a.to_lowercase().eq(&b.to_lowercase()));
 
@@ -287,7 +287,7 @@ impl Migrator {
             );
         }
 
-        processed_keys.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        processed_keys.sort_by_key(|a| a.to_lowercase());
         let pre_dedup = processed_keys.len();
         processed_keys.dedup_by(|a, b| a.to_lowercase().eq(&b.to_lowercase()));
 
@@ -307,7 +307,7 @@ impl Migrator {
 
     #[instrument(skip(chatters, channel_map), fields(chatter_count = chatters.len(), channel_count = channel_map.len()))]
     pub async fn merge_leaderboards(
-        chatters: &Vec<HelixUser>,
+        chatters: &[HelixUser],
         redis_keys: &Vec<String>,
         channel_map: &HashMap<String, Channel>,
     ) -> RedisResult<HashMap<String, HashMap<String, i32>>> {
@@ -336,7 +336,7 @@ impl Migrator {
             let mut mapped_scores = HashMap::new();
             // let mut should_update = HashSet::new();
 
-            for (idx, score) in scores.chunks_exact(2).enumerate() {
+            for  score in scores.chunks_exact(2) {
                 total_scores += 1;
                 let channel_key = &score[0];
                 let channel_login = channel_key
@@ -498,8 +498,8 @@ impl Migrator {
 
     #[instrument(skip(users, redis_keys), fields(count = users.len()))]
     pub async fn merge_chatters(
-        users: &mut Vec<HelixUser>,
-        redis_keys: &Vec<String>,
+        users: &mut [HelixUser],
+        redis_keys: &[String],
     ) -> RedisResult<Vec<Chatter>> {
         tracing::debug!("building redis pipeline for chatter totals");
 
@@ -617,7 +617,7 @@ impl Migrator {
         pipeline.zinterstore(new_channel_lb, old_channel_lb);
         pipeline.zinterstore(new_user_lb, old_user_lb);
 
-        let (): _ = pipeline.query_async(&mut conn).await?;
+        let () = pipeline.query_async(&mut conn).await?;
 
         tracing::info!("updated cached keys");
         Ok(())
@@ -629,7 +629,7 @@ impl Migrator {
 
 #[cfg(test)]
 mod test {
-    use opentelemetry::trace::Tracer;
+    // use opentelemetry::trace::Tracer;
 
     use super::*;
 
@@ -661,7 +661,7 @@ mod test {
                 .unwrap();
         }
 
-        let _migrator = Migrator::new().preprocess().await.unwrap();
+        Migrator::new().preprocess().await.unwrap();
 
         crate::util::tracing::destroy_tracer(provider);
 
