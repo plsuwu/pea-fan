@@ -63,7 +63,7 @@ pub async fn update_stored_channels(ids: &[ChatterId]) -> ChannelResult<HashMap<
     let mut existing_chatters = chatter_repo.get_many_by_id(ids).await?;
 
     // TODO:
-    //  this SEEMS like it will be somewhat inefficient?? 
+    //  this SEEMS like it will be somewhat inefficient??
     //
     //  i assume we are potentially iterating over `existing_chatters` and
     //  checking values twice here, right?
@@ -168,16 +168,18 @@ const CHANNELS_LIST_URL: &str =
 
 #[cfg(test)]
 mod test {
+    use crate::util::telemetry;
+
     use super::*;
 
     #[tokio::test]
     async fn test_channel_fetch() {
-        let provider = crate::util::tracing::build_subscriber().await.unwrap();
+        let provider = telemetry::Telemetry::new().await.unwrap().register();
         let test_chans =
             Some("https://storage.googleapis.com/scope-shaky-majority/test-channels-20252325.txt");
 
         assert!(update_channels(test_chans).await.is_ok());
 
-        crate::util::tracing::destroy_tracer(provider);
+        provider.shutdown();
     }
 }

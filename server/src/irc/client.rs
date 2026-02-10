@@ -804,13 +804,13 @@ mod test {
 
     use futures::future::join_all;
 
-    use crate::{api::server::start_server, util::channel::update_channels};
+    use crate::{api::server::start_server, util::{channel::update_channels, telemetry}};
 
     use super::*;
 
     #[tokio::test]
     async fn test_channel_handler_small() {
-        let provider = crate::util::tracing::build_subscriber().await.unwrap();
+        let provider = telemetry::Telemetry::new().await.unwrap().register();
 
         let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
         let (tx_from_api, rx_from_api) =
@@ -824,12 +824,13 @@ mod test {
         handles.extend(start_irc_handler(channels, rx_from_api).await.unwrap());
 
         _ = join_all(handles).await;
-        crate::util::tracing::destroy_tracer(provider);
+        provider.shutdown();
     }
 
     #[tokio::test]
     async fn test_channel_handler_all() {
-        let provider = crate::util::tracing::build_subscriber().await.unwrap();
+        let provider = telemetry::Telemetry::new().await.unwrap().register();
+
         let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
         let (tx_from_api, rx_from_api) =
             tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
@@ -842,7 +843,7 @@ mod test {
         handles.extend(start_irc_handler(channels, rx_from_api).await.unwrap());
 
         _ = join_all(handles).await;
-
-        crate::util::tracing::destroy_tracer(provider);
+        
+        provider.shutdown();
     }
 }

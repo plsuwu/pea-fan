@@ -289,13 +289,13 @@ impl IntoResponse for RouteError {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::util::tracing as otlp_trace;
+    use crate::util::telemetry as otlp_trace;
     use futures_util::future::join_all;
     use tokio::sync::oneshot::Sender;
 
     #[tokio::test]
     async fn test_run_server() {
-        let provider = otlp_trace::build_subscriber().await.unwrap();
+        let provider = otlp_trace::Telemetry::new().await.unwrap().register();
 
         let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
         let (tx_from_api, rx_from_api) =
@@ -314,7 +314,7 @@ mod test {
         );
 
         _ = join_all(handles).await;
-
-        otlp_trace::destroy_tracer(provider);
+        
+        provider.shutdown();
     }
 }

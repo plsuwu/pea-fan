@@ -37,7 +37,10 @@ mod test {
 
     #[tokio::test]
     async fn test_hooks() {
-        let provider = crate::util::tracing::build_subscriber().await.unwrap();
+        let provider = crate::util::telemetry::Telemetry::new()
+            .await
+            .unwrap()
+            .register();
 
         let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
         let (tx_from_api, rx_from_api) =
@@ -59,8 +62,6 @@ mod test {
         Helix::delete_subscriptions(&hooks).await.unwrap();
 
         _ = join_all(handles).await;
-        crate::util::tracing::destroy_tracer(provider);
-
-
+        provider.shutdown();
     }
 }

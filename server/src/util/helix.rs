@@ -668,11 +668,13 @@ pub enum HelixErr {
 
 #[cfg(test)]
 mod test {
+    use crate::util::telemetry;
+
     use super::*;
 
     #[tokio::test]
     async fn test_fetch_user_by_id() {
-        let provider = crate::util::tracing::build_subscriber().await.unwrap();
+        let provider = telemetry::Telemetry::new().await.unwrap().register();
 
         {
             let _span = tracing::info_span!("test_span").entered();
@@ -685,7 +687,7 @@ mod test {
             let user_details = Helix::fetch_users_by_id(&mut user_ids).await.unwrap();
             assert_eq!(user_details.len(), user_ids.len());
         }
-
-        crate::util::tracing::destroy_tracer(provider);
+        
+        provider.shutdown();
     }
 }

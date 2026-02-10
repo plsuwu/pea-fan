@@ -1,7 +1,7 @@
 pub mod channel;
 pub mod env;
 pub mod helix;
-pub mod tracing;
+pub mod telemetry;
 
 use std::arch::asm;
 

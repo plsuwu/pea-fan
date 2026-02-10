@@ -629,8 +629,7 @@ impl Migrator {
 
 #[cfg(test)]
 mod test {
-    // use opentelemetry::trace::Tracer;
-
+    use crate::util::telemetry;
     use super::*;
 
     #[tokio::test]
@@ -645,7 +644,7 @@ mod test {
     /// This would be good to serve as an endpoint so we can just update without rebuilding,
     /// but it needs to be more robust before this should be implemented.
     async fn run_updater() {
-        let provider = crate::util::tracing::build_subscriber().await.unwrap();
+        let provider = telemetry::Telemetry::new().await.unwrap().register();
 
         // [
         //      "old_name_1", "new_name_1",
@@ -663,7 +662,7 @@ mod test {
 
         Migrator::new().preprocess().await.unwrap();
 
-        crate::util::tracing::destroy_tracer(provider);
+        provider.shutdown();
 
         // let mut conn = redis_pool().await.unwrap().manager.clone();
         // let mut pipeline = redis::pipe();
