@@ -1,14 +1,21 @@
 use std::sync::Arc;
 
-use axum::extract::{Path, Query, State};
+use axum::body::{Body, HttpBody};
+use axum::extract::{self, Path, Query, State};
 use axum::{Json, debug_handler};
+use http::{HeaderMap, StatusCode};
+use serde_json::Value;
 use tokio::sync::oneshot;
 use tracing::instrument;
 
+use crate::api::middleware::verify_external::VerifiedBody;
 use crate::api::server::{AppState, JsonResult, RouteError};
 use crate::db::models::{PaginatedResponse, Pagination};
 use crate::db::prelude::{ChannelLeaderboardEntry, Repository};
 use crate::db::prelude::{ChatterLeaderboardEntry, ChatterRepository, LeaderboardRepository};
+use crate::db::redis::migrator::{
+    Aliases, Migrator, update_historic_channel, update_historic_user,
+};
 use crate::db::repositories::leaderboard::ScorePagination;
 use crate::util::helix::{Helix, HelixUser};
 
@@ -174,4 +181,46 @@ pub async fn helix_user_by_id(Path(id): Path<String>) -> JsonResult<Vec<HelixUse
     let helix_user = Helix::fetch_users_by_id(&mut ids).await?;
 
     Ok(Json(helix_user))
+}
+
+#[instrument(skip(payload))]
+pub async fn update_chatter_in_cache(
+    Json(payload): Json<Value>,
+) -> Result<Json<String>, StatusCode> {
+    let json_body: Aliases =
+        serde_json::from_value::<Aliases>(payload).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    match update_historic_user(json_body).await {
+        Ok(_) => Ok(Json(String::from("OK"))),
+        Err(e) => return Ok(Json(e.to_string())),
+    }
+}
+
+#[instrument(skip(payload))]
+pub async fn update_channel_in_cache(
+    Json(payload): Json<Value>,
+) -> Result<Json<String>, StatusCode> {
+    tracing::debug!(?payload, "RX post");
+    let json_body: Aliases =
+        serde_json::from_value::<Aliases>(payload).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    match update_historic_user(json_body.clone()).await {
+        Ok(_) => (),
+        Err(e) => return Ok(Json(e.to_string())),
+    };
+
+    match update_historic_channel(json_body).await {
+        Ok(_) => Ok(Json(String::from("OK"))),
+        Err(e) => return Ok(Json(e.to_string())),
+    }
+}
+
+#[instrument(skip(_headers))]
+pub async fn run_cache_migration(_headers: HeaderMap) -> Result<Json<String>, StatusCode> {
+
+    // this blocks for ages so maybe we run these updater functions on a separate thread
+    match Migrator::new().process().await {
+        Ok(_) => Ok(Json(String::from("OK"))),
+        Err(e) => return Ok(Json(e.to_string())),
+    }
 }

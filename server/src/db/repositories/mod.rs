@@ -187,6 +187,7 @@ impl<'a> Tx<'a> {
     }
 
     #[instrument(skip(self, chatter_id, channel_id, score))]
+    /// Alternatively 'set_score' - overwrites the score referenced by the foreign key `(channel_id, chatter_id)`
     pub async fn update_score(
         &mut self,
         chatter_id: &ChatterId,

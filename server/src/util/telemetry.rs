@@ -75,7 +75,7 @@ impl Telemetry {
         self
     }
 
-    pub async fn shutdown(self) {
+    pub fn shutdown(self) {
         if let Err(e) = self.meter_provider.shutdown() {
             eprintln!("error during metering shutdown: {e:?}");
         } else {

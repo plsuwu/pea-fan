@@ -22,6 +22,7 @@ use tracing::instrument;
 
 use crate::api::handler::*;
 use crate::api::middleware::verify_external::{get_hmac_key, verify_sender_ident};
+use crate::api::middleware::verify_internal::verify_internal_ident;
 use crate::api::webhook::webhook_handler;
 use crate::db::prelude::*;
 use crate::db::redis::redis_pool::redis_pool;
@@ -55,12 +56,22 @@ pub async fn router(
     let secret_key = get_hmac_key().await.unwrap();
     tracing::info!(secret_key, "HMAC SECRET KEY");
 
-    let app = Router::new()
-        .route("/", get(|| async { Response::new(Body::empty()) }))
-        //
-        // twitch hook callback
+    //
+    // twitch hook callback
+    let external_post_routes = Router::new()
         .route("/callback", post(webhook_handler))
-        .route_layer(middleware::from_fn(verify_sender_ident))
+        .route_layer(middleware::from_fn(verify_sender_ident));
+
+    let internal_post_routes = Router::new()
+        .route("/update/channel", post(update_channel_in_cache))
+        .route("/update/chatter", post(update_chatter_in_cache))
+        .route("/update/migrate", get(run_cache_migration))
+        .route_layer(middleware::from_fn(verify_internal_ident));
+
+    let app = Router::new()
+        .merge(external_post_routes)
+        .merge(internal_post_routes)
+        .route("/", get(|| async { Response::new(Body::empty()) }))
         //
         // channel-related routes
         .route("/channel/leaderboard", get(global_channels))
@@ -314,7 +325,7 @@ mod test {
         );
 
         _ = join_all(handles).await;
-        
+
         provider.shutdown();
     }
 }

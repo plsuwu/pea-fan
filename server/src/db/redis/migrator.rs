@@ -3,11 +3,12 @@
 use std::collections::HashMap;
 
 use redis::{AsyncCommands, CopyOptions, from_redis_value};
+use serde::{Deserialize, Serialize};
 use tracing::{instrument, warn};
 
 use super::redis_pool::RedisResult;
 // use crate::db::pg::db_pool;
-use crate::db::redis::redis_pool::{KeyType, RedisKey, redis_pool};
+use crate::db::redis::redis_pool::{KeyType, RedisErr, RedisKey, redis_pool};
 use crate::db::repositories::Repository;
 use crate::redis_key;
 use crate::util::helix::{Helix, HelixUser};
@@ -38,11 +39,11 @@ impl Migrator {
     }
 
     #[instrument(skip(self))]
-    pub async fn preprocess(&mut self) -> RedisResult<()> {
-        tracing::info!("begin preprocess pipeline");
+    pub async fn process(&mut self) -> RedisResult<()> {
+        tracing::info!("begin process pipeline");
 
         let channel_logins = Self::get_channel_keys().await?;
-        tracing::info!(
+        tracing::debug!(
             cached_channel_count = channel_logins.len(),
             "retrieved channel keys from redis"
         );
@@ -55,7 +56,7 @@ impl Migrator {
                 fetched.into_iter().map(Chatter::from).collect::<Vec<_>>(),
             )
         };
-        tracing::info!(
+        tracing::debug!(
             channels_count = channels.len(),
             broadcasters_count = broadcasters.len(),
             "fetched channel and broadcaster data from helix"
@@ -86,7 +87,7 @@ impl Migrator {
         // let score_repo = LeaderboardRepository::new(pool);
 
         chatter_repo.insert_many(&broadcasters).await?;
-        tracing::info!(
+        tracing::debug!(
             count = broadcasters.len(),
             "upsert broadcasters to database"
         );
@@ -94,14 +95,14 @@ impl Migrator {
         let broadcasters_channels: Vec<Channel> =
             broadcasters.into_iter().map(Channel::from).collect();
         channel_repo.insert_many(&broadcasters_channels).await?;
-        tracing::info!(count = channels.len(), "channels upserted to database");
+        tracing::debug!(count = channels.len(), "channels upserted to database");
 
         // -- end of initial broadcaster data processing --
 
         // fetch and process the non-broadcaster chatters
         let mut chatter_logins = Self::get_chatter_keys().await?;
         let num_chatters = chatter_logins.len();
-        tracing::info!(num_chatters, "retrieved chatter keys from redis");
+        tracing::debug!(num_chatters, "retrieved chatter keys from redis");
 
         let mut fetched = Helix::fetch_users_by_login(chatter_logins.clone()).await?;
 
@@ -111,9 +112,9 @@ impl Migrator {
             .map(|user| user.login.to_lowercase())
             .collect();
 
-        let pre_filter = chatter_logins.len();
+        let pre_filter_len = chatter_logins.len();
         chatter_logins.retain(|user| existing_logins.contains(&user.to_lowercase()));
-        let removed_count = pre_filter - chatter_logins.len();
+        let removed_count = pre_filter_len - chatter_logins.len();
 
         if removed_count > 0 {
             tracing::warn!(
@@ -121,6 +122,15 @@ impl Migrator {
                 remaining_count = chatter_logins.len(),
                 "filtered invalid chatter logins",
             );
+
+            // TODO:
+            //  perhaps we write filtered logins to a file to read this list of users
+            //  easily??
+            //      e.g:
+            //     ```
+            //     /var/log/piss-fan-server/[yyyy-mm-dd]_migrator_unknown-userlist.log
+            //     ```
+            //  .. or something
         } else {
             tracing::debug!("no invalid chatter logins found in cache");
         }
@@ -191,11 +201,11 @@ impl Migrator {
             let result = async {
                 for (chatter_id, scoremap) in scores.into_iter() {
                     for (channel_id, score) in scoremap.into_iter() {
-                        tracing::debug!(
+                        tracing::trace!(
                             channel = channel_id,
                             "updating and recaculating channel score"
                         );
-                        tracing::debug!(chatter = chatter_id, "updating chatter scoremap");
+                        tracing::trace!(chatter = chatter_id, "updating chatter scoremap");
                         tx.update_score(
                             &chatter_id.clone().into(),
                             &channel_id.clone().into(),
@@ -214,8 +224,7 @@ impl Migrator {
             }
             .await;
 
-            tracing::info!("updated scores in database");
-            tracing::info!("preprocessing pipeline completed successfully");
+            tracing::info!("cache migration pipeline complete");
 
             (tx, result)
         })
@@ -336,7 +345,7 @@ impl Migrator {
             let mut mapped_scores = HashMap::new();
             // let mut should_update = HashSet::new();
 
-            for  score in scores.chunks_exact(2) {
+            for score in scores.chunks_exact(2) {
                 total_scores += 1;
                 let channel_key = &score[0];
                 let channel_login = channel_key
@@ -418,13 +427,13 @@ impl Migrator {
             //     );
             //
             //     for (old, new) in should_update {
-            //         if let Err(e) = Self::update_cached_name(&old, &new).await {
+            //         if let Err(e) = Self::update_historic_channel(&old, &new).await {
             //             tracing::error!(
             //                 chatter = %chatters[i].login,
             //                 old_key = %old,
             //                 new_key = %new,
             //                 error = %e,
-            //                 "failed to update a legacy channel name"
+            //                 "failed to update legacy channel name"
             //             );
             //         }
             //     }
@@ -529,7 +538,7 @@ impl Migrator {
                                 user = %user.login,
                                 value = %s,
                                 error = %e,
-                                "chatter total parse failure"
+                                "chatter parse failure on total"
                             );
 
                             parse_failures.push(user.login.clone());
@@ -540,7 +549,7 @@ impl Migrator {
                         tracing::warn!(
                             user = %user.login,
                             error = ?e,
-                            "cached chatter total deserialization failure",
+                            "cached chatter deserialization failure on total",
                         );
                         parse_failures.push(user.login.clone());
                         user.total = 0;
@@ -557,12 +566,12 @@ impl Migrator {
             "merged chatter data",
         );
 
-        if !parse_failures.is_empty() && parse_failures.len() < 10 {
-            tracing::debug!(failed_users = ?parse_failures, "failed to parse totals for some users");
+        if !parse_failures.is_empty() && parse_failures.len() < 100 {
+            tracing::warn!(failed_users = ?parse_failures, "failed to parse totals for some users");
         } else if !parse_failures.is_empty() {
-            tracing::debug!(
+            tracing::warn!(
                 failed_count = parse_failures.len(),
-                sample = ?&parse_failures[..5.min(parse_failures.len())],
+                failed_sample = ?&parse_failures[..5.min(parse_failures.len())],
                 "failed to parse totals for a signficant number of users"
             );
         }
@@ -590,7 +599,7 @@ impl Migrator {
     /// Unsure whether we actually care about this even slightly if we are
     ///  - migrating storage from Redis to Postgres,
     ///  - using the user's ID over their login
-    pub async fn update_cached_name(old_login: &str, new_login: &str) -> RedisResult<()> {
+    pub async fn update_historic_channel(old_login: &str, new_login: &str) -> RedisResult<()> {
         tracing::debug!(
             old_login,
             new_login,
@@ -609,7 +618,7 @@ impl Migrator {
 
         let mut conn = redis_pool().await?.manager.clone();
         let mut pipeline = redis::pipe();
-        let copy_opts = CopyOptions::default().replace(true);
+        let copy_opts = CopyOptions::default().replace(false);
 
         pipeline.copy(old_channel_total, new_channel_total, copy_opts);
         pipeline.copy(old_user_total, new_user_total, copy_opts);
@@ -624,13 +633,253 @@ impl Migrator {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Aliases {
+    pub current: String,
+    pub historic: Vec<String>,
+}
+
+impl Aliases {
+    pub fn new(current: String, historic: Vec<String>) -> Self {
+        Self { current, historic }
+    }
+}
+
 // TODO:
-//  the below is really only needed as a one-off.
+//  this should be implemtned with `update_historic_user` as a single function,
+//  however i am too lazy and probably wont ever do this.
+
+#[instrument(skip(aliases))]
+/// Updates a channel's score with historic data (required when a channel changes their name).
+///
+/// The aliases and current login strings for this function should NOT contain the leading `#` as user data
+/// must be updated before the channel data is updated.
+///
+///     // e.g.:
+///     //  * [x] `#sleepiebug`   (incorrect)
+///     //  * [o]  `sleepiebug`    (correct)
+pub async fn update_historic_channel(aliases: Aliases) -> RedisResult<()> {
+    update_historic_user(aliases.clone()).await?;
+    tracing::info!(
+        current_login = aliases.current,
+        historic_keys_count = aliases.historic.len(),
+        "merging values for channel with historic data"
+    );
+
+    // `redis_key!(channel, ...)` should auto-prepend the `#` for us
+    let current_total_key = redis_key!(channel, score, &aliases.current);
+    let current_leaderboard_key = redis_key!(channel, leaderboard, &aliases.current);
+    let mut updated_leaderboard_map: HashMap<String, isize> = HashMap::new();
+    let mut conn = redis_pool().await?.manager.clone();
+
+    let mut current_total: isize = conn
+        .get::<_, Option<isize>>(&current_total_key)
+        .await?
+        .unwrap_or_default();
+
+    let initial_total = current_total;
+    let current_leaderboard: Vec<(String, isize)> = conn
+        .zrange_withscores::<_, Option<Vec<(String, isize)>>>(&current_leaderboard_key, 0, -1)
+        .await?
+        .unwrap_or_default();
+
+    current_leaderboard.iter().for_each(|(chatter, score)| {
+        updated_leaderboard_map.insert(chatter.clone(), *score);
+    });
+
+    tracing::debug!(current_total, ?current_leaderboard, "found current data");
+
+    for (i, alias) in aliases.historic.iter().enumerate() {
+        let historic_total_key = redis_key!(channel, score, &alias);
+        let historic_leaderboard_key = redis_key!(channel, leaderboard, &alias);
+        if let Some(total) = conn.get::<_, Option<isize>>(&historic_total_key).await? {
+            tracing::debug!(
+                prev = current_total,
+                updated = (current_total + total),
+                "adding score"
+            );
+            current_total += total;
+        } else {
+            tracing::warn!(index = i, alias, "skipping uncached alias");
+            continue;
+        }
+
+        let historic_leaderboard: Vec<(String, isize)> = conn
+            .zrange_withscores::<_, Option<Vec<(String, isize)>>>(&historic_leaderboard_key, 0, -1)
+            .await?
+            .unwrap_or_default();
+
+        tracing::debug!(
+            historic_name = alias,
+            ?historic_leaderboard,
+            "merging historic leaderboard data"
+        );
+
+        historic_leaderboard
+            .into_iter()
+            .for_each(|(chatter, score)| {
+                updated_leaderboard_map
+                    .entry(chatter)
+                    .and_modify(|total| *total += score)
+                    .or_insert(score);
+            });
+
+        tracing::warn!(alias, "removing historic channel keys");
+        conn.del::<_, ()>(&historic_total_key).await?;
+        conn.del::<_, ()>(&historic_leaderboard_key).await?;
+    }
+
+    if current_total == 0 {
+        tracing::error!(aliases.current, historic = ?aliases.historic, "empty dataset");
+        return Err(RedisErr::UpdateEmpty);
+    }
+
+    tracing::info!(
+        ?updated_leaderboard_map,
+        initial_total,
+        current_total,
+        current_login = aliases.current,
+        "writing merged data"
+    );
+
+    conn.set::<&String, isize, ()>(&current_total_key, current_total)
+        .await?;
+    let mut pipeline = redis::pipe();
+    updated_leaderboard_map
+        .into_iter()
+        .for_each(|(chatter, score)| {
+            pipeline.zadd(&current_leaderboard_key, chatter, score);
+        });
+
+    let () = pipeline.query_async(&mut conn).await?;
+    tracing::info!(current_login = aliases.current, "channel merge complete");
+
+    Ok(())
+}
+
+#[instrument(skip(aliases))]
+pub async fn update_historic_user(aliases: Aliases) -> RedisResult<()> {
+    tracing::info!(
+        current_login = aliases.current,
+        historic_keys_count = aliases.historic.len(),
+        "merging values for chatter with historic data"
+    );
+
+    let current_total_key = redis_key!(user, score, &aliases.current);
+    let current_leaderboard_key = redis_key!(user, leaderboard, &aliases.current);
+    let mut updated_leaderboard_map: HashMap<String, isize> = HashMap::new();
+    let mut conn = redis_pool().await?.manager.clone();
+
+    let mut current_total: isize = conn
+        .get::<_, Option<isize>>(&current_total_key)
+        .await?
+        .unwrap_or_default();
+
+    let initial_total = current_total;
+    let current_leaderboard: Vec<(String, isize)> = conn
+        .zrange_withscores::<_, Option<Vec<(String, isize)>>>(&current_leaderboard_key, 0, -1)
+        .await?
+        .unwrap_or_default();
+
+    current_leaderboard.iter().for_each(|(channel, score)| {
+        updated_leaderboard_map.insert(channel.clone(), *score);
+    });
+
+    tracing::debug!(current_total, ?current_leaderboard, "found current data");
+
+    for (i, alias) in aliases.historic.iter().enumerate() {
+        let historic_total_key = redis_key!(user, score, &alias);
+        let historic_leaderboard_key = redis_key!(user, leaderboard, &alias);
+        if let Some(total) = conn.get::<_, Option<isize>>(&historic_total_key).await? {
+            tracing::debug!(
+                prev = current_total,
+                additional = total,
+                updated = (current_total + total),
+                "adding score"
+            );
+            current_total += total;
+        } else {
+            tracing::warn!(index = i, alias, "skipping uncached alias");
+            continue;
+        }
+
+        let historic_leaderboard: Vec<(String, isize)> = conn
+            .zrange_withscores::<_, Option<Vec<(String, isize)>>>(&historic_leaderboard_key, 0, -1)
+            .await?
+            .unwrap_or_default();
+
+        tracing::debug!(
+            historic_name = alias,
+            ?historic_leaderboard,
+            "merging historic leaderboard data"
+        );
+
+        historic_leaderboard
+            .into_iter()
+            .for_each(|(channel, score)| {
+                updated_leaderboard_map
+                    .entry(channel)
+                    .and_modify(|total| *total += score)
+                    .or_insert(score);
+            });
+
+        tracing::warn!(alias, "removing historic user keys");
+        conn.del::<_, ()>(&historic_total_key).await?;
+        conn.del::<_, ()>(&historic_leaderboard_key).await?;
+    }
+
+    if current_total == 0 {
+        tracing::error!(aliases.current, historic = ?aliases.historic, "empty dataset");
+        return Err(RedisErr::UpdateEmpty);
+    }
+
+    tracing::info!(
+        ?updated_leaderboard_map,
+        initial_total,
+        current_total,
+        current_login = aliases.current,
+        "writing merged data"
+    );
+
+    conn.set::<&String, isize, ()>(&current_total_key, current_total)
+        .await?;
+    let mut pipeline = redis::pipe();
+    updated_leaderboard_map
+        .into_iter()
+        .for_each(|(channel, score)| {
+            pipeline.zadd(&current_leaderboard_key, channel, score);
+        });
+
+    let () = pipeline.query_async(&mut conn).await?;
+    tracing::info!(current_login = aliases.current, "user merge complete");
+
+    Ok(())
+}
+
+#[instrument]
+pub async fn migrate_redis_into_pg() -> RedisResult<()> {
+    Migrator::new().process().await?;
+    Ok(())
+}
 
 #[cfg(test)]
 mod test {
-    use crate::util::telemetry;
     use super::*;
+    use crate::util::telemetry;
+
+    #[tokio::test]
+    async fn test_historic_updater() {
+        let provider = telemetry::Telemetry::new().await.unwrap().register();
+
+        let user = String::from("cowtitties__");
+        let historic = vec![String::from("cowtitties_"), String::from("cowtitties")];
+
+        let aliases = Aliases::new(user, historic);
+
+        update_historic_user(aliases).await.unwrap();
+
+        provider.shutdown();
+    }
 
     #[tokio::test]
     /// Technically this is not a test, but rather can be run manually as a one-off to fix
@@ -655,12 +904,12 @@ mod test {
         let names_map = Vec::new();
         for update in names_map.chunks_exact(2) {
             tracing::info!("processing: {} -> {}", update[0], update[1]);
-            Migrator::update_cached_name(update[0], update[1])
+            Migrator::update_historic_channel(update[0], update[1])
                 .await
                 .unwrap();
         }
 
-        Migrator::new().preprocess().await.unwrap();
+        Migrator::new().process().await.unwrap();
 
         provider.shutdown();
 

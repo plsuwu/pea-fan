@@ -120,6 +120,9 @@ pub type RedisResult<T> = core::result::Result<T, RedisErr>;
 #[derive(Debug, Error)]
 pub enum RedisErr {
     #[error(transparent)]
+    Std(#[from] Box<dyn std::error::Error>),
+
+    #[error(transparent)]
     EnvErr(#[from] EnvErr),
 
     #[error(transparent)]
@@ -133,6 +136,9 @@ pub enum RedisErr {
 
     #[error(transparent)]
     ParseError(#[from] redis::ParsingError),
+
+    #[error("attempted to update non-existent dataset")]
+    UpdateEmpty,
 
     // #[error("unable to parse resulting redis key")]
     // BadKey,

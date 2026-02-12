@@ -52,6 +52,21 @@ prometheus.remote_write "default" {
   }
 }
 
+// pyroscope.write "default" {
+//     endpoint {
+//         url = "pyroscope:4040"
+//     }
+// }
+// 
+// pyroscope.scrap "default" {
+//     profiling_config {
+//         profile.process_cpu {
+//             enabled = true
+//         }
+//     }
+// 
+// }
+
 
 livedebugging {
     enabled = true
