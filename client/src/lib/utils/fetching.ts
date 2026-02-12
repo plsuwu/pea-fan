@@ -27,10 +27,10 @@ export class FetchUtil {
 
 		logger.info({ pageinfo: { ...pagination } }, "pagination");
 
-		const scoreLimit = 7;
-		url.searchParams.append("score_limit", String(scoreLimit));
+		// const scoreLimit;
+		// url.searchParams.append("score_limit", String(scoreLimit));
 
-		const limit = strToNum(pagination.limit) || 25;
+		const limit = strToNum(pagination.limit) || 15;
 		const page = strToNum(pagination.page) || 0;
 
 		if (limit) url.searchParams.append("limit", String(limit));
@@ -48,7 +48,6 @@ export class FetchUtil {
 		}
 
 		const body = (await response.json()) as PaginatedResponse;
-		logger.debug({ _body: body }, "raw json response body");
 		logger.info({ leaderboard: { leaderboard: body, variant } });
 
 		if (body.total_pages < Number(pagination.page)) {

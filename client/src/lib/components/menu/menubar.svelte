@@ -1,70 +1,10 @@
 <script lang="ts">
 	import type { Component } from "svelte";
-	import { Compass, Info } from "@lucide/svelte";
 	import * as M from "$lib/shadcn-components/ui/menubar";
-	import { URLS } from "$lib";
-
-	type Content = { _tag: "content" };
-	type Row = { _tag: "row" };
-	type MenuRowContent = {
-		target: "_self" | "_blank";
-		href: string;
-		title: string;
-		shortcut?: string;
-	} & Content;
-
-	type MenuRowItem = {
-		_tag: "row";
-		title: string;
-		Icon?: Component;
-		children?: (MenuRowContent | MenuRowItem)[];
-	} & Row;
-
-	const left: MenuRowItem[] = [
-		{
-			_tag: "row",
-			title: "navigate",
-			Icon: Compass,
-			children: [
-				{
-					_tag: "content",
-					target: "_self",
-					title: "channels",
-					href: `${URLS().proto}://${URLS().base}/leaderboard/channel`,
-					shortcut: "<C-!>"
-				},
-				{
-					_tag: "content",
-					target: "_self",
-					title: "chatters",
-					href: `${URLS().proto}://${URLS().base}/leaderboard/chatter`,
-					shortcut: "<C-@>"
-				}
-			]
-		}
-	];
-
-	const right: MenuRowItem[] = [
-		{
-			_tag: "row",
-			title: "about",
-			Icon: Info,
-			children: [
-				{
-					_tag: "content",
-					title: "plsuwu @ github",
-					href: "https://github.com/plsuwu",
-					target: "_blank"
-				},
-				{
-					_tag: "content",
-					title: "plss @ twitch",
-					href: "https://twitch.tv/plss",
-					target: "_blank"
-				}
-			]
-		}
-	];
+	import { tick } from "svelte";
+	import * as Command from "$lib/shadcn-components/ui/command";
+	import * as Popover from "$lib/shadcn-components/ui/popover";
+	import { left, right, type MenuRowItem, type MenuRowContent } from "./menu-content";
 </script>
 
 {#snippet MenuItem(
@@ -72,8 +12,8 @@
 	align: "start" | "end"
 )}
 	<M.Menu>
-		<M.Trigger class="text-[14px] font-semibold">
-			<div class="flex items-center space-x-1.5">
+		<M.Trigger class="rounded-non text-[14px] font-semibold">
+			<div class="flex items-center space-x-1.5 rounded-none">
 				<Icon size={16} />
 				<!-- <span>{title}</span> -->
 			</div>
@@ -92,7 +32,9 @@
 								<div class="flex w-full items-center justify-between">
 									<div class="font-bold">{content.title}</div>
 									{#if content.shortcut}
-										<div class="text-[12px] text-medium italic text-muted-foreground">
+										<div
+											class="text-medium text-[12px] text-muted-foreground italic"
+										>
 											{content.shortcut}
 										</div>
 									{/if}
@@ -139,11 +81,14 @@
 {/snippet}
 
 <div class="flex w-full justify-between">
-	<M.Root class="mx-6">
-		{#each left as nav}
-			{@render MenuItem({ ...nav }, "start")}
-		{/each}
-	</M.Root>
+	<div>
+		<M.Root class="mx-6">
+			{#each left as nav}
+				{@render MenuItem({ ...nav }, "start")}
+			{/each}
+		</M.Root>
+		<div></div>
+	</div>
 
 	<M.Root class="mx-6">
 		{#each right as nav}

@@ -1,0 +1,23 @@
+<script lang="ts">
+	let {
+		size = 40,
+		disabled = false
+	}: {
+		size?: number;
+		disabled?: boolean;
+	} = $props();
+
+	let points = $derived(
+		`${size / 2},0 ${size},${size / 2} ${size / 2},${size} 0,${size / 2}`
+	);
+</script>
+
+<svg height={size} width={size} aria-hidden="true">
+	<polygon
+		{points}
+		fill="transparent"
+		stroke={disabled
+			? "color-mix(in oklab, var(--muted-foreground) 60%, transparent)"
+			: "currentColor"}
+	/>
+</svg>

@@ -2,12 +2,14 @@
 	import "./layout.css";
 	import "$lib/assets/iosevka.css";
 	import favicon from "$lib/assets/favicon.svg";
-	import Menubar from "$lib/components/menu/menubar.svelte";
-	import { ModeWatcher } from "mode-watcher";
-	import { type ChannelEntry } from "$lib/types/index";
-	import Channel from "$lib/components/channel/channel.svelte";
 	import { page } from "$app/state";
 	import { onMount } from "svelte";
+
+	import { ModeWatcher } from "mode-watcher";
+	import { type ChannelEntry } from "$lib/types/index";
+	import Menubar from "$lib/components/menu/menubar.svelte";
+	import Noise from "$lib/components/bg/noise.svelte";
+	import Channel from "$lib/components/channel/channel.svelte";
 
 	let { data, children } = $props();
 	let { channel } = $derived(data);
@@ -21,8 +23,10 @@
 				.split("/")
 				.filter((p) => p !== "");
 
+			const currParams = page.url.searchParams.get("page");
+
 			if (currPath[1]) {
-				title = `${currPath[1]}s | ${title}`;
+				title = `${currPath[1]}s ${currParams ? `(page ${currParams})` : ""} | ${title}`;
 			}
 		}
 
@@ -64,6 +68,7 @@
 	role="button"
 	tabindex="0"
 >
+	<!-- <Noise> -->
 	<div class="flex px-8 py-4">
 		<Menubar />
 	</div>
@@ -76,7 +81,8 @@
 	<div class="flex h-full w-full flex-1 flex-col">
 		{@render children()}
 	</div>
-	<div class="mt-24 min-h-[250px] flex shrink items-end justify-center">
+	<div class="mt-24 flex min-h-[250px] shrink items-end justify-center">
 		<div class=" text-center">placeholder</div>
 	</div>
+	<!-- </Noise> -->
 </div>

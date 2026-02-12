@@ -4,7 +4,7 @@
 
 @theme {
     --font-iosevka: "Iosevka", Courier, monospace;
-    --breakpoint-xl: 90rem;
+    --breakpoint-xxl: 99rem;
 }
 
 @import "tw-animate-css";
@@ -12,6 +12,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* --noise-blend: multiply; */
+  /* --noise-opacity: 0.15; */
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
@@ -47,6 +49,8 @@
 }
 
 .dark {
+  /* --noise-blend: screen; */
+  /* --noise-opacity: 0.08; */
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.21 0.006 285.885);
@@ -116,6 +120,20 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+}
+
+.shadow-container {
+	box-shadow: 6px 6px 0px 0px rgba(0, 0, 0, 1);
+	hover {
+		box-shadow: 12px 12px 0px 0px rgba(0, 0, 0, 1);
+	}
+}
+
+.shadow-container-dark {
+	box-shadow: 6px 6px 0px 0px rgba(255, 255, 255, 1);
+	hover {
+		box-shadow: 12px 12px 0px 0px rgba(255, 255, 255, 1);
+	}
 }
 
 @layer base {

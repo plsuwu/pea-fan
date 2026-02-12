@@ -3,6 +3,13 @@ import type { PageServerLoad } from "./$types";
 import { isValidVariant } from "$lib/utils";
 import { fetchUtil } from "$lib/utils/fetching";
 
+function getPageParamUrl(route: string) {
+	const url = new URL(route);
+	url.searchParams.set("page", "1");
+
+	return url;
+}
+
 export const load: PageServerLoad = async ({
 	locals,
 	fetch,
@@ -25,10 +32,20 @@ export const load: PageServerLoad = async ({
 		);
 
 		const newRoute = route.id.replace("[variant]", "channel");
-		redirect(302, newRoute);
+		const newUrl = getPageParamUrl(newRoute);
+
+		redirect(302, newUrl.href);
 	}
 
 	let { limit, page } = Object.fromEntries(url.searchParams);
+	if (!page) {
+		url.searchParams.set("page", "1");
+		redirect(302, url);
+	}
+
+	if (params.variant === "channel") {
+		limit = "50";
+	}
 
 	const result = await fetchUtil.fetchLeaderboard(
 		{ fetch },
