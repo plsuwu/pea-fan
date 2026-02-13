@@ -659,7 +659,6 @@ impl Aliases {
 ///     //  * [x] `#sleepiebug`   (incorrect)
 ///     //  * [o]  `sleepiebug`    (correct)
 pub async fn update_historic_channel(aliases: Aliases) -> RedisResult<()> {
-    update_historic_user(aliases.clone()).await?;
     tracing::info!(
         current_login = aliases.current,
         historic_keys_count = aliases.historic.len(),

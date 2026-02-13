@@ -301,7 +301,8 @@ impl IntoResponse for RouteError {
 mod test {
     use super::*;
     use crate::util::telemetry as otlp_trace;
-    use futures_util::future::join_all;
+    use futures::future::join_all;
+    // use futures_util::future::join_all;
     use tokio::sync::oneshot::Sender;
 
     #[tokio::test]
@@ -325,7 +326,6 @@ mod test {
         );
 
         _ = join_all(handles).await;
-
         provider.shutdown();
     }
 }

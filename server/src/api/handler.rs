@@ -1,9 +1,11 @@
+use std::error::Error;
 use std::sync::Arc;
 
 use axum::body::{Body, HttpBody};
 use axum::extract::{self, Path, Query, State};
 use axum::{Json, debug_handler};
 use http::{HeaderMap, StatusCode};
+use redis::RedisError;
 use serde_json::Value;
 use tokio::sync::oneshot;
 use tracing::instrument;
@@ -16,6 +18,7 @@ use crate::db::prelude::{ChatterLeaderboardEntry, ChatterRepository, Leaderboard
 use crate::db::redis::migrator::{
     Aliases, Migrator, update_historic_channel, update_historic_user,
 };
+use crate::db::redis::redis_pool::RedisErr;
 use crate::db::repositories::leaderboard::ScorePagination;
 use crate::util::helix::{Helix, HelixUser};
 
@@ -206,7 +209,15 @@ pub async fn update_channel_in_cache(
 
     match update_historic_user(json_body.clone()).await {
         Ok(_) => (),
-        Err(e) => return Ok(Json(e.to_string())),
+        Err(e) => match e {
+            RedisErr::UpdateEmpty => {
+                // avoid bailing out if the broadcaster's total as a user/chatter is 0
+                tracing::warn!("nothing to update for broadcaster user");
+            }
+            _ => {
+                return Ok(Json(e.to_string()));
+            }
+        },
     };
 
     match update_historic_channel(json_body).await {
@@ -217,7 +228,6 @@ pub async fn update_channel_in_cache(
 
 #[instrument(skip(_headers))]
 pub async fn run_cache_migration(_headers: HeaderMap) -> Result<Json<String>, StatusCode> {
-
     // this blocks for ages so maybe we run these updater functions on a separate thread
     match Migrator::new().process().await {
         Ok(_) => Ok(Json(String::from("OK"))),
