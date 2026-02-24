@@ -19,3 +19,11 @@ pub struct ScoreSummary {
     pub score: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ScoreEvent {
+    pub id: String,
+    pub chatter_id: super::chatter::ChatterId,
+    pub channel_id: super::channel::ChannelId,
+    pub points: i64,
+    pub earned_at: NaiveDateTime,
+}

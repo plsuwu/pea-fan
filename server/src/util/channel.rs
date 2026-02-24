@@ -8,17 +8,33 @@ use crate::db::prelude::*;
 use crate::util::helix::{Helix, HelixErr, HelixUser};
 
 #[instrument(skip(from_url))]
-pub async fn update_channels(from_url: Option<&str>) -> ChannelResult<HashMap<String, Chatter>> {
+pub async fn fetch_channel_list(from_url: Option<&str>) -> ChannelResult<Vec<(String, ChatterId)>> {
     let channel_list = reqwest::get(from_url.unwrap_or(CHANNELS_LIST_URL))
         .await?
         .text()
         .await?;
 
     tracing::debug!(list_url = from_url, "fetching channel list");
-    let ids: Vec<ChatterId> = channel_list
+    let name_id: Vec<(String, ChatterId)> = channel_list
         .lines()
-        .filter_map(|line| line.split(':').nth(1).map(|s| s.to_owned().into()))
+        .map(|line| line.split(':').collect::<Vec<_>>())
+        .filter_map(|parts| {
+            parts
+                .get(0)
+                .map(|s| s.to_string())
+                .zip(parts.get(1).map(|s| s.to_string().into()))
+        })
         .collect();
+
+    tracing::debug!(list_url = from_url, ?name_id, "fetch complete");
+
+    Ok(name_id)
+}
+
+#[instrument(skip(from_url))]
+pub async fn update_channels(from_url: Option<&str>) -> ChannelResult<HashMap<String, Chatter>> {
+    let name_to_id = fetch_channel_list(from_url).await?;
+    let ids: Vec<ChatterId> = name_to_id.into_iter().map(|(_, id)| id).collect();
 
     update_stored_channels(&ids).await
 }

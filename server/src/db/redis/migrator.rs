@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use tracing::{instrument, warn};
 
 use super::redis_pool::RedisResult;
-// use crate::db::pg::db_pool;
 use crate::db::redis::redis_pool::{KeyType, RedisErr, RedisKey, redis_pool};
 use crate::db::repositories::Repository;
 use crate::redis_key;

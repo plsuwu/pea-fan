@@ -3,7 +3,7 @@ use tracing::instrument;
 
 use super::sql_fragment;
 use crate::db::{
-    models::chatter::{Chatter, ChatterId},
+    models::chatter::{Chatter, ChatterId, ChatterSearchResult},
     prelude::Tx,
     repositories::Repository,
 };
@@ -11,6 +11,28 @@ use crate::db::{
 #[derive(Debug)]
 pub struct ChatterRepository {
     pool: &'static Pool<Postgres>,
+}
+
+impl ChatterRepository {
+    #[instrument(skip(self))]
+    pub async fn search_by_login(&self, query: &str) -> SqlxResult<Vec<ChatterSearchResult>> {
+        match sqlx::query_as::<_, ChatterSearchResult>(
+            r#"
+            SELECT *
+            FROM search_chatter_by_login($1)
+            "#,
+        )
+        .bind(query)
+        .fetch_all(self.pool())
+        .await
+        {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                tracing::error!(error = ?e, query, "search failed");
+                return Err(e);
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]

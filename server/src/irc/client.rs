@@ -399,20 +399,22 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
                 user_login = tags.user_login,
                 user_id = tags.user_id,
                 content = msg_content,
-                "RX::PRIVMSG"
+                "RX_PRIVMSG"
             );
 
             let data = IrcMessage::Privmsg { tags, message };
             send_to_reader(&client.sender, data).await;
         }
 
-        Command::PONG(data, _) | Command::PING(data, _) => {
+        Command::PING(data, _) => {}
+
+        Command::PONG(data, _) => {
             let joined = client.get_joined();
             tracing::debug!(
                 info = data,
                 current_joined_count = joined.len(),
                 total_tracked_count = client.channels.len(),
-                "RX::PING",
+                "RX::PONG",
             );
         }
 
@@ -531,7 +533,7 @@ pub async fn read_channel(
                     }
                     // otherwise, check whether we should increment a counter if the message isn't
                     // a `!pisscount` query
-                    else if message.contains("piss")
+                    else if message.to_lowercase().contains("piss")
                         && !ID_BLACKLIST.contains(&tags.user_id.as_str())
                     {
                         increment_score(pool, &tags).await?;
@@ -569,22 +571,19 @@ pub async fn make_query_response(
         chatter_by_id(repo, &tags.user_id).await
     };
 
+    let requested_user = if parts.len() != 1 {
+        format!("{}'s", parts[1])
+    } else {
+        "your".to_string()
+    };
     match target {
-        Ok(ch) => {
-            let requested_user = if parts.len() != 1 {
-                format!("{}'s", ch.name)
-            } else {
-                "your".to_string()
-            };
-
-            Ok(format!(
-                "{} of {} messages have mentioned piss",
-                ch.total, requested_user,
-            ))
-        }
+        Ok(ch) => Ok(format!(
+            "{} of {} messages have mentioned piss",
+            ch.total, requested_user,
+        )),
         Err(IrcClientErr::SqlxError(err)) => {
             tracing::warn!(error = ?err, "IRC-based query failed due to non-existant user");
-            Ok(ReplyReason::RowNotFound.get_reply().to_string())
+            Ok(format!("0 piss mentions"))
         }
         Err(err) => {
             tracing::error!(error = ?err, "IRC-based query failed in an unexpected way");
@@ -804,7 +803,10 @@ mod test {
 
     use futures::future::join_all;
 
-    use crate::{api::server::start_server, util::{channel::update_channels, telemetry}};
+    use crate::{
+        api::server::start_server,
+        util::{channel::update_channels, telemetry},
+    };
 
     use super::*;
 
@@ -843,7 +845,7 @@ mod test {
         handles.extend(start_irc_handler(channels, rx_from_api).await.unwrap());
 
         _ = join_all(handles).await;
-        
+
         provider.shutdown();
     }
 }

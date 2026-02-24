@@ -107,6 +107,23 @@
             bun
             deno
 
+            chromedriver
+            chromium
+
+            geckodriver
+            firefox
+
+            # python313
+            (python313.withPackages (
+              ps: with ps; [
+                requests
+                beautifulsoup4
+                numpy
+                selenium
+                webdriver-manager
+              ]
+            ))
+
             twitch-cli
             sqlx-cli
 
@@ -130,6 +147,8 @@
               echo "unix_socket_directories = '$PWD/.pg-sock'" >> .pg-data/postgresql.conf
               echo "port = 5432" >> .pg-data/postgresql.conf
             fi
+
+            export PATH="${pkgs.chromedriver}/bin:$PATH"
 
             echo "in shell"
           '';

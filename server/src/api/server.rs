@@ -26,6 +26,7 @@ use crate::api::middleware::verify_internal::verify_internal_ident;
 use crate::api::webhook::webhook_handler;
 use crate::db::prelude::*;
 use crate::db::redis::redis_pool::redis_pool;
+use crate::util::channel::ChannelError;
 use crate::util::env::Var;
 use crate::util::helix::HelixErr;
 use crate::var;
@@ -71,7 +72,10 @@ pub async fn router(
     let app = Router::new()
         .merge(external_post_routes)
         .merge(internal_post_routes)
+        //
+        // general
         .route("/", get(|| async { Response::new(Body::empty()) }))
+        .route("/search/by-login", get(search_by_login))
         //
         // channel-related routes
         .route("/channel/leaderboard", get(global_channels))
@@ -165,6 +169,9 @@ pub enum RouteError {
     #[error(transparent)]
     QueryError(#[from] PgError),
 
+    #[error(transparent)]
+    ChannelFetch(#[from] ChannelError),
+
     #[error("{0}")]
     AuthError(StatusCode),
 
@@ -234,6 +241,12 @@ impl IntoResponse for RouteError {
             RouteError::AuthError(status) => (
                 status.to_owned(),
                 String::from("invalid authorization header"),
+                Some(self),
+            ),
+
+            RouteError::ChannelFetch(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("error during channel fetch: {err}"),
                 Some(self),
             ),
 

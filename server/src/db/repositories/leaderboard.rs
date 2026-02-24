@@ -280,10 +280,7 @@ impl LeaderboardRepository {
         .fetch_all(self.pool)
         .await?;
 
-        let ids = &chatters
-            .iter()
-            .map(|c| c.id.clone())
-            .collect::<Vec<_>>();
+        let ids = &chatters.iter().map(|c| c.id.clone()).collect::<Vec<_>>();
         let scores = if !ids.is_empty() {
             self.get_channel_scores_batch(ids, &score_pagination)
                 .await?
@@ -418,6 +415,7 @@ impl LeaderboardRepository {
                 LIMIT $2 OFFSET $3
             ) scores
             JOIN chatter c ON scores.chatter_id = c.id
+            ORDER BY scores.channel_id, scores.ranking ASC
             "#,
             &ids,
             score_pagination.limit,

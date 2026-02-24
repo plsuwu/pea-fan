@@ -57,6 +57,17 @@ pub struct ChatterScoreSummary {
     pub ranking: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ChatterSearchResult {
+    pub id: String,
+    pub name: String,
+    pub login: String,
+    pub color: String,
+    pub image: String,
+    pub total: i64,
+    pub similarity_score: f32,
+}
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct ChatterLeaderboardRow {
     pub id: ChatterId,

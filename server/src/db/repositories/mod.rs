@@ -7,7 +7,7 @@ use sqlx::{Pool, Postgres, Result as SqlxResult, Transaction};
 use tracing::instrument;
 
 use crate::db::models::channel::ChannelId;
-use crate::db::models::chatter::ChatterId;
+use crate::db::models::chatter::{ChatterId, ChatterSearchResult};
 use crate::db::prelude::{Channel, Chatter, ScoreSummary};
 
 pub mod channel;

@@ -1,3 +1,5 @@
+use std::collections::hash_set::Difference;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::sync::Arc;
 
@@ -6,12 +8,14 @@ use axum::extract::{self, Path, Query, State};
 use axum::{Json, debug_handler};
 use http::{HeaderMap, StatusCode};
 use redis::RedisError;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::oneshot;
 use tracing::instrument;
 
 use crate::api::middleware::verify_external::VerifiedBody;
 use crate::api::server::{AppState, JsonResult, RouteError};
+use crate::db::models::chatter::ChatterSearchResult;
 use crate::db::models::{PaginatedResponse, Pagination};
 use crate::db::prelude::{ChannelLeaderboardEntry, Repository};
 use crate::db::prelude::{ChatterLeaderboardEntry, ChatterRepository, LeaderboardRepository};
@@ -20,6 +24,7 @@ use crate::db::redis::migrator::{
 };
 use crate::db::redis::redis_pool::RedisErr;
 use crate::db::repositories::leaderboard::ScorePagination;
+use crate::util::channel::fetch_channel_list;
 use crate::util::helix::{Helix, HelixUser};
 
 #[instrument(skip(state))]
@@ -87,20 +92,45 @@ pub async fn channel_by_id(
 }
 
 #[instrument(skip(state))]
-pub async fn irc_joins(State(state): State<Arc<AppState>>) -> JsonResult<Vec<String>> {
+pub async fn irc_joins(
+    State(state): State<Arc<AppState>>,
+) -> JsonResult<HashMap<&'static str, Vec<String>>> {
     let tx = &state.tx_client;
     let msg = String::from("irc_joins");
+    let mut output = HashMap::new();
+    let mut missing = HashSet::new();
 
     let (tx_oneshot, rx_oneshot) = oneshot::channel::<Vec<String>>();
-
     tx.send((msg, tx_oneshot))?;
-    match rx_oneshot.await {
-        Ok(data) => Ok(Json(data)),
+    let joins = match rx_oneshot.await {
+        Ok(data) => data,
         Err(e) => {
             tracing::error!(error = ?e, "failure during irc_joins query");
-            Err(e.into())
+            return Err(e.into());
         }
-    }
+    };
+
+    let full_list = fetch_channel_list(None)
+        .await?
+        .iter()
+        .map(|(name, _)| {
+            let ch_name = format!("#{name}");
+            missing.insert(ch_name.clone());
+            ch_name
+        })
+        .collect();
+
+    let joins_set: HashSet<String> = HashSet::from_iter(joins.clone());
+    let diff = missing
+        .difference(&joins_set)
+        .map(|i| i.to_owned())
+        .collect();
+
+    output.insert("likely_missing", diff);
+    output.insert("current_joins", joins);
+    output.insert("full_list", full_list);
+
+    Ok(Json(output))
 }
 
 #[instrument(skip(state))]
@@ -233,4 +263,19 @@ pub async fn run_cache_migration(_headers: HeaderMap) -> Result<Json<String>, St
         Ok(_) => Ok(Json(String::from("OK"))),
         Err(e) => return Ok(Json(e.to_string())),
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SearchByLoginParam {
+    login: String,
+}
+
+#[instrument(skip(state))]
+#[axum::debug_handler]
+pub async fn search_by_login(
+    State(state): State<Arc<AppState>>,
+    Query(param): Query<SearchByLoginParam>,
+) -> JsonResult<Vec<ChatterSearchResult>> {
+    let repo = ChatterRepository::new(state.db_pool);
+    Ok(Json(repo.search_by_login(&param.login).await?))
 }
