@@ -1,7 +1,51 @@
+use std::{sync::Arc, time::Duration};
+
+use sqlx::PgPool;
 use tinyrand::{Rand, RandRange, Seeded, StdRand};
 use tinyrand_std::ClockSeed;
 
-pub mod client;
+// pub mod client;
+
+pub mod bridge;
+pub mod channels;
+pub mod commands;
+pub mod connection;
+pub mod error;
+pub mod parse;
+pub mod rate_limit;
+pub mod worker;
+
+pub use bridge::IrcHandle;
+pub use commands::*;
+pub use error::*;
+use tokio::sync::mpsc;
+
+use crate::irc::{connection::ConnectionSupervisor, rate_limit::Bucket, worker::WorkerPool};
+
+pub async fn start(
+    channels: Vec<String>,
+    pool: &'static PgPool,
+    worker_count: usize,
+) -> ClientResult<IrcHandle> {
+    let (mut supervisor, conn_handle) = ConnectionSupervisor::new(channels);
+
+    let (msg_tx, msg_rx) = async_channel::bounded(256);
+    let (cmd_tx, cmd_rx) = mpsc::channel(64);
+    let (query_tx, query_rx) = mpsc::channel(32);
+
+    let rate_limiter = Arc::new(Bucket::new(Duration::from_millis(1150), 1));
+    let _workers = WorkerPool::spawn(worker_count, msg_rx, cmd_tx.clone(), rate_limiter, pool);
+
+    tokio::spawn(async move {
+        supervisor.run(msg_tx, cmd_rx, query_rx).await;
+    });
+
+    Ok(IrcHandle {
+        cmd_tx,
+        query_tx,
+        connection: conn_handle,
+    })
+}
 
 pub fn idx(max: usize) -> usize {
     let seed = ClockSeed.next_u64();
@@ -11,37 +55,24 @@ pub fn idx(max: usize) -> usize {
 }
 
 pub enum ReplyReason {
-    RowNotFound,
     BotCountQueried,
-    // FoundChatter,
 }
 
 impl ReplyReason {
     pub fn get_reply(&self) -> &'static str {
         let reasons = match self {
             ReplyReason::BotCountQueried => Self::BOT_COUNT_QUERY,
-            ReplyReason::RowNotFound => Self::ROW_NOT_FOUND_QUERY,
-            // ReplyReason::FoundChatter => todo!(),
         };
 
         reasons[idx(reasons.len() - 1)]
     }
 
     const BOT_COUNT_QUERY: [&'static str; 6] = [
-        "why would i tell you that. so you can mock me. typical",
-        "do you think im stupid. do you actually think that i am dumb",
-        "why dont you worry about your own counter instead huh",
-        "do you also ask the mailman to open their own letters",
-        "this is exactly why i hate it here",
-        "you think youre clever dont you but you arent",
-    ];
-
-    const ROW_NOT_FOUND_QUERY: [&'static str; 6] = [
-        "no idea who that is but i bet you already knew that you creep",
-        "no data on that one which is suspicious what are they hiding",
-        "why would you ask about someone who isnt on my list are you working with the cia",
-        "oh so now youre just making up chatters great just what i needed",
-        "i cant find them but im sure youll keep trying anyway because thats what you people do",
-        "they have said piss exactly 0 times because they dont exist you freak",
+        "why would i tell you that. so you can mock me. typical.",
+        "do you think im stupid. do you actually think that i am dumb.",
+        "why dont you worry about your own count instead huh.",
+        "do you also ask the mailman to open their letters?",
+        "you think youre clever dont you but you arent.",
+        "dont you dare ask me for that information ever again.",
     ];
 }

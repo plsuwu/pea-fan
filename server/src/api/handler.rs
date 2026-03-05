@@ -1,19 +1,15 @@
-use std::collections::hash_set::Difference;
 use std::collections::{HashMap, HashSet};
-use std::error::Error;
 use std::sync::Arc;
 
-use axum::body::{Body, HttpBody};
-use axum::extract::{self, Path, Query, State};
+use axum::extract::{Path, Query, State};
 use axum::{Json, debug_handler};
 use http::{HeaderMap, StatusCode};
-use redis::RedisError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::oneshot;
 use tracing::instrument;
 
-use crate::api::middleware::verify_external::VerifiedBody;
+// use crate::api::middleware::verify_external::VerifiedBody;
 use crate::api::server::{AppState, JsonResult, RouteError};
 use crate::db::models::chatter::ChatterSearchResult;
 use crate::db::models::{PaginatedResponse, Pagination};
@@ -95,40 +91,27 @@ pub async fn channel_by_id(
 pub async fn irc_joins(
     State(state): State<Arc<AppState>>,
 ) -> JsonResult<HashMap<&'static str, Vec<String>>> {
-    let tx = &state.tx_client;
-    let msg = String::from("irc_joins");
     let mut output = HashMap::new();
-    let mut missing = HashSet::new();
+    let mut missing = Vec::new();
+    let joined = state.irc_client.joined_channels().await?;
 
-    let (tx_oneshot, rx_oneshot) = oneshot::channel::<Vec<String>>();
-    tx.send((msg, tx_oneshot))?;
-    let joins = match rx_oneshot.await {
-        Ok(data) => data,
-        Err(e) => {
-            tracing::error!(error = ?e, "failure during irc_joins query");
-            return Err(e.into());
-        }
-    };
-
-    let full_list = fetch_channel_list(None)
-        .await?
+    let all: Vec<String> = state
+        .channels
+        .clone()
         .iter()
-        .map(|(name, _)| {
+        .map(|name| {
             let ch_name = format!("#{name}");
-            missing.insert(ch_name.clone());
+            if !joined.contains(&ch_name) {
+                missing.push(ch_name.clone());
+            }
+
             ch_name
         })
         .collect();
 
-    let joins_set: HashSet<String> = HashSet::from_iter(joins.clone());
-    let diff = missing
-        .difference(&joins_set)
-        .map(|i| i.to_owned())
-        .collect();
-
-    output.insert("likely_missing", diff);
-    output.insert("current_joins", joins);
-    output.insert("full_list", full_list);
+    output.insert("missing", missing);
+    output.insert("joined", joined);
+    output.insert("all", all);
 
     Ok(Json(output))
 }
@@ -223,9 +206,20 @@ pub async fn update_chatter_in_cache(
     let json_body: Aliases =
         serde_json::from_value::<Aliases>(payload).map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    match update_historic_user(json_body).await {
-        Ok(_) => Ok(Json(String::from("OK"))),
-        Err(e) => return Ok(Json(e.to_string())),
+    let handle = tokio::spawn(async move {
+        match update_historic_user(json_body).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
+    });
+
+    match handle.await {
+        Ok(Ok(_)) => Ok(Json(String::from("OK"))),
+        Ok(Err(e)) => Ok(Json(e.to_string())),
+        Err(e) => {
+            tracing::error!("task panic: {e}");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
 }
 
@@ -234,34 +228,56 @@ pub async fn update_channel_in_cache(
     Json(payload): Json<Value>,
 ) -> Result<Json<String>, StatusCode> {
     tracing::debug!(?payload, "RX post");
+
     let json_body: Aliases =
         serde_json::from_value::<Aliases>(payload).map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    match update_historic_user(json_body.clone()).await {
-        Ok(_) => (),
-        Err(e) => match e {
-            RedisErr::UpdateEmpty => {
-                // avoid bailing out if the broadcaster's total as a user/chatter is 0
-                tracing::warn!("nothing to update for broadcaster user");
-            }
-            _ => {
-                return Ok(Json(e.to_string()));
-            }
-        },
-    };
+    let handle = tokio::spawn(async move {
+        match update_historic_user(json_body.clone()).await {
+            Ok(_) => (),
+            Err(e) => match e {
+                RedisErr::UpdateEmpty => {
+                    tracing::warn!("nothing to update for broadcaster user");
+                }
+                _ => {
+                    let msg = e.to_string();
+                    return Err(msg);
+                }
+            },
+        };
 
-    match update_historic_channel(json_body).await {
-        Ok(_) => Ok(Json(String::from("OK"))),
-        Err(e) => return Ok(Json(e.to_string())),
+        match update_historic_channel(json_body).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
+    });
+
+    match handle.await {
+        Ok(Ok(_)) => Ok(Json(String::from("OK"))),
+        Ok(Err(e)) => Ok(Json(e.to_string())),
+        Err(e) => {
+            tracing::error!("task panic: {e}");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
 }
 
 #[instrument(skip(_headers))]
 pub async fn run_cache_migration(_headers: HeaderMap) -> Result<Json<String>, StatusCode> {
-    // this blocks for ages so maybe we run these updater functions on a separate thread
-    match Migrator::new().process().await {
-        Ok(_) => Ok(Json(String::from("OK"))),
-        Err(e) => return Ok(Json(e.to_string())),
+    let handle = tokio::spawn(async move {
+        match Migrator::new().process().await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
+    });
+
+    match handle.await {
+        Ok(Ok(_)) => Ok(Json(String::from("OK"))),
+        Ok(Err(e)) => Ok(Json(e.to_string())),
+        Err(e) => {
+            tracing::error!("task panic: {e}");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
 }
 
@@ -275,7 +291,26 @@ pub struct SearchByLoginParam {
 pub async fn search_by_login(
     State(state): State<Arc<AppState>>,
     Query(param): Query<SearchByLoginParam>,
-) -> JsonResult<Vec<ChatterSearchResult>> {
+) -> JsonResult<(Vec<ChatterSearchResult>, usize)> {
     let repo = ChatterRepository::new(state.db_pool);
-    Ok(Json(repo.search_by_login(&param.login).await?))
+
+    let search_res = repo.search_by_login(&param.login).await?;
+    let length = search_res.len();
+
+    Ok(Json((search_res, length)))
+}
+
+#[instrument(skip(state))]
+pub async fn force_irc_reconnect(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<String>, StatusCode> {
+    let supervisor = &state.irc_client;
+    supervisor
+        .connection
+        .reset_tx
+        .send(())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json("reset requested".to_string()))
 }

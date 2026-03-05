@@ -29,10 +29,6 @@ pub struct MpscChannels {
 
 #[derive(Debug)]
 pub enum IrcCommand {
-    // Privmsg {
-    //     channel: String,
-    //     data: String,
-    // },
     ReplyPm {
         channel: String,
         message: String,
@@ -56,7 +52,13 @@ pub struct IrcTags {
     pub msg_id: String,
 }
 
+const COMMAND: &str = "!pisscount";
+const KEYWORD: &str = "piss";
 const COUNTER_USER: &str = "pee_liker";
+
+/// Names of "response-enabled" broadcasters; bot will only respond to command in these
+/// chatrooms to avoid saturating the rate limit and polluting the chat of unsuspecting
+/// streamers.
 const CHANNEL_WHITELIST: [&str; 7] = [
     "plss",
     "chikogaki",
@@ -67,35 +69,10 @@ const CHANNEL_WHITELIST: [&str; 7] = [
     "sleepiebug",
 ];
 const ID_BLACKLIST: [&str; 3] = [
-    "19264788",  // Nightbot
-    "100135110", // StreamElements
-    "1152307157", // us!!!
-                 // ... other bots ...
+    "19264788",   // Nightbot
+    "100135110",  // StreamElements
+    "1152307157", // us
 ];
-
-static IGNORED_USER_IDS: LazyLock<OnceCell<HashSet<&str>>> = LazyLock::new(OnceCell::new);
-
-/// Provides constant-time lookups via a `LazyLock`ed HashSet to check for blacklisted users
-/// on-the-fly.
-///
-/// # Note
-///
-/// Blacklist is only two ids at present, and the overhead associated with instantiation of a
-/// hashset is significant compared to checking the two items in an otherwise constant array.
-#[allow(dead_code)]
-#[instrument]
-pub async fn is_ignored_user(user_id: &str) -> bool {
-    let blacklist = IGNORED_USER_IDS
-        .get_or_try_init(|| async { ignored_hashset().await })
-        .await
-        .unwrap();
-
-    blacklist.contains(user_id)
-}
-
-async fn ignored_hashset() -> Result<HashSet<&'static str>, ()> {
-    Ok(HashSet::from_iter(ID_BLACKLIST))
-}
 
 pub struct ReplyCooldown {
     can_reply: Arc<RwLock<AtomicBool>>,
@@ -134,9 +111,6 @@ async fn set_can_reply(val: bool) {
         .unwrap()
         .store(val, Ordering::Relaxed);
 }
-
-// async fn reply_interval(reply_timer: &'static ReplyCooldown) {
-// }
 
 #[instrument]
 pub async fn start_irc_handler(
@@ -388,8 +362,6 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
     );
 
     match &msg.command {
-        // this is the only command we REALLY care about, but the others
-        // are nice to have, particularly for logging purposes
         Command::PRIVMSG(channel, msg_content) => {
             let tags = parse_tags(msg, channel);
             let message = msg_content.to_string();
@@ -408,6 +380,9 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
 
         Command::PING(data, _) => {}
 
+        // TODO:
+        //  Ensure that the IRC endpoint received a PING that we sent, resetting the connection if
+        //  we determine it has timed out for whatever reason
         Command::PONG(data, _) => {
             let joined = client.get_joined();
             tracing::debug!(
@@ -440,9 +415,10 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
             tracing::warn!(target, msg_id, ?msg, "RX::NOTICE");
 
             // TODO:
-            //  'duplicate message' NOTICE; we circumvent this by appending invisible
-            //  character(s) to the end of our last message but its annoying to set up
-            //  and i cant be bothered currently
+            //  this notice indicates we attempted to send a duplicate message; we should either:
+            //      a) append an invisible character to the end of the message if not present,
+            //      b) remove an existing invisible character from a message if present
+            //  and then retry
             if msg_id.contains("less than 30 seconds ago") {
                 tracing::error!("RX::DUPLICATE_MSG_NOTICE");
             }
@@ -470,7 +446,6 @@ pub async fn command_parser(msg: &Message, client: &mut IrcConnection) -> IrcRes
 
         _ => {
             tracing::debug!(command = ?msg.command, message = ?msg, "RX::OTHER_UNHANDLED");
-            // tracing::debug!(command = ?msg.command, message = ?msg, "IRC received generic cmd");
         }
     }
 
@@ -502,9 +477,9 @@ pub async fn read_channel(
             match msg {
                 IrcMessage::Privmsg { tags, message } => {
                     let pool = db_pool().await?;
-                    // first, we check to see if we should reply to a chatter's message with a
-                    // counter query (only doing so for "whitelisted" channels)
-                    if message.starts_with("!pisscount")
+                    // check whether an incoming message is prefixed with a command and that we are
+                    // in a whitelisted channel
+                    if message.starts_with(COMMAND)
                         && CHANNEL_WHITELIST.contains(&tags.channel_name.as_str())
                     {
                         if !can_reply().await {
@@ -531,9 +506,8 @@ pub async fn read_channel(
                             message,
                         })?;
                     }
-                    // otherwise, check whether we should increment a counter if the message isn't
-                    // a `!pisscount` query
-                    else if message.to_lowercase().contains("piss")
+                    // otherwise, check if we should be increment the counter
+                    else if message.to_lowercase().contains(KEYWORD)
                         && !ID_BLACKLIST.contains(&tags.user_id.as_str())
                     {
                         increment_score(pool, &tags).await?;
@@ -561,7 +535,7 @@ pub async fn make_query_response(
     let target = if parts.len() > 1 {
         parts[1] = parts[1].trim_start_matches('@');
 
-        // our count is always going to be 0 but we have fun around here
+        // our own count is always going to be 0
         if parts[1].to_lowercase() == COUNTER_USER {
             return Ok(ReplyReason::BotCountQueried.get_reply().to_string());
         } else {
@@ -578,12 +552,12 @@ pub async fn make_query_response(
     };
     match target {
         Ok(ch) => Ok(format!(
-            "{} of {} messages have mentioned piss",
-            ch.total, requested_user,
+            "{0} of {requested_user} messages have mentioned {KEYWORD}",
+            ch.total
         )),
         Err(IrcClientErr::SqlxError(err)) => {
             tracing::warn!(error = ?err, "IRC-based query failed due to non-existant user");
-            Ok(format!("0 piss mentions"))
+            Ok(format!("0 {KEYWORD} mentions"))
         }
         Err(err) => {
             tracing::error!(error = ?err, "IRC-based query failed in an unexpected way");
@@ -596,31 +570,17 @@ pub async fn make_query_response(
 #[instrument(skip(pool, tags))]
 pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> IrcResult<()> {
     let chatter_repo = ChatterRepository::new(pool);
+
     let chatter = chatter_repo.get_by_id(&tags.user_id.clone().into()).await?;
     let exists = chatter.is_some();
-
-    // i kind of dont want to do this for channels for efficiency reasons - seems better to make sure
-    // all channels are present when we read in the channel list and then assume they are present (right??)
     if !exists {
         let mut target_id = vec![tags.user_id.clone()];
         let helix_chatter = Helix::fetch_users_by_id(&mut target_id).await?;
 
-        // TODO: why does this get moved if we dont clone? is it because we return a `Vec` of `T`
-        // rather than just the `T`??
         let chatter = Chatter::from(helix_chatter[0].clone());
         chatter_repo.insert(&chatter).await?;
     }
 
-    // let score_repo = LeaderboardRepository::new(pool);
-    // let pre_incr = score_repo
-    //     .get_relational_score(
-    //         &tags.user_id.clone().into(),
-    //         &tags.channel_id.clone().into(),
-    //     )
-    //     .await?;
-    // tracing::debug!(pre_incr = ?pre_incr, "score prior to incrementing");
-
-    // do transaction
     match Tx::with_tx(pool, |mut tx| async move {
         let chatter_id = tags.user_id.clone().into();
         let channel_id = tags.channel_id.clone().into();
@@ -657,14 +617,6 @@ pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> Irc
         ),
     };
 
-    // let post_incr = score_repo
-    //     .get_relational_score(
-    //         &tags.user_id.clone().into(),
-    //         &tags.channel_id.clone().into(),
-    //     )
-    //     .await?;
-    // tracing::debug!(post_incr = ?post_incr, "score after incrementing");
-
     Ok(())
 }
 
@@ -678,15 +630,6 @@ pub async fn send_to_reader(tx: &UnboundedSender<IrcMessage>, data: IrcMessage) 
         }
     }
 }
-
-// #[instrument(skip(rx))]
-// pub async fn read_commands_channel(rx: &mut UnboundedReceiver<IrcCommand>) -> IrcResult<()> {
-//     if let Some(msg) = rx.recv().await {
-//         warn!(msg = ?msg, "RX (IN CLIENT)");
-//     }
-//
-//     Ok(())
-// }
 
 #[instrument(skip(msg, channel))]
 pub fn parse_tags(msg: &Message, channel: &str) -> IrcTags {
@@ -730,15 +673,6 @@ pub fn parse_ttv_response(response: &Response, parts: &[String], _: &Message) {
         _ => (),
     }
 }
-
-// #[instrument(skip(stream))]
-// pub async fn read_incoming(stream: &mut ClientStream) -> Option<Message> {
-//     if let Ok(incoming) = stream.select_next_some().await {
-//         return Some(incoming);
-//     }
-//
-//     None
-// }
 
 const TTV_IRC_URI: &str = "irc.chat.twitch.tv";
 const TTV_IRC_PORT: u16 = 6697;
@@ -788,8 +722,6 @@ impl From<TtvCap> for Capability {
 
 #[derive(Debug)]
 pub struct IrcConnection {
-    // pub config: Config,
-    // pub curr_jitter: u8,
     pub client: Client,
     pub channels: Vec<String>,
     pub sender: UnboundedSender<IrcMessage>,

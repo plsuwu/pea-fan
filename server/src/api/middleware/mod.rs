@@ -11,7 +11,6 @@ use crate::var;
 
 pub type MiddlewareResult<T> = core::result::Result<T, MiddlewareErr>;
 
-
 #[derive(Debug, Error)]
 pub enum MiddlewareErr {
     #[error(transparent)]
@@ -21,9 +20,8 @@ pub enum MiddlewareErr {
     UnspecifiedRingErr,
 }
 
-#[allow(dead_code)]
-pub async fn cors() -> MiddlewareResult<CorsLayer> {
-    let cors_allowed = var!(Var::CorsAllowOrigins).await?;
+pub async fn cors_layer() -> CorsLayer {
+    let cors_allowed = var!(Var::CorsAllowOrigins).await.unwrap_or("*");
 
     let allowed = if cors_allowed == "*" {
         AllowOrigin::any()
@@ -33,7 +31,7 @@ pub async fn cors() -> MiddlewareResult<CorsLayer> {
         })
     };
 
-    Ok(CorsLayer::new()
+    CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
-        .allow_origin(allowed))
+        .allow_origin(allowed)
 }

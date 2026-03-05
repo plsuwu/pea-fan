@@ -65,6 +65,7 @@ pub struct ChatterSearchResult {
     pub color: String,
     pub image: String,
     pub total: i64,
+    // pub broadcaster: bool,
     pub similarity_score: f32,
 }
 

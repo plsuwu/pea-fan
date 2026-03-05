@@ -55,9 +55,10 @@ impl fmt::Display for Hmac {
 pub struct VerifiedBody(pub Bytes);
 
 impl VerifiedBody {
-    // pub fn as_bytes(&self) -> &Bytes {
-    //     &self.0
-    // }
+    #[allow(dead_code)]
+    pub fn as_bytes(&self) -> &Bytes {
+        &self.0
+    }
 
     pub fn as_json<T>(&self) -> Result<T, serde_json::Error>
     where

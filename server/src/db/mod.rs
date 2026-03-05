@@ -32,6 +32,9 @@ pub mod prelude {
     pub use crate::db::repositories::Repository; // + trait to provide base methods
 }
 
+
+// TODO:
+//  we may wish to refactor out this global state
 static DB_POOL: LazyLock<OnceCell<Db>> = LazyLock::new(OnceCell::new);
 pub async fn db_pool() -> PgResult<&'static PgPool> {
     Ok(&DB_POOL

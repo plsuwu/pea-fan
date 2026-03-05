@@ -21,11 +21,13 @@ use tower_http::trace::TraceLayer;
 use tracing::instrument;
 
 use crate::api::handler::*;
+use crate::api::middleware::cors_layer;
 use crate::api::middleware::verify_external::{get_hmac_key, verify_sender_ident};
 use crate::api::middleware::verify_internal::verify_internal_ident;
 use crate::api::webhook::webhook_handler;
 use crate::db::prelude::*;
 use crate::db::redis::redis_pool::redis_pool;
+use crate::irc::{ConnectionClientError, IrcHandle};
 use crate::util::channel::ChannelError;
 use crate::util::env::Var;
 use crate::util::helix::HelixErr;
@@ -38,20 +40,24 @@ pub type JsonResult<T> = core::result::Result<Json<T>, RouteError>;
 pub struct AppState {
     pub db_pool: &'static PgPool,
     pub redis_pool: ConnectionManager,
-    pub tx_client: UnboundedSender<(String, Sender<Vec<String>>)>,
+    pub irc_client: IrcHandle,
+    pub channels: Vec<String>,
 }
 
 #[instrument(skip(tx))]
-pub async fn router(
-    tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>,
-    tx_to_client: UnboundedSender<(String, Sender<Vec<String>>)>,
-) {
-    // let cors = internal_mw::cors().await.unwrap();
+pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels: Vec<String>) {
+    let db_pool = db_pool().await.unwrap();
+    let redis_pool = redis_pool().await.unwrap().manager.clone();
+
+    let irc_client = crate::irc::start(channels.clone(), db_pool, 6)
+        .await
+        .unwrap();
+
     let state = Arc::new(AppState {
-        db_pool: db_pool().await.unwrap(),
-        redis_pool: redis_pool().await.unwrap().manager.clone(),
-        tx_client: tx_to_client,
-        // rx_client: Arc::new(rx_from_client),
+        db_pool,
+        irc_client,
+        redis_pool,
+        channels,
     });
 
     let secret_key = get_hmac_key().await.unwrap();
@@ -63,15 +69,15 @@ pub async fn router(
         .route("/callback", post(webhook_handler))
         .route_layer(middleware::from_fn(verify_sender_ident));
 
+    //
+    // runtime administration
     let internal_post_routes = Router::new()
         .route("/update/channel", post(update_channel_in_cache))
         .route("/update/chatter", post(update_chatter_in_cache))
         .route("/update/migrate", get(run_cache_migration))
         .route_layer(middleware::from_fn(verify_internal_ident));
 
-    let app = Router::new()
-        .merge(external_post_routes)
-        .merge(internal_post_routes)
+    let main_api_routes = Router::new()
         //
         // general
         .route("/", get(|| async { Response::new(Body::empty()) }))
@@ -91,6 +97,12 @@ pub async fn router(
         // proxied helix requests
         .route("/helix/by-login/{login}", get(helix_user_by_login))
         .route("/helix/by-id/{id}", get(helix_user_by_id))
+        .layer(cors_layer().await);
+
+    let app = Router::new()
+        .merge(external_post_routes)
+        .merge(internal_post_routes)
+        .merge(main_api_routes)
         .layer(
             TraceLayer::new_for_http().make_span_with(|req: &axum::http::Request<_>| {
                 let method = req.method();
@@ -139,12 +151,13 @@ async fn log_route_errors(request: Request, next: Next) -> Response {
 #[instrument]
 pub async fn start_server(
     tx: UnboundedSender<SocketAddr>,
-    tx_to_irc: UnboundedSender<(String, Sender<Vec<String>>)>,
     mut rx: UnboundedReceiver<SocketAddr>,
+    channels: Vec<String>,
 ) -> Result<Vec<JoinHandle<()>>, RouteError> {
+
     tracing::info!("starting server");
     let server_handle = tokio::task::spawn(async move {
-        router(tx, tx_to_irc).await;
+        router(tx, channels).await;
     });
 
     let logging_handle = tokio::task::spawn(async move {
@@ -166,6 +179,9 @@ pub async fn start_server(
 #[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum RouteError {
+    #[error(transparent)]
+    IrcClientError(#[from] ConnectionClientError),
+
     #[error(transparent)]
     QueryError(#[from] PgError),
 
@@ -202,6 +218,12 @@ impl IntoResponse for RouteError {
         }
 
         let (status, message, err) = match &self {
+            RouteError::IrcClientError(error) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                error.to_string(),
+                Some(self),
+            ),
+
             RouteError::TryRecvError(error) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 error.to_string(),
@@ -310,35 +332,35 @@ impl IntoResponse for RouteError {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::util::telemetry as otlp_trace;
-    use futures::future::join_all;
-    // use futures_util::future::join_all;
-    use tokio::sync::oneshot::Sender;
-
-    #[tokio::test]
-    async fn test_run_server() {
-        let provider = otlp_trace::Telemetry::new().await.unwrap().register();
-
-        let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
-        let (tx_from_api, rx_from_api) =
-            tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
-
-        let channels = ["vacu0usly", "plss", "chikogaki"]
-            .into_iter()
-            .map(|ch| ch.to_string())
-            .collect();
-
-        let mut handles = start_server(tx_server, tx_from_api, rx).await.unwrap();
-        handles.extend(
-            crate::irc::client::start_irc_handler(channels, rx_from_api)
-                .await
-                .unwrap(),
-        );
-
-        _ = join_all(handles).await;
-        provider.shutdown();
-    }
-}
+// #[cfg(test)]
+// mod test {
+//     use super::*;
+//     use crate::util::telemetry as otlp_trace;
+//     use futures::future::join_all;
+//     // use futures_util::future::join_all;
+//     use tokio::sync::oneshot::Sender;
+//
+//     #[tokio::test]
+//     async fn test_run_server() {
+//         let provider = otlp_trace::Telemetry::new().await.unwrap().register();
+//
+//         let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
+//         let (tx_from_api, rx_from_api) =
+//             tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
+//
+//         let channels = ["vacu0usly", "plss", "chikogaki"]
+//             .into_iter()
+//             .map(|ch| ch.to_string())
+//             .collect();
+//
+//         let mut handles = start_server(tx_server, tx_from_api, rx).await.unwrap();
+//         handles.extend(
+//             crate::irc::client::start_irc_handler(channels, rx_from_api)
+//                 .await
+//                 .unwrap(),
+//         );
+//
+//         _ = join_all(handles).await;
+//         provider.shutdown();
+//     }
+// }
