@@ -121,11 +121,16 @@
                 numpy
                 selenium
                 webdriver-manager
+                fonttools
+                brotli
               ]
             ))
 
             twitch-cli
             sqlx-cli
+            ttfautohint
+
+            # pyftsubset
 
             postgresql
             redis

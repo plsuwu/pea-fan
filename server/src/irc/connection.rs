@@ -3,7 +3,6 @@ use std::time::Instant;
 
 use futures::StreamExt;
 use irc::client::{Client, data};
-// use irc::client::prelude::*;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 use tracing::instrument;
@@ -25,6 +24,7 @@ use super::commands::{IncomingMessage, OutgoingCommand};
 
 const KEEPALIVE_INTERVAL: u64 = 180;
 
+#[derive(Debug)]
 pub struct ConnectionSupervisor {
     channels: Vec<String>,
     reset_rx: mpsc::Receiver<()>,
@@ -43,6 +43,7 @@ pub struct ConnectionHandle {
 }
 
 impl ConnectionSupervisor {
+    #[instrument]
     pub fn new(channels: Vec<String>) -> (Self, ConnectionHandle) {
         let (reset_tx, reset_rx) = mpsc::channel(4);
         let (generation_tx, generation_rx) = watch::channel(0u64);
@@ -63,6 +64,7 @@ impl ConnectionSupervisor {
     }
 
     /// Main event loop, where each iteration reflects one full connection lifecycle.
+    #[instrument(skip(self, msg_tx, cmd_rx, query_rx))]
     pub async fn run(
         &mut self,
         msg_tx: async_channel::Sender<IncomingMessage>,
@@ -90,6 +92,7 @@ impl ConnectionSupervisor {
         }
     }
 
+    #[instrument(skip(self, msg_tx, cmd_rx, query_rx))]
     async fn run_single_connection(
         &mut self,
         msg_tx: &async_channel::Sender<IncomingMessage>,
@@ -121,9 +124,8 @@ impl ConnectionSupervisor {
             tokio::select! {
                 Some(msg_result) = stream.next() => {
                         let msg = msg_result?;
-
                         if is_pong(&msg) {
-                            tracing::debug!(
+                            tracing::info!(
                                 command = ?msg.command,
                                 time_since_last_ack = ?last_ack.elapsed(),
                                 "keepalive_acknowledged"
@@ -144,12 +146,13 @@ impl ConnectionSupervisor {
                                 }
                             }
 
-                            _ => {}
+                            _ => {
+                                if let Some(parsed) = parse_incoming(&msg) {
+                                    _ = msg_tx.send(parsed).await;
+                                }
+                            }
                         }
 
-                        if let Some(parsed) = parse_incoming(&msg) {
-                            _ = msg_tx.send(parsed).await;
-                        }
                     }
 
                 _ = ping_interval.tick() => {
@@ -241,7 +244,7 @@ impl ConnectionClient {
         })
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn connect(&mut self) -> ClientResult<()> {
         tracing::debug!("connecting to IRC: authorizing + requesting capabilities");
 

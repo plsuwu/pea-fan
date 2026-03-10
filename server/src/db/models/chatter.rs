@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// #![allow(dead_code)]
 
 use core::fmt;
 
@@ -65,7 +65,7 @@ pub struct ChatterSearchResult {
     pub color: String,
     pub image: String,
     pub total: i64,
-    // pub broadcaster: bool,
+    pub ranking: i64,
     pub similarity_score: f32,
 }
 

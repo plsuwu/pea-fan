@@ -7,7 +7,7 @@ use tracing::instrument; //{debug, error, info, instrument, warn};
 use crate::db::prelude::*;
 use crate::util::helix::{Helix, HelixErr, HelixUser};
 
-#[instrument(skip(from_url))]
+#[instrument]
 pub async fn fetch_channel_list(from_url: Option<&str>) -> ChannelResult<Vec<(String, ChatterId)>> {
     let channel_list = reqwest::get(from_url.unwrap_or(CHANNELS_LIST_URL))
         .await?
@@ -31,7 +31,7 @@ pub async fn fetch_channel_list(from_url: Option<&str>) -> ChannelResult<Vec<(St
     Ok(name_id)
 }
 
-#[instrument(skip(from_url))]
+#[instrument]
 pub async fn update_channels(from_url: Option<&str>) -> ChannelResult<HashMap<String, Chatter>> {
     let name_to_id = fetch_channel_list(from_url).await?;
     let ids: Vec<ChatterId> = name_to_id.into_iter().map(|(_, id)| id).collect();
@@ -39,7 +39,8 @@ pub async fn update_channels(from_url: Option<&str>) -> ChannelResult<HashMap<St
     update_stored_channels(&ids).await
 }
 
-#[instrument(skip(channels))]
+#[allow(dead_code)]
+#[instrument]
 pub async fn update_channels_by_name(
     channels: &[String],
 ) -> ChannelResult<HashMap<String, Chatter>> {
@@ -49,7 +50,7 @@ pub async fn update_channels_by_name(
     update_stored_channels(&ids).await
 }
 
-#[instrument(skip(chatter), fields(id = chatter.id.0))]
+#[instrument(skip(chatter), fields(chatter_id = chatter.id.0))]
 pub fn update_threshold_elapsed(chatter: &Chatter) -> bool {
     let current_ts = Utc::now().naive_utc();
     let threshold = Days::new(1);
@@ -70,7 +71,7 @@ pub fn update_threshold_elapsed(chatter: &Chatter) -> bool {
     false
 }
 
-#[instrument(skip(ids), fields(count = ids.len()))]
+#[instrument(skip(ids), fields(chatter_id_count = ids.len()))]
 pub async fn update_stored_channels(ids: &[ChatterId]) -> ChannelResult<HashMap<String, Chatter>> {
     tracing::debug!("performing stored channel checks");
     let mut requires_update: Vec<String> = Vec::new();
@@ -125,11 +126,11 @@ pub async fn update_stored_channels(ids: &[ChatterId]) -> ChannelResult<HashMap<
     Ok(channel_map)
 }
 
-#[instrument(skip(existing, requires_update), fields(update_required_count = requires_update.len(), total_existing_count = existing.len()))]
 /// Updates existing database entries with refreshed data
 ///
 /// This function performs the retrieval of chatter data from Helix, calls the database upsert, and
 /// then returns the full list of chatters to its caller
+#[instrument(skip(existing, requires_update), fields(updates = requires_update.len()))]
 pub async fn get_and_refresh_chatter_data(
     repo: &ChatterRepository,
     existing: &mut Vec<Chatter>,

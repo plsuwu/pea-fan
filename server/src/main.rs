@@ -38,20 +38,18 @@ type Result<T> = core::result::Result<T, RunnerErr>;
 async fn main() -> Result<()> {
     let telemetry_registry = telemetry::Telemetry::new().await?.register();
 
-    tracing::info!("starting main application");
+    tracing::info!("------------------------");
+    tracing::info!("MAIN APPLICATION RUNNING");
+    tracing::info!("------------------------");
 
     let channels_updated = util::channel::update_channels(None).await?;
     let channel_names: Vec<String> = channels_updated.into_keys().collect();
     let (tx_server_ready, rx_server_ready) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
-    // let (tx_to_client, rx_from_api) =
-    //     tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
 
     let mut handles = Vec::new();
-    // let irc_handles = irc::client::start_irc_handler(channel_names, rx_from_api).await?;
     let server_handles =
         api::server::start_server(tx_server_ready, rx_server_ready, channel_names).await?;
 
-    // handles.extend(irc_handles);
     handles.extend(server_handles);
     _ = join_all(handles).await;
 

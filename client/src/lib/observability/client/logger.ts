@@ -1,4 +1,5 @@
 import { browser } from "$app/environment";
+import { v4 } from "uuid";
 import type {
 	LogEntry,
 	LogLevel,
@@ -49,7 +50,7 @@ export class ClientLogger {
 
 		let clientId = localStorage.getItem(CLIENT_STORED);
 		if (!clientId) {
-			clientId = crypto.randomUUID();
+			clientId = v4();
 			localStorage.setItem(CLIENT_STORED, clientId);
 		}
 
@@ -57,7 +58,7 @@ export class ClientLogger {
 	}
 
 	private createSessionId(): string {
-		return crypto.randomUUID();
+		return v4();
 	}
 
 	private startFlushTimer(): void {
@@ -164,7 +165,7 @@ export class ClientLogger {
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}`);
 			} else {
-				console.info(`OTEL collection OK`);
+				console.info(`log collection succeeded`);
 			}
 		} catch (err) {
 			if (attempt <= this.config.maxRetries) {

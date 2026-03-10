@@ -5,8 +5,11 @@ pub mod telemetry;
 
 use std::arch::asm;
 
+use tracing::instrument;
+
 /// Performs `&str` comparisons in constant time in an attempt to close any and all side-channels
 /// that might leak information about our key
+#[instrument(skip(a, b))]
 pub fn constant_time_cmp(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
@@ -24,7 +27,7 @@ pub fn constant_time_cmp(a: &str, b: &str) -> bool {
     //  for equality testing but i am not so smart and i don't think perfect
     //  efficiency is of utmost importance for this function at present.
     //
-    //  ... plus we want to check out decompilation for this function anyway, right?
+    //  ... plus we should check out the decompilation for this function anyway
     for i in 0..a.len() {
         let left = std::hint::black_box(&a[i]) as *const u8;
         let right = std::hint::black_box(&b[i]) as *const u8;

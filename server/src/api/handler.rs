@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::extract::{Path, Query, State};
@@ -6,13 +6,14 @@ use axum::{Json, debug_handler};
 use http::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::oneshot;
 use tracing::instrument;
 
 // use crate::api::middleware::verify_external::VerifiedBody;
 use crate::api::server::{AppState, JsonResult, RouteError};
 use crate::db::models::chatter::ChatterSearchResult;
+use crate::db::models::leaderboard::TimeWindow;
 use crate::db::models::{PaginatedResponse, Pagination};
+use crate::db::prelude::{ChannelId, ChatterId, Tx};
 use crate::db::prelude::{ChannelLeaderboardEntry, Repository};
 use crate::db::prelude::{ChatterLeaderboardEntry, ChatterRepository, LeaderboardRepository};
 use crate::db::redis::migrator::{
@@ -20,7 +21,6 @@ use crate::db::redis::migrator::{
 };
 use crate::db::redis::redis_pool::RedisErr;
 use crate::db::repositories::leaderboard::ScorePagination;
-use crate::util::channel::fetch_channel_list;
 use crate::util::helix::{Helix, HelixUser};
 
 #[instrument(skip(state))]
@@ -85,6 +85,11 @@ pub async fn channel_by_id(
         Some(ch) => Ok(Json(ch)),
         None => Err(RouteError::InvalidUser(id)),
     }
+}
+
+#[instrument(skip(state))]
+pub async fn all_channels(State(state): State<Arc<AppState>>) -> JsonResult<Vec<String>> {
+    Ok(Json(state.channels.clone()))
 }
 
 #[instrument(skip(state))]
@@ -286,6 +291,11 @@ pub struct SearchByLoginParam {
     login: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SearchByIdParam {
+    id: String,
+}
+
 #[instrument(skip(state))]
 #[axum::debug_handler]
 pub async fn search_by_login(
@@ -305,12 +315,121 @@ pub async fn force_irc_reconnect(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<String>, StatusCode> {
     let supervisor = &state.irc_client;
-    supervisor
-        .connection
-        .reset_tx
-        .send(())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok(Json("reset requested".to_string()))
+    match supervisor.connection.reset_tx.send(()).await {
+        Ok(_) => {
+            tracing::info!("force irc reset from API triggered");
+            Ok(Json("IRC_RESET_REQUESTED".to_string()))
+        }
+        Err(e) => {
+            tracing::error!(error = ?e, "failure while triggering irc reconnect from API");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WindowedScores {
+    yesterday: i64,
+    prev_week: i64,
+    prev_month: i64,
+    prev_year: i64,
+    last_7_days: i64,
+    last_30_days: i64,
+}
+
+impl WindowedScores {
+    pub fn new(
+        yesterday: i64,
+        prev_week: i64,
+        prev_month: i64,
+        prev_year: i64,
+        last_7_days: i64,
+        last_30_days: i64,
+    ) -> Self {
+        Self {
+            yesterday,
+            prev_week,
+            prev_month,
+            prev_year,
+            last_7_days,
+            last_30_days,
+        }
+    }
+}
+
+#[instrument(skip(state))]
+pub async fn get_channel_scores_window(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<WindowedScores>, StatusCode> {
+    let pool = state.db_pool;
+    let channel_id = ChannelId(id);
+
+    match tokio::spawn(async move {
+        Tx::with_tx(pool, |mut tx| async move {
+            let result = async {
+                let mut query_results = Vec::new();
+                let queries: [String; 6] = [
+                    TimeWindow::Yesterday.into_query("channel"),
+                    TimeWindow::PrevWeek.into_query("channel"),
+                    TimeWindow::PrevMonth.into_query("channel"),
+                    TimeWindow::PrevYear.into_query("channel"),
+                    TimeWindow::Last7Days.into_query("channel"),
+                    TimeWindow::Last30Days.into_query("channel"),
+                ];
+                for query in queries {
+                    let q_res = sqlx::query_scalar::<_, i64>(&query)
+                        .bind(&channel_id.0)
+                        .fetch_one(&mut **tx.inner_mut()?)
+                        .await
+                        .unwrap_or(0);
+
+                    query_results.push(q_res);
+                }
+
+                Ok(query_results)
+            }
+            .await;
+
+            (tx, result)
+        })
+        .await
+    })
+    .await
+    {
+        Ok(Ok(vals)) => Ok(Json(WindowedScores::new(
+            vals[0], vals[1], vals[2], vals[3], vals[4], vals[5],
+        ))),
+        Ok(Err(e)) => {
+            tracing::error!(error = ?e, "sqlx inner error");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+        Err(e) => {
+            tracing::error!(error = ?e, "tokio worker error");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+#[instrument(skip(state))]
+pub async fn get_chatter_scores_window(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> JsonResult<WindowedScores> {
+    let repo = LeaderboardRepository::new(state.db_pool);
+    let chatter_id = ChatterId(id);
+
+    todo!()
+}
+
+// #[instrument(skip(state))]
+// pub async fn get_channel_weekly(
+//     State(state): State<Arc<AppState>>,
+//     Query(param): Query<SearchByIdParam>,
+// ) -> JsonResult<i64> {
+//     let repo = LeaderboardRepository::new(state.db_pool);
+//     let res = repo.get_channel_daily_total(&crate::db::prelude::ChatterId(param.id))
+//         .await?;
+//
+//     Ok(Json(res))
+// }

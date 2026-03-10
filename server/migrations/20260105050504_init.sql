@@ -114,27 +114,27 @@ SELECT
 FROM channel ch
 JOIN chatter c ON ch.id = c.id;
 
-CREATE OR REPLACE FUNCTION recalc_chatter_total(chatter_id_param varchar(16))
-RETURNS INT8 AS $$
-BEGIN
-    UPDATE chatter
-    SET 
-        total = (SELECT COALESCE(SUM(score), 0) FROM score WHERE chatter_id = chatter_id_param),
-        updated_at = NOW()
-    WHERE id = chatter_id_param;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION recalc_channel_total(channel_id_param varchar(16))
-RETURNS INT8 AS $$
-BEGIN
-    UPDATE channel
-    SET
-        total = (SELECT COALESCE(SUM(score), 0) FROM score WHERE channel_id = channel_id_param),
-        updated_at = NOW()
-    WHERE id = channel_id_param;
-END;
-$$ LANGUAGE plpgsql;
+-- CREATE OR REPLACE FUNCTION recalc_chatter_total(chatter_id_param varchar(16))
+-- RETURNS INT8 AS $$
+-- BEGIN
+--     UPDATE chatter
+--     SET 
+--         total = (SELECT COALESCE(SUM(score), 0) FROM score WHERE chatter_id = chatter_id_param),
+--         updated_at = NOW()
+--     WHERE id = chatter_id_param;
+-- END;
+-- $$ LANGUAGE plpgsql;
+--
+-- CREATE OR REPLACE FUNCTION recalc_channel_total(channel_id_param varchar(16))
+-- RETURNS INT8 AS $$
+-- BEGIN
+--     UPDATE channel
+--     SET
+--         total = (SELECT COALESCE(SUM(score), 0) FROM score WHERE channel_id = channel_id_param),
+--         updated_at = NOW()
+--     WHERE id = channel_id_param;
+-- END;
+-- $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION get_chatter_rank(chatter_id_param varchar(16))
 RETURNS INT8 AS $$

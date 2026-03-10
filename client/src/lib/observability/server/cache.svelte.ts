@@ -1,9 +1,19 @@
-import { URLS } from "$lib";
+import { Rh } from "$lib/utils/route";
 import { logger } from "./logger.svelte";
 import { Result } from "$lib/types/result/result";
 import { traced } from "./tracing";
+import {
+	PUBLIC_DEVL_API,
+	PUBLIC_DEVL_PROTO,
+	PUBLIC_PROD_API,
+	PUBLIC_PROD_PROTO,
+} from "$env/static/public";
 
-const { api, proto } = URLS();
+export type RawIrcInfo = {
+	likely_missing: string[];
+	full_list: string[];
+	current_joins: string[];
+};
 
 export abstract class Cache<T extends string> {
 	readonly url: string;
@@ -16,41 +26,40 @@ export abstract class Cache<T extends string> {
 	constructor(url: string, cacheName: string, ttl = 300000) {
 		this.url = url;
 		this.name = cacheName;
-
-		this._ttlMs = ttl;
+		// this._ttlMs = ttl;
+		this._ttlMs = 1000;
 	}
 
 	@traced()
 	public async refresh(method = "GET"): Promise<void> {
 		if (!this.ttlElapsed()) {
-			logger.debug({ cache: this }, "cache up to date");
+			logger.debug({ cache: this }, "[CACHE] up to date");
 			return;
 		}
 
-		logger.debug({ cache: this }, "running cache refresh");
+		logger.debug({ cache: this }, "[CACHE] running refresh");
 		const response = await fetch(this.url, { method });
 		if (!response.ok) {
-			logger.error({ response }, "error while updating a cache");
-
+			logger.error({ response }, "[CACHE] error during update");
 			return;
 		}
 
 		(await Result.fromPromise(response.json())).match({
 			Ok: (data) => {
-				this.data = data as Iterable<T>;
+				this.data = new Set(data as string[] as Iterable<T>);
 				this._lastRefresh = Date.now();
 			},
 			Err: (err) => {
 				logger.error(
 					{ cache: this, error: err },
-					"error while reading response JSON"
+					"[CACHE] JSON response error"
 				);
 
 				throw err;
-			}
+			},
 		});
 
-		logger.info({ cache: this }, "retrieved channels from endpoint");
+		logger.info({ cache: this }, "[CACHE] retrieved channel data");
 		return;
 	}
 
@@ -66,7 +75,7 @@ export abstract class Cache<T extends string> {
 			this._lastRefresh == null || this._lastRefresh + this._ttlMs < Date.now();
 
 		if (stale) {
-			logger.warn("stale cache (refreshes on this request)");
+			logger.warn("[CACHE] stale data: attempting refresh");
 		}
 
 		return stale;
@@ -109,7 +118,7 @@ export abstract class Cache<T extends string> {
 	}
 }
 
-type Broadcaster = `#${string}`;
+type Broadcaster = string; //`#${string}`;
 // type Leaderboard = "channel" | "chatter";
 
 class ChannelCache extends Cache<Broadcaster> {
@@ -121,8 +130,10 @@ class ChannelCache extends Cache<Broadcaster> {
 	}
 }
 
+const protocol = import.meta.env.DEV ? PUBLIC_DEVL_PROTO : PUBLIC_PROD_PROTO;
+const apiUrl = import.meta.env.DEV ? PUBLIC_DEVL_API : PUBLIC_PROD_API;
+
 export const channelCache = new ChannelCache(
-	`${proto}://${api}/channel/irc-joins`,
+	`${protocol}://${apiUrl}/channel/all`,
 	"channels"
 );
-

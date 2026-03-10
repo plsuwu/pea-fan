@@ -1,8 +1,14 @@
 <script lang="ts">
 	let {
+		fill = "transparent",
+		stroke = "currentColor",
 		size = 40,
+        thickness = 1,
 		disabled = false
 	}: {
+		fill?: "transparent" | string;
+		stroke?: "currentColor" | string;
+        thickness?: number;
 		size?: number;
 		disabled?: boolean;
 	} = $props();
@@ -13,9 +19,10 @@
 <svg height={size} width={size} aria-hidden="true">
 	<polygon
 		{points}
-		fill="transparent"
+		{fill}
 		stroke={disabled
 			? "color-mix(in oklab, var(--muted-foreground) 60%, transparent)"
-			: "currentColor"}
+			: stroke}
+        stroke-width={thickness}
 	/>
 </svg>

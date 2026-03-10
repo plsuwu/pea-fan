@@ -3,24 +3,33 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vitest/config";
 import { playwright } from "@vitest/browser-playwright";
 import { sveltekit } from "@sveltejs/kit/vite";
+import Icons from "unplugin-icons/vite";
 
 export default defineConfig(({ command }) => {
 	const target = "es2022";
 	return {
 		define: {
 			__VITE_COMMAND__: JSON.stringify(command),
-			__BUILDING__: command === "build"
+			__BUILDING__: command === "build",
 		},
-		plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
+		plugins: [
+			tailwindcss(),
+			sveltekit(),
+			devtoolsJson(),
+			Icons({ compiler: "svelte" }),
+		],
 		optimizeDeps: {
 			esbuildOptions: {
-				target
-			}
+				target,
+			},
 		},
 		esbuild: {
-			target
+			target,
 		},
-		server: { port: 5173 },
+		server: {
+			port: 5173,
+			allowedHosts: [".piss.local"],
+		},
 		test: {
 			expect: { requireAssertions: true },
 
@@ -34,12 +43,12 @@ export default defineConfig(({ command }) => {
 						browser: {
 							enabled: true,
 							provider: playwright(),
-							instances: [{ browser: "chromium", headless: true }]
+							instances: [{ browser: "chromium", headless: true }],
 						},
 
 						include: ["src/**/*.svelte.{test,spec}.{js,ts}"],
-						exclude: ["src/lib/server/**"]
-					}
+						exclude: ["src/lib/server/**"],
+					},
 				},
 
 				{
@@ -49,10 +58,10 @@ export default defineConfig(({ command }) => {
 						name: "server",
 						environment: "node",
 						include: ["src/**/*.{test,spec}.{js,ts}"],
-						exclude: ["src/**/*.svelte.{test,spec}.{js,ts}"]
-					}
-				}
-			]
-		}
+						exclude: ["src/**/*.svelte.{test,spec}.{js,ts}"],
+					},
+				},
+			],
+		},
 	};
 });

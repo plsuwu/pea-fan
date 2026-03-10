@@ -1,26 +1,40 @@
 use std::sync::Arc;
 
 use tokio::sync::{AcquireError, Semaphore};
-use tokio::time::MissedTickBehavior;
-use tokio::time::{Duration, interval};
+use tokio::time::{Duration, MissedTickBehavior, interval};
+use tracing::instrument;
 
+#[derive(Debug)]
 pub struct Bucket {
     sem: Arc<Semaphore>,
     handle: tokio::task::JoinHandle<()>,
 }
 
 impl Bucket {
+    #[instrument(skip(duration, capacity))]
     pub fn new(duration: Duration, capacity: usize) -> Self {
         let sem = Arc::new(Semaphore::new(capacity));
         let handle = tokio::spawn({
             let sem = sem.clone();
-            let mut interval = interval(duration);
 
-            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            let mut inner_interval = interval(duration);
+            let mut poller_interval = interval(Duration::from_millis(500));
+
+            inner_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+            poller_interval.set_missed_tick_behavior(MissedTickBehavior::Delay); 
+
             async move {
                 loop {
-                    interval.tick().await;
+                    poller_interval.tick().await;
                     if sem.available_permits() < capacity {
+                        inner_interval.reset();
+                        inner_interval.tick().await;
+                        tracing::info!(
+                            current_bucket = sem.available_permits(),
+                            capacity,
+                            "adding token back to bucket",
+                        );
+
                         sem.add_permits(1);
                     }
                 }
@@ -30,13 +44,16 @@ impl Bucket {
         Self { sem, handle }
     }
 
+    #[instrument]
     pub async fn acquire_one(&self) -> Result<bool, AcquireError> {
-        let permit = self.sem.acquire().await?;
+        let permit = self.sem.clone().acquire_owned().await?;
         permit.forget();
 
         Ok(true)
     }
 
+    #[allow(dead_code)]
+    #[instrument]
     pub fn try_acquire_one(&self) -> bool {
         match self.sem.try_acquire() {
             Ok(_) => true,

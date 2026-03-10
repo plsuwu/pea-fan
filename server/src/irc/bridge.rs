@@ -1,4 +1,7 @@
+#![allow(dead_code)]
+
 use tokio::sync::{mpsc, oneshot};
+use tracing::instrument;
 
 use crate::irc::commands::{IrcQuery, OutgoingCommand};
 use crate::irc::connection::ConnectionHandle;
@@ -13,6 +16,7 @@ pub struct IrcHandle {
 }
 
 impl IrcHandle {
+    #[instrument(skip(self))]
     pub async fn joined_channels(&self) -> ClientResult<Vec<String>> {
         let (tx, rx) = oneshot::channel();
         self.query_tx
@@ -39,6 +43,7 @@ impl IrcHandle {
     //     Ok(())
     // }
 
+    #[instrument]
     pub async fn force_reconnect(&mut self) {
         tracing::warn!("connection reset requested");
         _ = self.connection.reset_tx.send(()).await;

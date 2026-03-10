@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::sync::Arc;
 
 use irc::proto::Message;
@@ -5,8 +7,11 @@ use irc::proto::message::Tag;
 use sqlx::PgPool;
 use tokio::sync::Mutex;
 use tokio::{sync::mpsc, task::JoinHandle};
+use tracing::instrument;
 
-use crate::db::prelude::{Chatter, ChatterId, ChatterRepository, Repository, Tx};
+use crate::db::prelude::{
+    Chatter, ChatterId, ChatterRepository, LeaderboardRepository, Repository, Tx,
+};
 use crate::irc::ReplyReason;
 use crate::irc::commands::{IncomingMessage, IrcTags, OutgoingCommand};
 use crate::irc::error::{ClientResult, ConnectionClientError};
@@ -14,7 +19,7 @@ use crate::irc::parse::format_username;
 use crate::irc::rate_limit::Bucket;
 use crate::util::helix::Helix;
 
-const INVISIBLE_CHAR: u32 = 0x00002000;
+const TRAILER_CHAR: char = '\u{180B}';
 pub const COUNTER_USER: &str = "pee_liker";
 
 /// Names of "response-enabled" broadcasters; bot will only respond to command in these
@@ -44,20 +49,22 @@ const ID_BLACKLIST: [&str; 3] = [
 const COMMAND: &str = "!pisscount";
 const KEYWORD: &str = "piss";
 
-#[derive(Default)]
-struct LastMessage {
+#[derive(Debug, Default)]
+pub struct LastMessage {
     pub channel: String,
     pub message: String,
     pub tagged_chatter: String,
     pub has_invisible_char: bool,
 }
 
+#[derive(Debug)]
 pub struct WorkerPool {
     workers: Vec<JoinHandle<()>>,
     pub last_message: Arc<Mutex<LastMessage>>,
 }
 
 impl WorkerPool {
+    #[instrument]
     pub fn spawn(
         count: usize,
         msg_rx: async_channel::Receiver<IncomingMessage>,
@@ -94,6 +101,7 @@ impl WorkerPool {
     }
 }
 
+#[instrument(skip(msg, cmd_tx, last_message, bucket, pool))]
 async fn handle_message(
     msg: IncomingMessage,
     cmd_tx: &mpsc::Sender<OutgoingCommand>,
@@ -108,7 +116,7 @@ async fn handle_message(
             let chatter = format!("{}.{}", &tags.user_id, &tags.user_login);
 
             tracing::info!(
-                msg_id = tags.msg_id,
+                // msg_id = tags.msg_id,
                 channel,
                 chatter,
                 content = text,
@@ -119,29 +127,28 @@ async fn handle_message(
             if text.starts_with("!pisscount")
                 && CHANNEL_WHITELIST.contains(&tags.channel_name.as_str())
             {
-                rate_limiter.acquire_one().await?;
-                tracing::debug!(reply_for = tags.msg_id, "reply permit acquired");
-
+                tracing::debug!("`pisscount` command recv");
                 let repo = ChatterRepository::new(pool);
-
                 let mut reply = build_query_response(&repo, &text, &tags).await?;
-                let mut guard = last_message.lock().await;
 
-                tracing::debug!(
+                // we use a mutex here as we want to do a single read and a single write in order
+                // to atomically compare every response to its predecessor
+                let mut guard = last_message.lock().await;
+                tracing::trace!(
                     prev_msg_content = ?guard.message,
                     prev_in_channel = ?guard.channel,
                     prev_tagged_chatter = ?guard.tagged_chatter,
                     curr_msg_content = ?reply,
                     curr_in_channel = ?tags.channel_name,
                     curr_tagged_chatter = ?tags.user_login,
-                    "message detail"
                 );
 
                 if &guard.channel == &tags.channel_name
                     && &guard.message == &reply
                     && &guard.tagged_chatter == &tags.user_login
                 {
-                    reply.push('\u{180B}');
+                    // circumvent duplicate message filter if content matches
+                    reply.push(TRAILER_CHAR);
                 }
 
                 guard.channel = tags.channel_name.clone();
@@ -149,15 +156,22 @@ async fn handle_message(
                 guard.tagged_chatter = tags.user_login.clone();
 
                 let channel = format!("#{0}", tags.channel_name);
-                let reply_tag = vec![Tag(String::from("reply-parent-msg-id"), Some(tags.msg_id))];
+                let reply_tag = vec![Tag(
+                    String::from("reply-parent-msg-id"),
+                    Some(tags.msg_id.clone()),
+                )];
                 let response = Message {
                     tags: Some(reply_tag),
                     prefix: None,
                     command: irc::proto::Command::PRIVMSG(channel, reply),
                 };
 
-                tracing::debug!(message = ?response, "final irc::proto::Message");
+                tracing::debug!(message = ?response, "final `irc::proto::Message` for output");
 
+                // ensure we adhere to rate limits - build response, then wait until a permit is
+                // available before pushing out to connection
+                rate_limiter.acquire_one().await?;
+                tracing::debug!(reply_for = tags.msg_id, "reply permit acquired");
                 cmd_tx
                     .send(OutgoingCommand::Reply { message: response })
                     .await?;
@@ -166,6 +180,7 @@ async fn handle_message(
             } else if text.to_lowercase().contains(KEYWORD)
                 && !ID_BLACKLIST.contains(&tags.user_id.as_str())
             {
+                tracing::info!(tags.user_login, tags.channel_name, "incrementing score");
                 increment_score(pool, &tags).await?;
             }
 
@@ -178,6 +193,7 @@ async fn handle_message(
     }
 }
 
+#[instrument(skip(repo))]
 pub async fn build_query_response(
     repo: &ChatterRepository,
     message: &str,
@@ -223,54 +239,100 @@ pub async fn build_query_response(
     }
 }
 
+#[instrument(skip(pool))]
 pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> ClientResult<()> {
     let chatter_repo = ChatterRepository::new(pool);
+    let score_repo = LeaderboardRepository::new(pool);
 
     let chatter = chatter_repo.get_by_id(&tags.user_id.clone().into()).await?;
     let exists = chatter.is_some();
+
     if !exists {
         let mut target_id = vec![tags.user_id.clone()];
         let helix_chatter = Helix::fetch_users_by_id(&mut target_id).await?;
-
         let chatter = Chatter::from(helix_chatter[0].clone());
         chatter_repo.insert(&chatter).await?;
     }
 
-    match Tx::with_tx(pool, |mut tx| async move {
-        let chatter_id = tags.user_id.clone().into();
-        let channel_id = tags.channel_id.clone().into();
-
-        let result = async {
-            tx.increment_score_by(&chatter_id, &channel_id, 1).await?;
-            tx.recalculate_channel_total(&channel_id).await?;
-            tx.recalculate_chatter_total(&chatter_id).await?;
-
+    match score_repo
+        .record_score_event(
+            &tags.user_id.clone().into(),
+            &tags.channel_id.clone().into(),
+        )
+        .await
+    {
+        Ok(_) => {
+            tracing::trace!(
+                channel = tags.channel_id,
+                chatter = tags.user_id,
+                channel_name = tags.channel_name,
+                login = tags.user_login,
+                "score event recorded"
+            );
             Ok(())
         }
-        .await;
-
-        (tx, result)
-    })
-    .await
-    {
         Err(e) => {
             tracing::error!(
                 error = ?e,
                 channel = tags.channel_id,
                 chatter = tags.user_id,
-                "score increment via transaction failure"
+                "score event insert failure"
             );
-
-            return Err(ConnectionClientError::SqlxError(e));
+            Err(ConnectionClientError::SqlxError(e))
         }
-        _ => tracing::trace!(
-            channel = tags.channel_id,
-            chatter = tags.user_id,
-            channel_name = tags.channel_name,
-            login = tags.user_login,
-            "increment ok"
-        ),
-    };
-
-    Ok(())
+    }
 }
+
+// #[instrument(skip(pool))]
+// pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> ClientResult<()> {
+//     let chatter_repo = ChatterRepository::new(pool);
+//
+//     let chatter = chatter_repo.get_by_id(&tags.user_id.clone().into()).await?;
+//     let exists = chatter.is_some();
+//     if !exists {
+//         let mut target_id = vec![tags.user_id.clone()];
+//         let helix_chatter = Helix::fetch_users_by_id(&mut target_id).await?;
+//
+//         let chatter = Chatter::from(helix_chatter[0].clone());
+//         chatter_repo.insert(&chatter).await?;
+//     }
+//
+//     // custom transaction handler to auto-commit on an Ok result
+//     match Tx::with_tx(pool, |mut tx| async move {
+//         let chatter_id = tags.user_id.clone().into();
+//         let channel_id = tags.channel_id.clone().into();
+//
+//         let result = async {
+//             tx.increment_score_by(&chatter_id, &channel_id, 1).await?;
+//             tx.recalculate_channel_total(&channel_id).await?;
+//             tx.recalculate_chatter_total(&chatter_id).await?;
+//
+//             Ok(())
+//         }
+//         .await;
+//
+//         (tx, result)
+//     })
+//     .await
+//     {
+//         Err(e) => {
+//             tracing::error!(
+//                 error = ?e,
+//                 channel = tags.channel_id,
+//                 chatter = tags.user_id,
+//                 "score increment via transaction failure"
+//             );
+//
+//             return Err(ConnectionClientError::SqlxError(e));
+//         }
+//         _ => tracing::trace!(
+//             channel = tags.channel_id,
+//             chatter = tags.user_id,
+//             channel_name = tags.channel_name,
+//             login = tags.user_login,
+//             "increment ok"
+//         ),
+//     };
+//
+//     Ok(())
+// }

@@ -8,25 +8,27 @@
 		currentUrl,
 		totalItems,
 		itemsPerPage,
-		variant
+		variant = "Channel",
+        pageParam = "page",
 	}: {
 		pageNumber: number;
 		totalPages: number;
 		currentUrl: URL;
 		totalItems: number;
 		itemsPerPage: number;
-		variant: string;
+		variant?: string;
+        pageParam?: string;
 	} = $props();
 
 	let currentRanks = $derived({
 		// low is 0-indexed
 		low: itemsPerPage * pageNumber - itemsPerPage + 1,
-		high: itemsPerPage * pageNumber
+		high: itemsPerPage * pageNumber,
 	});
 
 	function withPage(page: number): string {
-		const url = new URL(currentUrl.href);
-		url.searchParams.set("page", String(page));
+		const url = new URL(currentUrl);
+		url.searchParams.set(pageParam, String(page));
 		return url.href;
 	}
 
@@ -34,7 +36,7 @@
 	let hasNext = $derived(pageNumber < totalPages);
 </script>
 
-<div class="mb-4 flex w-full flex-col justify-center">
+<div class="-mt-6 -mb-3 flex w-full flex-col justify-center">
 	<div class="mb-4 flex justify-center">
 		<div class="flex w-4/5 flex-row justify-between">
 			<PageButton
@@ -44,6 +46,12 @@
 				direction="backward"
 				class="mr-0.5"
 			/>
+			<div class="text-center text-muted-foreground">
+				<div class="text-sm">page {pageNumber} of {totalPages}</div>
+				<div class="text-xs italic">
+					rank {currentRanks.low} to {currentRanks.high} (of {totalItems} total)
+				</div>
+			</div>
 			<PageButton
 				icon={ChevronRight}
 				href={withPage(pageNumber + 1)}
@@ -51,12 +59,6 @@
 				direction="forward"
 				class="ml-0.5"
 			/>
-		</div>
-	</div>
-	<div class="text-center text-muted-foreground">
-		<div class="text-sm">page {pageNumber} of {totalPages}</div>
-		<div class="text-xs italic">
-			rank {currentRanks.low} to {currentRanks.high} (of {totalItems} total)
 		</div>
 	</div>
 </div>

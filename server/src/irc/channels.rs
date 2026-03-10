@@ -1,8 +1,12 @@
+#![allow(dead_code)]
+
 use std::collections::HashSet;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
+use tracing::instrument;
 
+#[derive(Debug)]
 pub enum ChannelEvent {
     /// JOIN observed for our user
     Joined(String),
@@ -18,10 +22,12 @@ pub enum ChannelEvent {
 }
 
 /// Commands to send back to the supervisor to execute on the socket
+#[derive(Debug)]
 pub enum ChannelAction {
     Join(Vec<String>),
 }
 
+#[derive(Debug)]
 pub struct ChannelManager {
     expected: HashSet<String>,
     joined: HashSet<String>,
@@ -31,6 +37,7 @@ pub struct ChannelManager {
 }
 
 impl ChannelManager {
+    #[instrument(skip(event_rx, action_tx))]
     pub fn new(
         channels: Vec<String>,
         nick: String,
@@ -57,11 +64,12 @@ impl ChannelManager {
         }
     }
 
+    #[instrument(skip(self))]
     pub async fn run(mut self) {
         const MIN_CHECK: Duration = Duration::from_secs(6);
         const MAX_CHECK: Duration = Duration::from_secs(480);
 
-        let mut check_interval = Duration::from_secs(0); // attempt to join immediately
+        let mut check_interval = Duration::from_secs(0); // start joining channels immediately
         let mut check_timer = Box::pin(tokio::time::sleep(check_interval));
 
         tracing::info!("starting channel manager");
@@ -146,6 +154,7 @@ impl ChannelManager {
         }
     }
 
+    #[instrument(skip(self))]
     pub fn add_channel(&mut self, channel: String) {
         self.expected.insert(channel);
     }

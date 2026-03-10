@@ -1,3 +1,5 @@
+// #![allow(dead_code)]
+
 use tokio::sync::oneshot;
 
 #[derive(Debug, Default)]
@@ -11,6 +13,22 @@ pub struct IrcTags {
     pub channel_name: String,
     pub channel_id: String,
     pub msg_id: String,
+}
+
+#[derive(Debug)]
+pub enum UserNoticeType {
+    // Sub,
+    Resub,
+    // SubGift,
+    // SubMysteryGift,
+    // GiftPaidUpgrade,
+    // RewardGift,
+    // AnonGiftPaidUpgrade,
+    // Raid,
+    // Unraid,
+    // BitsBadgeTier,
+    // SharedChatNotice,
+    Other(String),
 }
 
 #[derive(Debug)]
@@ -36,6 +54,11 @@ pub enum IncomingMessage {
         channel: String,
         chatter: String,
         id: Option<String>,
+    },
+    Usernotice {
+        channel: String,
+        chatter: String,
+        notice_type: UserNoticeType,
     },
     Join {
         channel: String,

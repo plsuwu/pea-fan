@@ -75,6 +75,7 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
         .route("/update/channel", post(update_channel_in_cache))
         .route("/update/chatter", post(update_chatter_in_cache))
         .route("/update/migrate", get(run_cache_migration))
+        .route("/irc/force-reconnect", get(force_irc_reconnect))
         .route_layer(middleware::from_fn(verify_internal_ident));
 
     let main_api_routes = Router::new()
@@ -85,9 +86,11 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
         //
         // channel-related routes
         .route("/channel/leaderboard", get(global_channels))
+        .route("/channel/windowed/{id}", get(get_channel_scores_window))
         .route("/channel/by-login/{login}", get(channel_by_login))
         .route("/channel/by-id/{id}", get(channel_by_id))
         .route("/channel/irc-joins", get(irc_joins))
+        .route("/channel/all", get(all_channels))
         //
         // chatter-related routes
         .route("/chatter/leaderboard", get(global_chatters))

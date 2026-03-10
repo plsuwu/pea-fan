@@ -3,7 +3,7 @@
 @plugin '@tailwindcss/typography';
 
 @theme {
-    --font-iosevka: "Iosevka", Courier, monospace;
+    --font-iosevka: "Iosevka";
     --breakpoint-xxl: 99rem;
 }
 
@@ -123,24 +123,25 @@
 }
 
 .shadow-container {
-	box-shadow: 6px 6px 0px 0px rgba(0, 0, 0, 1);
+	box-shadow: 7px 7px 0px 0px rgba(0, 0, 0, 1);
 	hover {
-		box-shadow: 12px 12px 0px 0px rgba(0, 0, 0, 1);
+		box-shadow: 16px 16px 0px 0px rgba(0, 0, 0, 1);
 	}
 }
 
 .shadow-container-dark {
-	box-shadow: 6px 6px 0px 0px rgba(255, 255, 255, 1);
+	box-shadow: 7px 7px 0px 0px rgba(255, 255, 255, 1);
 	hover {
-		box-shadow: 12px 12px 0px 0px rgba(255, 255, 255, 1);
+		box-shadow: 16px 16px 0px 0px rgba(255, 255, 255, 1);
 	}
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-y-scroll;
   }
 }

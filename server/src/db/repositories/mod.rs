@@ -45,6 +45,28 @@ impl<'a> Tx<'a> {
         }
     }
 
+    #[instrument(skip(self))]
+    pub async fn disable_score_event_triggers(&mut self) -> SqlxResult<()> {
+        tracing::warn!("disabling score_event-score incrementer triggers");
+
+        sqlx::query!("ALTER TABLE score_event DISABLE TRIGGER score_event_increment_trigger")
+            .execute(&mut **self.inner_mut()?)
+            .await?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn enable_score_event_triggers(&mut self) -> SqlxResult<()> {
+        tracing::warn!("enabling score_event-score incrementer triggers");
+
+        sqlx::query!("ALTER TABLE score_event ENABLE TRIGGER score_event_increment_trigger")
+            .execute(&mut **self.inner_mut()?)
+            .await?;
+
+        Ok(())
+    }
+
     #[instrument(skip(self, item))]
     pub async fn insert_chatter(&mut self, item: &Chatter) -> SqlxResult<()> {
         sqlx::query!(
@@ -126,7 +148,7 @@ impl<'a> Tx<'a> {
         }
     }
 
-    fn inner_mut(&mut self) -> SqlxResult<&mut Transaction<'a, Postgres>> {
+    pub fn inner_mut(&mut self) -> SqlxResult<&mut Transaction<'a, Postgres>> {
         self.inner
             .as_mut()
             .ok_or_else(|| sqlx::Error::Protocol("Transaction already completed".into()))
@@ -184,6 +206,37 @@ impl<'a> Tx<'a> {
         .bind(score)
         .fetch_one(&mut **self.inner_mut()?)
         .await
+    }
+
+    #[instrument(skip(self))]
+    pub async fn record_score_events_multi(
+        &mut self,
+        chatter_id: &ChatterId,
+        channel_id: &ChannelId,
+        count: i64,
+        base_timestamp: chrono::NaiveDateTime,
+    ) -> SqlxResult<()> {
+        if count <= 0 {
+            return Ok(());
+        }
+
+        sqlx::query!(
+            r#"
+            INSERT INTO score_event (chatter_id, channel_id, earned_at)
+            SELECT 
+                $1::varchar(16),
+                $2::varchar(16),
+                $3::timestamp + make_interval(secs => generate_series(1, $4))
+            "#,
+            chatter_id.0,
+            channel_id.0,
+            base_timestamp,
+            count as i32,
+        )
+        .execute(&mut **self.inner_mut()?)
+        .await?;
+
+        Ok(())
     }
 
     #[instrument(skip(self, chatter_id, channel_id, score))]

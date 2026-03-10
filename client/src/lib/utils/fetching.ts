@@ -1,29 +1,31 @@
-import type { Entry, PaginatedRequest, PaginatedResponse } from "$lib/types";
+import type {
+	ChannelEntry,
+	ChatterEntry,
+	Entry,
+	PaginatedRequest,
+	PaginatedResponse,
+    ScoreWindows,
+} from "$lib/types";
 import type { RequestEvent } from "@sveltejs/kit";
-import { capitalize, clamp, strToNum } from ".";
-import { URLS } from "$lib";
+import {
+	capitalize,
+	clamp,
+	intoUntypedEntry,
+	strToNum,
+	type UntypedEntry,
+} from ".";
 import { logger } from "$lib/observability/server/logger.svelte";
 import { traced } from "$lib/observability/server/tracing";
+import { Rh } from "$lib/utils/route";
 
 export class FetchUtil {
-	public api: string;
-	public base: string;
-	public proto: string;
-
-	constructor() {
-		const { api, base, proto } = URLS();
-		this.api = api;
-		this.base = base;
-		this.proto = proto;
-	}
-
 	@traced()
 	async fetchLeaderboard(
 		{ fetch }: Partial<RequestEvent>,
 		variant: "channel" | "chatter",
 		pagination: PaginatedRequest
 	): Promise<PaginatedResponse> {
-		let url = new URL(`${this.proto}://${this.api}/${variant}/leaderboard`);
+		let url = new URL(`${Rh.proto}://${Rh.api}/${variant}/leaderboard`);
 
 		logger.info({ pageinfo: { ...pagination } }, "pagination");
 
@@ -36,15 +38,17 @@ export class FetchUtil {
 		if (limit) url.searchParams.append("limit", String(limit));
 		if (page) url.searchParams.append("page", String(clamp(page - 1, 0)));
 
-		logger.info({ url }, "performing leaderboard fetch");
+		logger.info({ url }, "[API] performing leaderboard fetch");
+
 		const response = await fetch!(url, { method: "GET" });
 
-		logger.info({ response }, "query response");
+		logger.info({ response }, "[API] query response");
 
 		if (!response.ok) {
-			// the server SHOULD return some error info on error in its
-			// JSON body (i think lmfao)
-			logger.error({ response }, "received error response from API");
+			// TODO check this
+			//   the server SHOULD return some error info on error in its
+			//   JSON body (i think lmfao but who KNOWS)
+			logger.error({ response }, "[API] received error response");
 		}
 
 		const body = (await response.json()) as PaginatedResponse;
@@ -53,7 +57,7 @@ export class FetchUtil {
 		if (body.total_pages < Number(pagination.page)) {
 			logger.warn(
 				{ requestPage: pagination.page, totalPages: body.total_pages },
-				"requested non-existent page, using fallback of 'totalPages - 1'"
+				"[API] requested non-existent page, using fallback of 'totalPages - 1'"
 			);
 
 			pagination.page = String(body.total_pages);
@@ -68,25 +72,63 @@ export class FetchUtil {
 		{ fetch }: Partial<RequestEvent>,
 		variant: "channel" | "chatter",
 		identVariant: "id" | "login",
-		ident: string
-		// pagination: PaginatedRequest
-	): Promise<Entry> {
+		ident: string,
+		pagination: PaginatedRequest
+	): Promise<PaginatedResponse<UntypedEntry>> {
 		const url = new URL(
-			`${this.proto}://${this.api}/${variant}/by-${identVariant}/${ident}`
+			`${Rh.proto}://${Rh.api}/${variant}/by-${identVariant}/${ident}`
 		);
 
-		const response = await fetch!(url, { method: "GET" });
-		const body = await response.json();
+		url.searchParams.set("score_limit", pagination.scoreLimit!);
 
-		if (!response.ok) {
-			logger.error({ response }, "received error response from API");
-			return body;
+		const scorePage = strToNum(pagination.scorePage!)!;
+		url.searchParams.append("score_page", String(clamp(scorePage - 1, 0)));
+
+		logger.info(
+			{ url: url.href },
+			"[API] built URL for single channel score fetch"
+		);
+
+		const apiResponse = await fetch!(url, { method: "GET" });
+
+		logger.info({ response: apiResponse }, "[API] query response");
+		if (!apiResponse.ok) {
+			logger.error({ response: apiResponse }, "[API] received error response");
+		}
+		const body = intoUntypedEntry({
+			_tag: capitalize(variant),
+			data: await apiResponse.json(),
+		});
+
+		const scoreLimit = strToNum(pagination.scoreLimit!);
+
+		const response: PaginatedResponse<UntypedEntry> = {
+			page: scorePage!,
+			total_items: body.totalScores,
+			total_pages: Math.ceil(body.totalScores / scoreLimit!),
+			page_size: body.scores.length,
+			items: [body],
+		};
+
+		return response;
+	}
+
+	@traced()
+	async fetchWindowed(
+		{ fetch }: Partial<RequestEvent>,
+		variant: "channel" | "chatter",
+		id: string
+	): Promise<ScoreWindows> {
+		const url = new URL(`${Rh.proto}://${Rh.api}/${variant}/windowed/${id}`);
+		logger.info({ url: url.href }, "querying for windowed scores");
+
+		const apiResponse = await fetch!(url, { method: "GET" });
+		logger.info({ response: apiResponse }, "[API] query response");
+		if (!apiResponse.ok) {
+			logger.error({ response: apiResponse }, "[API] received error response");
 		}
 
-		const entry: Entry = { _tag: capitalize(variant), data: body };
-		logger.info({ entry }, "retrieved entry ok");
-
-		return body;
+		return await apiResponse.json();
 	}
 }
 

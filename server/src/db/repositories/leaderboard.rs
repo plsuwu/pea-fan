@@ -9,6 +9,7 @@ use crate::db::models::channel::{
 use crate::db::models::chatter::{
     ChatterId, ChatterLeaderboardEntry, ChatterLeaderboardRow, ChatterScoreSummary,
 };
+use crate::db::models::leaderboard::TimeWindow;
 use crate::db::prelude::{
     Channel, ChannelRepository, Chatter, ChatterRepository, Repository, Score, ScoreSummary,
 };
@@ -38,6 +39,104 @@ pub struct ScorePaginationResponse {
 impl LeaderboardRepository {
     pub fn new(pool: &'static Pool<Postgres>) -> Self {
         Self { pool }
+    }
+
+    #[instrument(skip(self))]
+    pub async fn record_score_event(
+        &self,
+        chatter_id: &ChatterId,
+        channel_id: &ChannelId,
+    ) -> SqlxResult<()> {
+        tracing::debug!(%chatter_id, %channel_id,  "inserting new score_event");
+
+        sqlx::query!(
+            r#"
+            INSERT INTO score_event (chatter_id, channel_id, earned_at)
+            VALUES ($1, $2, NOW())
+            "#,
+            chatter_id.0,
+            channel_id.0,
+        )
+        .execute(self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn record_score_events_multi(
+        &self,
+        chatter_id: &ChatterId,
+        channel_id: &ChatterId,
+        count: i64,
+        base_timestamp: chrono::NaiveDateTime,
+    ) -> SqlxResult<()> {
+        if count <= 0 {
+            tracing::warn!(count, "score <= 0 is invalid");
+            return Ok(());
+        }
+
+        sqlx::query!(
+            r#"
+            INSERT INTO score_event (chatter_id, channel_id, earned_at)
+            SELECT 
+                $1::varchar(16),
+                $2::varchar(16),
+                $3::timestamp + make_interval(secs => generate_series(1, $4))
+            "#,
+            chatter_id.0,
+            channel_id.0,
+            base_timestamp,
+            count as i64,
+        )
+        .execute(self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_channel_total_for_window(
+        &self,
+        channel_id: &ChannelId,
+        window: TimeWindow,
+    ) -> SqlxResult<i64> {
+        let query = format!(
+            r#"
+            SELECT COALESCE(COUNT(*), 0)
+            FROM score_event
+            WHERE chatter_id = $1
+            AND earned_at >= {}
+            "#,
+            window.as_date_trunc(),
+        );
+
+        Ok(sqlx::query_scalar(&query)
+            .bind(&channel_id.0)
+            .fetch_one(self.pool)
+            .await
+            .unwrap_or(0))
+    }
+
+    pub async fn get_chatter_total_for_window(
+        &self,
+        chatter_id: &ChannelId,
+        window: TimeWindow,
+    ) -> SqlxResult<i64> {
+        let query = format!(
+            r#"
+            SELECT COALESCE(COUNT(*), 0)
+            FROM score_event
+            WHERE chatter_id = $1
+            AND earned_at >= {}
+            "#,
+            window.as_date_trunc(),
+        );
+
+        Ok(sqlx::query_scalar(&query)
+            .bind(&chatter_id.0)
+            .fetch_one(self.pool)
+            .await
+            .unwrap_or(0))
     }
 
     #[instrument(skip(self, channel, chatter, value), fields(channel = channel.id.0, chatter = chatter.id.0))]

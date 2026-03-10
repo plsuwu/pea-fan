@@ -8,7 +8,7 @@ export type ChannelEntry = {
 	total_chatter: number;
 	total_channel: number;
 	chatter_scores?: Array<ChatterScore>;
-    total_scores: number;
+	total_scores: number;
 };
 
 export type ChatterEntry = {
@@ -20,7 +20,7 @@ export type ChatterEntry = {
 	ranking: number;
 	total: number;
 	channel_scores?: Array<ChannelScore>;
-    total_scores: number;
+	total_scores: number;
 };
 
 //
@@ -47,19 +47,28 @@ export type ChatterScore = {
 	chatter_image: string;
 };
 
-export type PaginatedResponse = {
+export type ScoreWindows = {
+	yesterday: number;
+	prev_week: number;
+	prev_month: number;
+	prev_year: number;
+	last_7_days: number;
+	last_30_days: number;
+};
+
+export type PaginatedResponse<T = ChatterEntry | ChannelEntry> = {
 	page: number;
 	total_items: number;
 	total_pages: number;
 	page_size: number;
-	items: Array<ChatterEntry | ChannelEntry>;
+	items: Array<T>;
 };
 
 export type PaginatedRequest = {
 	limit: string;
 	page: string;
-    scoreLimit?: string;
-    scorePage?: string;
+	scoreLimit?: string;
+	scorePage?: string;
 };
 
 //
@@ -82,7 +91,7 @@ export const TWITCH_IMAGE_SIZE = {
 	LG: "150x150",
 	MD: "70x70",
 	SM: "50x50",
-	XS: "28x28"
+	XS: "28x28",
 } as const;
 
 export const DEFAULT_ICON_SIZE = TWITCH_IMAGE_SIZE.XL;

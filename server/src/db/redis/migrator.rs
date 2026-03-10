@@ -116,7 +116,7 @@ impl Migrator {
         let removed_count = pre_filter_len - chatter_logins.len();
 
         if removed_count > 0 {
-            tracing::warn!(
+            tracing::error!(
                 removed_count,
                 remaining_count = chatter_logins.len(),
                 "filtered invalid chatter logins",
@@ -196,39 +196,92 @@ impl Migrator {
             "merged leaderboard data"
         );
 
+        let base_timestamp = chrono::Utc::now()
+            .naive_utc()
+            .checked_sub_signed(chrono::Duration::days(1)) // idk just whenever really
+            .unwrap_or_default();
+
         Tx::with_tx(pool, |mut tx| async move {
             let result = async {
+                tx.disable_score_event_triggers().await?;
+
                 for (chatter_id, scoremap) in scores.into_iter() {
                     for (channel_id, score) in scoremap.into_iter() {
-                        tracing::trace!(
-                            channel = channel_id,
-                            "updating and recaculating channel score"
+                        tracing::debug!(
+                            chatter = %chatter_id,
+                            channel = %channel_id,
+                            score,
+                            "inserting score_event relationship"
                         );
-                        tracing::trace!(chatter = chatter_id, "updating chatter scoremap");
-                        tx.update_score(
+
+                        tx.record_score_events_multi(
                             &chatter_id.clone().into(),
                             &channel_id.clone().into(),
-                            score.into(),
+                            score as _,
+                            base_timestamp,
                         )
                         .await?;
-
-                        tx.recalculate_channel_total(&channel_id.into()).await?;
-                        tx.recalculate_chatter_total(&chatter_id.clone().into())
-                            .await
-                            .unwrap();
                     }
                 }
+
+                tx.enable_score_event_triggers().await?;
+
+                sqlx::query!(
+                    r#"
+                    UPDATE chatter
+                    SET total = (
+                        SELECT COALESCE(COUNT(*), 0)
+                        FROM score_event
+                        WHERE chatter_id = chatter.id
+                    ),
+                    updated_at = NOW()
+                    "#,
+                )
+                .execute(&mut **tx.inner_mut()?)
+                .await?;
+
+                sqlx::query!(
+                    r#"
+                    UPDATE channel
+                    SET channel_total = (
+                        SELECT COALESCE(COUNT(*), 0)
+                        FROM score_event
+                        WHERE channel_id = channel.id
+                    ),
+                    updated_at = NOW()
+                    "#,
+                )
+                .execute(&mut **tx.inner_mut()?)
+                .await?;
+
+                sqlx::query!(
+                    r#"
+                    INSERT INTO score (chatter_id, channel_id, score, updated_at)
+                    SELECT 
+                        chatter_id,
+                        channel_id,
+                        COUNT(*) as score,
+                        NOW() as updated_at
+                    FROM score_event
+                    GROUP BY chatter_id, channel_id
+                    ON CONFLICT (chatter_id, channel_id)
+                    DO UPDATE SET
+                        score = EXCLUDED.score,
+                        updated_at = EXCLUDED.updated_at
+                    "#
+                )
+                .execute(&mut **tx.inner_mut()?)
+                .await?;
 
                 Ok(())
             }
             .await;
 
-            tracing::info!("cache migration pipeline complete");
-
             (tx, result)
         })
         .await?;
 
+        tracing::info!("cache migration pipeline complete");
         Ok(())
     }
 

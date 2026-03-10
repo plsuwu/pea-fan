@@ -205,8 +205,8 @@ impl Helix {
             && let Some(total) = rl_total
         {
             tracing::info!(
-                ratelimit_available = ?remaining, 
-                ratelimit_total = ?total, 
+                ratelimit_available = ?remaining,
+                ratelimit_total = ?total,
                 "rate-limit bucket"
             );
             // ... implement some kind of backoff if we start to saturate this limit
@@ -339,7 +339,6 @@ impl Helix {
     #[instrument]
     pub async fn get_active_subscriptions() -> HelixResult<Vec<String>> {
         let params = build_query_params(HelixParamType::Status, &["enabled".to_string()]);
-
         if params.len() != 1 {
             return Err(HelixErr::FetchErr(
                 "invalid active_hooks query param".to_string(),
@@ -433,7 +432,6 @@ impl Helix {
 }
 
 pub const HELIX_URI_BASE: &str = "https://api.twitch.tv/helix";
-// pub const HELIX_URI_BASE: &str = "http://localhost:8081/mock";
 pub const HELIX_URN_USERS: &str = "users";
 pub const HELIX_URN_STREAMS: &str = "streams";
 pub const HELIX_URN_COLORS: &str = "chat/color";
@@ -491,11 +489,7 @@ pub fn build_query_params(param_type: HelixParamType, items: &[String]) -> Vec<S
     let queries: Vec<_> = items
         .chunks(100)
         .map(|chunk| {
-            let mut query = format!(
-                "?{}{}",
-                String::from(param_type),
-                chunk[0].to_lowercase()
-            );
+            let mut query = format!("?{}{}", String::from(param_type), chunk[0].to_lowercase());
             for val in &chunk[1..] {
                 query.push_str(&format!(
                     "&{}{}",
@@ -687,7 +681,7 @@ mod test {
             let user_details = Helix::fetch_users_by_id(&mut user_ids).await.unwrap();
             assert_eq!(user_details.len(), user_ids.len());
         }
-        
+
         provider.shutdown();
     }
 }
