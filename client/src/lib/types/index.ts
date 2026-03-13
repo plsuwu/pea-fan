@@ -64,6 +64,13 @@ export type PaginatedResponse<T = ChatterEntry | ChannelEntry> = {
 	items: Array<T>;
 };
 
+export type PaginationData = {
+	currentPage: number;
+	totalItems: number;
+	itemsPerPage: number;
+	totalPages: number;
+};
+
 export type PaginatedRequest = {
 	limit: string;
 	page: string;

@@ -1,10 +1,10 @@
 <script lang="ts">
 	import * as Accordion from "$lib/shadcn-components/ui/accordion";
+	import { AccordionState } from "./periodic-accordion-state.svelte";
 	import calendar from "dayjs/plugin/calendar";
 	import dayjs, { type Dayjs } from "dayjs";
 
 	dayjs.extend(calendar);
-
 	let tsNow = dayjs();
 
 	function getPeriod(period: "day" | "week" | "month" | "year") {
@@ -66,41 +66,44 @@
 	</div>
 {/snippet}
 
-<div>
-	<Accordion.Root type="single" class="w-full" >
-		<Accordion.Item value="periodic-piss-stats">
-			<Accordion.Trigger
-				class="border-b border-b-muted rounded-none pt-2 pb-3 text-sm font-semibold text-accent-foreground/55 lg:text-lg"
-				>periodic piss stats</Accordion.Trigger
-			>
-			<Accordion.Content class="rounded-b-lg border-r border-b border-l p-4">
-				{@render StatLine(
-					getCalendarPeriod("yesterday"),
-					yesterday.toLocaleString()
-				)}
-				<div class="my-4"></div>
-				{@render StatLine(
-					getCalendarPeriod("last7Days"),
-					last7Days.toLocaleString()
-				)}
-				{@render StatLine(
-					getCalendarPeriod("last30Days"),
-					last30Days.toLocaleString()
-				)}
-				<div class="my-4"></div>
-				{@render StatLine(
-					getCalendarPeriod("lastWeek"),
-					prevWeek.toLocaleString()
-				)}
-				{@render StatLine(
-					getCalendarPeriod("lastMonth"),
-					prevMonth.toLocaleString()
-				)}
-				{@render StatLine(
-					getCalendarPeriod("lastYear"),
-					prevYear.toLocaleString()
-				)}
-			</Accordion.Content>
-		</Accordion.Item>
-	</Accordion.Root>
-</div>
+<Accordion.Root
+	type="single"
+	class="w-full"
+	bind:ref={AccordionState.element}
+>
+	<Accordion.Item value="periodic-piss-stats">
+		<Accordion.Trigger
+			class="rounded-none border-b border-b-muted pt-2 pb-3 text-sm font-semibold 
+                text-accent-foreground/55 lg:text-lg"
+			>other periodic piss stats</Accordion.Trigger
+		>
+		<Accordion.Content class="rounded-b-lg border-r border-b border-l p-4">
+			{@render StatLine(
+				getCalendarPeriod("yesterday"),
+				yesterday.toLocaleString()
+			)}
+			<div class="my-4"></div>
+			{@render StatLine(
+				getCalendarPeriod("last7Days"),
+				last7Days.toLocaleString()
+			)}
+			{@render StatLine(
+				getCalendarPeriod("last30Days"),
+				last30Days.toLocaleString()
+			)}
+			<div class="my-4"></div>
+			{@render StatLine(
+				getCalendarPeriod("lastWeek"),
+				prevWeek.toLocaleString()
+			)}
+			{@render StatLine(
+				getCalendarPeriod("lastMonth"),
+				prevMonth.toLocaleString()
+			)}
+			{@render StatLine(
+				getCalendarPeriod("lastYear"),
+				prevYear.toLocaleString()
+			)}
+		</Accordion.Content>
+	</Accordion.Item>
+</Accordion.Root>

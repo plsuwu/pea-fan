@@ -10,7 +10,8 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::instrument;
 
 use crate::db::prelude::{
-    Chatter, ChatterId, ChatterRepository, LeaderboardRepository, Repository, Tx,
+    ChannelId, ChannelRepository, Chatter, ChatterId, ChatterRepository, LeaderboardRepository,
+    Repository, Tx,
 };
 use crate::irc::ReplyReason;
 use crate::irc::commands::{IncomingMessage, IrcTags, OutgoingCommand};
@@ -101,6 +102,18 @@ impl WorkerPool {
     }
 }
 
+#[instrument]
+async fn is_whitelisted_channel(
+    pool: &'static PgPool,
+    channel_id: &str,
+) -> Result<bool, ConnectionClientError> {
+    let repo = ChannelRepository::new(pool);
+
+    let row = repo.get_reply_config(channel_id).await?;
+
+    Ok(row.enabled)
+}
+
 #[instrument(skip(msg, cmd_tx, last_message, bucket, pool))]
 async fn handle_message(
     msg: IncomingMessage,
@@ -125,7 +138,7 @@ async fn handle_message(
 
             // check for command invocation
             if text.starts_with("!pisscount")
-                && CHANNEL_WHITELIST.contains(&tags.channel_name.as_str())
+                && is_whitelisted_channel(pool, &tags.channel_id).await?
             {
                 tracing::debug!("`pisscount` command recv");
                 let repo = ChatterRepository::new(pool);

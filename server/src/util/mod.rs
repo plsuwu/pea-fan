@@ -2,6 +2,7 @@ pub mod channel;
 pub mod env;
 pub mod helix;
 pub mod telemetry;
+pub mod totp;
 
 use std::arch::asm;
 

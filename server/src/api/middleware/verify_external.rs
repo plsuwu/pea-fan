@@ -33,8 +33,8 @@ pub struct Hmac {
 impl Hmac {
     fn new() -> MiddlewareResult<Self> {
         let rng = ring::rand::SystemRandom::new();
-        let mut digest = [0u8; digest::SHA256_OUTPUT_LEN];
 
+        let mut digest = [0u8; digest::SHA256_OUTPUT_LEN];
         rng.fill(&mut digest)
             .map_err(|_| MiddlewareErr::UnspecifiedRingErr)?;
 
@@ -68,7 +68,7 @@ impl VerifiedBody {
     }
 }
 
-pub async fn verify_sender_ident(mut req: Request, next: Next) -> Result<Response, StatusCode> {
+pub async fn verify_external_ident(mut req: Request, next: Next) -> Result<Response, StatusCode> {
     let headers = req.headers().clone();
     let body = match extract_body(&mut req).await {
         Ok(bytes) => bytes,

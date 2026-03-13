@@ -4,7 +4,7 @@ import type {
 	Entry,
 	PaginatedRequest,
 	PaginatedResponse,
-    ScoreWindows,
+	ScoreWindows,
 } from "$lib/types";
 import type { RequestEvent } from "@sveltejs/kit";
 import {
@@ -120,6 +120,8 @@ export class FetchUtil {
 		id: string
 	): Promise<ScoreWindows> {
 		const url = new URL(`${Rh.proto}://${Rh.api}/${variant}/windowed/${id}`);
+		url.searchParams.set("variant", variant);
+
 		logger.info({ url: url.href }, "querying for windowed scores");
 
 		const apiResponse = await fetch!(url, { method: "GET" });

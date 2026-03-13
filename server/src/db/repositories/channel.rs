@@ -3,7 +3,7 @@ use tracing::instrument;
 
 use super::sql_fragment;
 use crate::db::{
-    models::channel::{Channel, ChannelId},
+    models::channel::{Channel, ChannelId, ChannelReplies},
     prelude::Tx,
     repositories::Repository,
 };
@@ -76,7 +76,8 @@ impl Repository for ChannelRepository {
                 }
 
                 Ok(())
-            }.await;
+            }
+            .await;
 
             (tx, result)
         })
@@ -115,4 +116,62 @@ impl Repository for ChannelRepository {
             }
         }
     }
+}
+
+impl ChannelRepository {
+    #[instrument(skip(self))]
+    pub async fn update_channel_config(&self, channel: &ChannelId) -> SqlxResult<()> {
+        match sqlx::query!(
+            r#"
+            UPDATE reply SET
+                enabled = NOT enabled,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+            channel.0,
+        )
+        .execute(self.pool)
+        .await
+        {
+            Ok(_) => {
+                tracing::info!(channel = channel.0, "update ok");
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!(error = ?e, channel = channel.0, "failed to update");
+                Err(e)
+            }
+        }
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_reply_config(&self, channel: &str) -> SqlxResult<ChannelReplies> {
+        let result = sqlx::query_as::<_, ChannelReplies>(
+            r#"
+            SELECT * FROM replies_and_chatter_data
+            WHERE id = $1
+            "#,
+        )
+        .bind(channel)
+        .fetch_one(self.pool)
+        .await?;
+
+        Ok(result)
+    }
+    
+    #[instrument(skip(self))]
+    pub async fn get_all_reply_configs(&self) -> SqlxResult<Vec<ChannelReplies>> {
+        // TODO rename this view if ever bothered
+        let configs = sqlx::query_as::<_, ChannelReplies>(
+            r#"
+            SELECT * FROM replies_and_chatter_data;
+            "#,
+        )
+        .fetch_all(self.pool)
+        .await?;
+
+        Ok(configs)
+    }
+
+    // pub async fn get_all_reply_configs()
 }

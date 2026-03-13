@@ -11,7 +11,6 @@
 
 	let { data }: { data: PageData } = $props();
 	let leaderboard = $derived(data.leaderboardData);
-    console.log(leaderboard);
 
 	let variant = $derived(
 		capitalize<"Chatter" | "Channel">(data.leaderboardVariant)
@@ -35,6 +34,7 @@
 	});
 </script>
 
+<div class="flex flex-col w-full">
 <div
 	class="flex w-[60%] flex-col self-center pb-8 transition-all duration-100 ease-in
     lg:w-[650px]"
@@ -62,4 +62,5 @@
 		</div>
 	{/if}
 	<Table {entries} {variant} />
+</div>
 </div>

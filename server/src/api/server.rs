@@ -13,6 +13,7 @@ use redis::aio::ConnectionManager;
 use serde::Serialize;
 use sqlx::PgPool;
 use thiserror::Error;
+use tokio::sync::Mutex;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot::{self, Sender};
@@ -22,8 +23,8 @@ use tracing::instrument;
 
 use crate::api::handler::*;
 use crate::api::middleware::cors_layer;
-use crate::api::middleware::verify_external::{get_hmac_key, verify_sender_ident};
-use crate::api::middleware::verify_internal::verify_internal_ident;
+use crate::api::middleware::verify_external::{get_hmac_key, verify_external_ident};
+use crate::api::middleware::verify_internal::verify_session_ident;
 use crate::api::webhook::webhook_handler;
 use crate::db::prelude::*;
 use crate::db::redis::redis_pool::redis_pool;
@@ -31,6 +32,7 @@ use crate::irc::{ConnectionClientError, IrcHandle};
 use crate::util::channel::ChannelError;
 use crate::util::env::Var;
 use crate::util::helix::HelixErr;
+use crate::util::totp::TOTPHandler;
 use crate::var;
 
 pub type JsonResult<T> = core::result::Result<Json<T>, RouteError>;
@@ -42,6 +44,7 @@ pub struct AppState {
     pub redis_pool: ConnectionManager,
     pub irc_client: IrcHandle,
     pub channels: Vec<String>,
+    pub totp: Arc<Mutex<TOTPHandler>>,
 }
 
 #[instrument(skip(tx))]
@@ -53,11 +56,15 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
         .await
         .unwrap();
 
+    let totp_key = var!(Var::TOTPKey).await.unwrap();
+    let totp = Arc::new(Mutex::new(TOTPHandler::new(totp_key)));
+
     let state = Arc::new(AppState {
         db_pool,
         irc_client,
         redis_pool,
         channels,
+        totp,
     });
 
     let secret_key = get_hmac_key().await.unwrap();
@@ -67,16 +74,30 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
     // twitch hook callback
     let external_post_routes = Router::new()
         .route("/callback", post(webhook_handler))
-        .route_layer(middleware::from_fn(verify_sender_ident));
+        .route_layer(middleware::from_fn(verify_external_ident));
+
+    let init_auth_routes = Router::new()
+        // .route("/auth/print-totp", get(print_totp))
+        .route("/auth/totp-session", post(totp_compare));
 
     //
     // runtime administration
     let internal_post_routes = Router::new()
+        .route(
+            "/auth/validate-session",
+            get(|| async { "OK".into_response() }),
+        )
+        .route("/channel/reply-configs", get(channel_configs))
+        .route("/update/reply-configs", post(update_channel_config))
         .route("/update/channel", post(update_channel_in_cache))
         .route("/update/chatter", post(update_chatter_in_cache))
         .route("/update/migrate", get(run_cache_migration))
+        .route("/update/db-entries", get(irc_joins))
         .route("/irc/force-reconnect", get(force_irc_reconnect))
-        .route_layer(middleware::from_fn(verify_internal_ident));
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            verify_session_ident,
+        ));
 
     let main_api_routes = Router::new()
         //
@@ -104,6 +125,7 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
 
     let app = Router::new()
         .merge(external_post_routes)
+        .merge(init_auth_routes)
         .merge(internal_post_routes)
         .merge(main_api_routes)
         .layer(
@@ -157,7 +179,6 @@ pub async fn start_server(
     mut rx: UnboundedReceiver<SocketAddr>,
     channels: Vec<String>,
 ) -> Result<Vec<JoinHandle<()>>, RouteError> {
-
     tracing::info!("starting server");
     let server_handle = tokio::task::spawn(async move {
         router(tx, channels).await;

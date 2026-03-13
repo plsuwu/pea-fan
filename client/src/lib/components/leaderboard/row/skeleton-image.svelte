@@ -74,7 +74,7 @@
 
 	.img-fade {
 		opacity: 0;
-		transition: opacity 0.3s ease-out;
+		transition: opacity 0.2s ease-out;
 	}
 
 	.img-fade.visible {

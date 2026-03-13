@@ -3,7 +3,7 @@
 @plugin '@tailwindcss/typography';
 
 @theme {
-    --font-iosevka: "Iosevka";
+    --font-iosevka: "Iosevka", monospace;
     --breakpoint-xxl: 99rem;
 }
 

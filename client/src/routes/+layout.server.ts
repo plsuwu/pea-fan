@@ -1,48 +1,81 @@
 import type { LayoutServerLoad } from "./$types";
 import { fetchUtil } from "$lib/utils/fetching";
-import { MODE_COOKIE_NAME } from "$lib/utils/mode-cookie";
-import type { PaginatedRequest } from "$lib/types";
-import { redirect } from "@sveltejs/kit";
+import { MODE_COOKIE_NAME } from "$lib/utils/mode-cookie.svelte";
+import type {
+	PaginatedRequest,
+	PaginatedResponse,
+	PaginationData,
+} from "$lib/types";
+import {
+	intoParentEntry,
+	type UntypedEntry,
+	type UntypedSubEntry,
+} from "$lib/utils";
 
 export const load: LayoutServerLoad = async ({
-	url,
 	locals,
-	fetch,
 	cookies,
+	fetch,
+	url,
 }) => {
 	const modePreference = cookies.get(MODE_COOKIE_NAME) ?? null;
+	const announcementClearToken = cookies.get("seen-announcement") || null;
 
-	if (locals.channel) {
-		const pagination = buildSingleChannelParams({ url });
-		const leaderboard = await fetchUtil.fetchSingle(
-			{ fetch },
-			"channel",
-			"login",
-			locals.channel,
-			pagination
-		);
-
-		const scoreWindows = await fetchUtil.fetchWindowed(
-			{ fetch },
-			"channel",
-			leaderboard.items[0].id
-		);
-
+	if (!locals.channel) {
 		return {
-			leaderboard,
-			scoreWindows,
-			channel: locals.channel,
+			leaderboard: null,
+			scoreWindows: null,
+			channel: null,
 			modePreference,
+			announcementClearToken,
+			announcement: "test announcement, hello, hello 123",
 		};
 	}
 
+	const pagination = buildSingleChannelParams({ url });
+	const rawChannelData = await fetchUtil.fetchSingle(
+		{ fetch },
+		"channel",
+		"login",
+		locals.channel,
+		pagination
+	);
+
+	const scoreWindows = await fetchUtil.fetchWindowed(
+		{ fetch },
+		"channel",
+		rawChannelData.items[0].id
+	);
+
 	return {
-		leaderboard: null,
-        scoreWindows: null,
-		channel: null,
+		channelData: parseChannelData(rawChannelData),
+		paginationData: parsePaginationData(rawChannelData),
+		channel: locals.channel,
 		modePreference,
+		scoreWindows,
 	};
 };
+
+function parsePaginationData(data: PaginatedResponse<any>): PaginationData {
+	const { page, total_items, total_pages, page_size } = data;
+	return {
+		currentPage: page,
+		totalItems: total_items,
+		itemsPerPage: page_size,
+		totalPages: total_pages,
+	};
+}
+
+function parseChannelData(
+	data: PaginatedResponse<UntypedEntry>
+): UntypedEntry<UntypedEntry> {
+	const [channelItems] = data.items;
+	const scores = channelItems.scores.map((entry: UntypedSubEntry) =>
+		intoParentEntry(entry)
+	);
+
+	return { ...channelItems, scores };
+}
 
 function buildSingleChannelParams({ url }: { url: URL }) {
 	let { score_limit, score_page } = Object.fromEntries(url.searchParams);
@@ -53,8 +86,6 @@ function buildSingleChannelParams({ url }: { url: URL }) {
 	const pagination: PaginatedRequest = {
 		scoreLimit: score_limit,
 		scorePage: score_page,
-		// we shouldn't actually care about these params at all, but we need to provide
-		// them to avoid throwing errors somewhere - not IDEAL but it is what it is
 		limit: "0",
 		page: "0",
 	};

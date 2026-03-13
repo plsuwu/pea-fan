@@ -117,7 +117,6 @@
 					login={entry.login}
 					scores={subtableScores}
 					totalScores={entry.totalScores}
-					{isChannel}
 				/>
 			</div>
 		{/if}

@@ -21,6 +21,16 @@ pub struct Channel {
     pub updated_at: NaiveDateTime,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct ChannelReplies {
+    pub id: ChannelId,
+    pub enabled: bool,
+    pub login: String,
+    pub name: String,
+    pub color: String,
+    pub image: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChannelLeaderboardEntry {
     pub id: ChannelId,

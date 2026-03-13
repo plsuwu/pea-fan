@@ -1,27 +1,31 @@
 <script lang="ts">
 	import "iconify-icon";
 	import { onMount } from "svelte";
+    import { loadedIconCache } from "./load-cache.svelte";
 
 	let {
 		icon,
 		color = "currentColor",
-		size = 20
+		size = 20,
 	}: { icon: string; color: string; size?: number } = $props();
 
 	let iconEl = $state<Element | null>(null);
-	let loaded = $state(false);
+	let loaded = $derived(loadedIconCache.has(icon));
 
 	onMount(() => {
-		if (!iconEl) return;
-		const checkLoaded = () => {
-			if (iconEl?.shadowRoot?.querySelector("svg")) {
-				loaded = true;
-				return true;
-			}
-			return false;
+		if (loaded || !iconEl) return;
+
+		const markLoaded = () => {
+			loadedIconCache.add(icon);
+			loaded = true;
+			return true;
 		};
 
+		const checkLoaded = () =>
+			iconEl?.shadowRoot?.querySelector("svg") ? markLoaded() : false;
+
 		if (checkLoaded()) return;
+
 		let svgObserver: MutationObserver | undefined;
 		const observeShadowRoot = () => {
 			if (!iconEl?.shadowRoot) return false;
@@ -30,7 +34,7 @@
 			});
 			svgObserver.observe(iconEl.shadowRoot, {
 				childList: true,
-				subtree: true
+				subtree: true,
 			});
 
 			// race check on-attach

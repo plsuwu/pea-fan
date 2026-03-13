@@ -1,9 +1,11 @@
-import { ADMIN_COOKIE_KEY, INTERNAL_POST_TOKEN_RAW } from "$env/static/private";
+import { ADMIN_SESSION_TOKEN } from "$env/static/private";
 import type { PageServerLoad } from "./$types";
-import type { Actions, Cookies, RequestEvent } from "@sveltejs/kit";
+import type { Actions, Cookies } from "@sveltejs/kit";
 import { redirect } from "@sveltejs/kit";
 import { logger } from "$lib/observability/server/logger.svelte";
+import { invalidateCookie } from "$lib/server";
 import { Rh } from "$lib/utils/route";
+import { channelCache } from "$lib/observability/server/cache.svelte";
 
 // TODO:
 // -------------------------------------------------------------------
@@ -11,6 +13,10 @@ import { Rh } from "$lib/utils/route";
 // - HMAC-based message signing/verification,
 // - also probably perform verification (or part of the verification)
 //    in a server hook instead of here.
+
+const API_BASE = `${Rh.proto}://${Rh.api}`;
+const FETCH_CONFIGS = `${API_BASE}/channel/reply-configs`;
+const UPDATE_CONFIGS = `${API_BASE}/update/reply-configs`;
 
 function getClientInfo(request: Request, getClientAddress: () => string) {
 	const userAgent = request.headers.get("user-agent") ?? "[NO_USER_AGENT]";
@@ -29,62 +35,69 @@ function getClientInfo(request: Request, getClientAddress: () => string) {
 	};
 }
 
-export const load: PageServerLoad = async (event: RequestEvent) => {
-	const { fetch, cookies, request, getClientAddress } = event;
-	const token = (cookies.get(ADMIN_COOKIE_KEY) as string) ?? "AAAAA";
+async function getChannelConfigs(token: string, id = "all") {
+	const headers = buildHeaders(true, token);
+	const url = new URL(FETCH_CONFIGS);
 
-	const res = await fetch("/api/verify-token", {
-		method: "POST",
-		body: JSON.stringify({ token }),
+	url.searchParams.set("id", id);
+	const res = await fetch(url, {
+		method: "GET",
+		headers,
 	});
 
-	const { verified } = await res.json();
-	logger.info({ verified });
-
-	if (!token || (token && verified !== true)) {
-		logger.warn(
-			{ ...getClientInfo(request, getClientAddress) },
-			"[ADMIN] unauthorized access attempt"
-		);
-
-		cookies.set(ADMIN_COOKIE_KEY, "", {
-			path: "/",
-			expires: new Date(0),
-		});
-
-		redirect(302, "/admin/login");
-	} else {
-		cookies.set(ADMIN_COOKIE_KEY, token, {
-			path: "/",
-		});
-
-		return;
+	if (res.status !== 200) {
+		logger.error({ response: res }, "failed to fetching channel configs");
+		return null;
 	}
+
+	const body = await res.json();
+	return [...body];
+}
+
+export const load: PageServerLoad = async ({
+	fetch,
+	cookies,
+	request,
+	getClientAddress,
+}) => {
+	let token = await verifyToken(cookies, request, getClientAddress, fetch);
+	if (!token) {
+		invalidateCookie(cookies);
+		redirect(302, "/admin/login");
+	}
+
+	const channels = await getChannelConfigs(token);
+	return {
+		channels,
+	};
 };
 
-async function verifyTokenOnAction(
+async function verifyToken(
 	cookies: Cookies,
 	request: Request,
 	getClientAddress: () => string,
 	fetch: typeof globalThis.fetch
-) {
-	const token = (cookies.get(ADMIN_COOKIE_KEY) as string) ?? "****************";
-	const res = await fetch("/api/verify-token", {
+): Promise<string | null> {
+	const token = cookies.get(ADMIN_SESSION_TOKEN);
+	if (!token) {
+		logger.warn("no session cookie");
+		return null;
+	}
+
+	const res = await fetch("/api/verify-session", {
 		method: "POST",
+		headers: buildHeaders(true, token),
 		body: JSON.stringify({ token }),
 	});
 
-	const { verified } = await res.json();
-	if (!verified) {
+	const { valid } = await res.json();
+	logger.info({ valid }, "initial session validation response");
+
+	if (token && valid !== true) {
 		logger.warn(
 			{ ...getClientInfo(request, getClientAddress) },
-			"[ACTION_ADMIN] unauthorized access attempt"
+			"unauthorized"
 		);
-
-		cookies.set(ADMIN_COOKIE_KEY, "", {
-			path: "/",
-			expires: new Date(0),
-		});
 
 		return null;
 	}
@@ -92,13 +105,9 @@ async function verifyTokenOnAction(
 	return token;
 }
 
-// TODO:
-//  implement serverside token hashing and replace this
-function buildAuthHeaders(
-	{ isJSON }: { isJSON?: boolean } = { isJSON: false }
-) {
+function buildHeaders(isJSON: boolean, token: string) {
 	const headers = new Headers();
-	headers.set("authorization", INTERNAL_POST_TOKEN_RAW);
+	headers.set("authorization", token);
 
 	if (isJSON) {
 		headers.set("content-type", "application/json");
@@ -109,14 +118,10 @@ function buildAuthHeaders(
 
 export const actions = {
 	update: async ({ cookies, request, fetch, getClientAddress }) => {
-		const verifiedToken = await verifyTokenOnAction(
-			cookies,
-			request,
-			getClientAddress,
-			fetch
-		);
-		if (!verifiedToken) {
-			redirect(302, "/admin/login");
+		const token = await verifyToken(cookies, request, getClientAddress, fetch);
+		if (!token) {
+			invalidateCookie(cookies);
+			return { success: false };
 		}
 
 		const formData = await request.formData();
@@ -132,7 +137,7 @@ export const actions = {
 			};
 		}
 
-		const headers = buildAuthHeaders({ isJSON: true });
+		const headers = buildHeaders(true, token);
 		const data = { current, historic: JSON.parse(historic) };
 
 		const { success, status, body } = await runUpdate(
@@ -142,28 +147,53 @@ export const actions = {
 			headers
 		);
 
-		logger.debug({ success, status, body }, "[ACTION] update action result");
-
+		logger.debug({ success, status, body }, "update action complete");
 		return { success, status, body };
 	},
 
 	merge: async ({ cookies, request, fetch, getClientAddress }) => {
-		const authHeader = await verifyTokenOnAction(
-			cookies,
-			request,
-			getClientAddress,
-			fetch
-		);
-		if (!authHeader) {
-			redirect(302, "/admin/login");
+		const token = await verifyToken(cookies, request, getClientAddress, fetch);
+
+		if (!token) {
+			invalidateCookie(cookies);
+			return { success: false };
 		}
 
-		const headers = buildAuthHeaders();
+		const headers = buildHeaders(false, token);
 		const { success, status, body } = await runMerge(fetch, headers);
 
-		logger.debug({ success, status, body }, "[ACTION] merge action result");
-
+		logger.debug({ success, status, body }, "merge action complete");
 		return { success, status, body };
+	},
+
+	toggleReply: async ({ cookies, request, fetch, getClientAddress }) => {
+		const token = await verifyToken(cookies, request, getClientAddress, fetch);
+		if (!token) {
+			invalidateCookie(cookies);
+			return { success: false };
+		}
+
+		const headers = buildHeaders(true, token);
+		const formData = await request.formData();
+		const id = formData.get("id") as string;
+
+		const body = { id };
+
+		console.log(UPDATE_CONFIGS, id, body);
+
+		const res = await fetch(UPDATE_CONFIGS, {
+			method: "POST",
+			headers,
+			body: JSON.stringify({ id }),
+		});
+
+		if (res.status !== 200) {
+			logger.error({ response: res }, "config update failed");
+			return { success: false, status: res.status };
+		}
+
+		logger.info({ response: res }, "config update successful");
+		return { success: true };
 	},
 } satisfies Actions;
 
@@ -176,26 +206,19 @@ async function runUpdate(
 	headers: Headers
 ) {
 	const updateEndpoint = `${UPDATE_API_ROUTE}/${keytype}`;
-	console.log(updateEndpoint);
-
 	const res = await fetch(updateEndpoint, {
 		method: "POST",
 		headers,
-        keepalive: true,
 		body: JSON.stringify(data),
 	});
 
 	if (!res.ok) {
-		console.log(res);
-
-		logger.error({ response: res }, "[ACTION] update failed");
+		logger.error({ response: res }, "update failed");
 		return { success: false, body: "", status: res.status };
 	}
 
-	console.log("response:", res);
-
 	const body = await res.json();
-	logger.info({ body }, "RX from server");
+	logger.info({ body }, "server response");
 
 	return {
 		success: body === "OK",
@@ -208,7 +231,7 @@ async function runMerge(fetch: typeof globalThis.fetch, headers: Headers) {
 	const mergeEndpoint = `${UPDATE_API_ROUTE}/migrate`;
 	const res = await fetch(mergeEndpoint, {
 		method: "GET",
-        keepalive: true,
+		keepalive: true,
 		headers,
 	});
 

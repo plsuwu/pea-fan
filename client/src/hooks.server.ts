@@ -1,26 +1,10 @@
 import { sequence } from "@sveltejs/kit/hooks";
 import { redirect, type Handle, type HandleServerError } from "@sveltejs/kit";
-// import { URLS } from "$lib";
 import { logger } from "$lib/observability/server/logger.svelte";
-// import { rtUtil } from "$lib/utils/routing";
 import { Rh } from "$lib/utils/route";
 import { getBaseURLFromRequest, isIpAddr, isLocalDomain } from "$lib/utils";
 
-// NOTE:
-// most of the functions below don't explicitly create new spans as svelte's `redirect(..)` functionality
-// throws an error under the hood if the tenant is invalid.
-//
-// sveltekit will internally handle this to perform the redirection so we don't want a span error handler
-// attempting to catch it, even though it will apparently just log the error before propagating it back up to
-// sveltekit's handlers - this seems like it is very likely to cause some evil bugs that are tricky to
-// diagnose down the line...
-
-export const handleError: HandleServerError = ({
-	event,
-	error,
-	status,
-	message,
-}) => {
+export const handleError: HandleServerError = ({ event, error, status }) => {
 	const context = event.tracing.current
 		? event.tracing.current.spanContext()
 		: event.tracing.root.spanContext();
@@ -49,12 +33,16 @@ export const handleError: HandleServerError = ({
 			displayMessage = "the requested page doesn't exist";
 			break;
 
+		case "401":
+			displayMessage = "you arent authorized to view this page";
+			break;
+
 		case "500":
 			displayMessage = "an internal error occurred";
 			break;
 
 		default:
-			displayMessage = "an unexpected error occurred";
+			displayMessage = "an unknown error occurred";
 			break;
 	}
 
@@ -77,16 +65,12 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 	}
 
 	const requestedTenant = requestHost?.split(".")[0];
-	// const { api, base, proto } = URLS();
-
 	if (
 		!requestedTenant ||
-		/**
-		 * API is on a dedicated port, so this might
-		 * be redundant now
-		 **/
-		requestHost === Rh.api ||
-		requestedTenant === Rh.base
+		requestedTenant === Rh.base ||
+		// [api].base.url is routed by nginx to rust backend,
+		// so this check might be redundant (??)
+		requestHost === Rh.api
 	) {
 		event.locals.logger.debug("[ALLOW] (no tenant)");
 		event.locals.channel = null;

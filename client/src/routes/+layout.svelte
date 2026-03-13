@@ -2,29 +2,68 @@
 	import "./layout.css";
 	import "$lib/assets/iosevka.css";
 	import favicon from "$lib/assets/favicon.svg";
-	import { navigating, page } from "$app/state";
-	import * as Tt from "$lib/shadcn-components/ui/tooltip/index";
-	import { mode, ModeWatcher, setMode } from "mode-watcher";
-	import { setModeCookie, getModeCookie } from "$lib/utils/mode-cookie";
-	import { onMount } from "svelte";
 
-	import Menubar from "$lib/components/menu/menubar.svelte";
-	// import Noise from "$lib/components/bg/noise.svelte";
+	import type { LayoutData } from "./$types";
+	import { onMount } from "svelte";
 	import { goto } from "$app/navigation";
+	import { navigating, page } from "$app/state";
+
+	import { mode, ModeWatcher, setMode } from "mode-watcher";
+	import * as Tt from "$lib/shadcn-components/ui/tooltip/index";
+	import { MoveLeft, X } from "@lucide/svelte";
+
+	// import Noise from "$lib/components/bg/noise.svelte";
+	import {
+		setModeCookie,
+		getModeCookie,
+		getParentDomain,
+	} from "$lib/utils/mode-cookie.svelte";
 	import { Rh } from "$lib/utils/route";
-	import { MoveLeft } from "@lucide/svelte";
-	import { fade } from "svelte/transition";
-	import { expoIn, expoOut } from "svelte/easing";
+
 	import Footer from "$lib/components/menu/footer.svelte";
 	import ModeChanger from "$lib/components/menu/mode-changer.svelte";
 	import Spinner from "$lib/shadcn-components/ui/spinner/spinner.svelte";
+	import Stats from "$lib/components/tenant/stats/stats.svelte";
+	import ExternalLinks from "$lib/components/tenant/stats/external.svelte";
+	import Menubar from "$lib/components/menu/menubar.svelte";
+	import { fade, slide } from "svelte/transition";
+	import { Button } from "$lib/shadcn-components/ui/button";
+	import { expoOut } from "svelte/easing";
 
 	let { data, children } = $props();
-	let { channel } = $derived(data);
 	let { hostname } = page.url;
 
+	let {
+		channel,
+		scoreWindows,
+		channelData,
+		announcement,
+		announcementClearToken,
+	}: LayoutData = $derived(data);
+
 	let waitForLoad = $derived(navigating.to !== null);
-	// let waitForLoad = true;
+	let announcementCleared = $state(false);
+
+	onMount(() => {
+		const saved = getModeCookie();
+		if (saved === "dark" || saved === "light" || saved === "system") {
+			setMode(saved);
+		}
+
+		$inspect(announcement);
+	});
+
+	$effect(() => {
+		const current = mode.current;
+		if (current) {
+			setModeCookie(current);
+		}
+	});
+
+	function handleClearAnnouncement() {
+		announcementCleared = true;
+		document.cookie = `seen-announcement=1; domain=${getParentDomain()}; path=/; max-age=forever;`;
+	}
 
 	// TODO:
 	//  move this + the keyboard handler into a utility function (or
@@ -94,16 +133,35 @@
 <svelte:window onkeydown={handleShortcut} />
 <ModeWatcher />
 
-<div class="flex h-[111vh] w-full flex-col font-iosevka">
+<div class="flex h-[110vh] w-full flex-col font-iosevka">
 	<header
 		class="mt-4 mb-2 flex flex-row items-center justify-between px-8 py-4"
 	>
 		<Menubar />
-		<ModeChanger />
 	</header>
 
+	<div class="border-t-2"></div>
+	{#if announcement && !announcementClearToken && !announcementCleared}
+		<div
+			in:slide={{ delay: 50, duration: 250, axis: "y", easing: expoOut }}
+			out:slide={{ delay: 0, duration: 250, axis: "y", easing: expoOut }}
+			class="flex h-[50px] w-full flex-row items-center justify-between bg-amber-300 px-8 text-black"
+		>
+			<div></div>
+			<div class="text-lg font-semibold">{announcement}</div>
+			<Button
+				onclick={handleClearAnnouncement}
+				variant="ghost"
+				size="icon-sm"
+				class="flex flex-row items-center justify-center rounded-full border text-black
+                hover:cursor-pointer hover:text-black"
+			>
+				<X size={3} />
+			</Button>
+		</div>
+	{/if}
+
 	<main class="mb-32 flex-1">
-		<div class="border-t-2 pt-2"></div>
 		{#if channel}
 			<div class="hidden w-[90%] justify-self-center lg:block">
 				<a
@@ -119,14 +177,30 @@
 		<Tt.Provider delayDuration={0}>
 			{#if waitForLoad}
 				<div
-					class="fixed top-0 left-0 flex h-full w-full flex-row items-center justify-center
-                    bg-background/50 backdrop-blur-[2px] z-10"
+					class="fixed top-0 left-0 z-10 flex h-full w-full flex-row items-center
+                    justify-center bg-background/50 backdrop-blur-[2px]"
 				>
 					<Spinner class="size-5" />
 				</div>
 			{:else}
 				<div class="mt-12 flex h-full min-h-[450px] flex-col">
-					{@render children()}
+					<div class="w-[93%] self-center xl:w-[90%]">
+						<div class="flex flex-col lg:flex-row xl:justify-center">
+							{#if channel && channelData && scoreWindows}
+								<div
+									class="w-full px-2 md:min-w-[320px] lg:pr-6 lg:pl-2 xl:w-[35%]"
+								>
+									<Stats channelLogin={channel} {channelData} {scoreWindows}>
+										<ExternalLinks
+											channelLogin={channelData.login}
+											channelId={channelData.id}
+										/>
+									</Stats>
+								</div>
+							{/if}
+							{@render children()}
+						</div>
+					</div>
 				</div>
 			{/if}
 		</Tt.Provider>

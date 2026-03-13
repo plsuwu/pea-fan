@@ -1,7 +1,6 @@
 <script lang="ts">
-	import * as ButtonGroup from "$lib/shadcn-components/ui/button-group";
 	import Button from "$lib/shadcn-components/ui/button/button.svelte";
-	import { CombineIcon, GitMergeIcon } from "@lucide/svelte";
+	import { CombineIcon } from "@lucide/svelte";
 
 	let {
 		waiting,
@@ -21,5 +20,8 @@
         text-muted-foreground/55 hover:text-muted-foreground"
 	{disabled}
 >
+    <div>
+        merge
+    </div>
 	<CombineIcon />
 </Button>

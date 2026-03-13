@@ -1,91 +1,32 @@
 <script lang="ts">
-	import Button from "$lib/shadcn-components/ui/button/button.svelte";
-	import * as InputGroup from "$lib/shadcn-components/ui/input-group";
-	import * as Kbd from "$lib/shadcn-components/ui/kbd";
-	import Spinner from "$lib/shadcn-components/ui/spinner/spinner.svelte";
-	import { readableColor } from "$lib/utils";
-
-	import { Rh } from "$lib/utils/route";
-	import { debounce, type SearchResult } from "$lib/utils/search";
-	import { DeleteIcon, SquareChevronUpIcon } from "@lucide/svelte";
-	import { mode } from "mode-watcher";
-	import { expoOut, expoIn, expoInOut } from "svelte/easing";
+	import { expoOut } from "svelte/easing";
 	import { fade } from "svelte/transition";
 
-	// onMount(() => {
-	//
-	// });
+	import * as InputGroup from "$lib/shadcn-components/ui/input-group";
+	import * as Kbd from "$lib/shadcn-components/ui/kbd";
+	import Button from "$lib/shadcn-components/ui/button/button.svelte";
+	import Spinner from "$lib/shadcn-components/ui/spinner/spinner.svelte";
+
+	import { DeleteIcon } from "@lucide/svelte";
+	import { mode } from "mode-watcher";
+
+	import { readableColor } from "$lib/utils";
 
 	let {
-		inputElement = $bindable(),
-		onclose,
-	}: {
-		inputElement: HTMLInputElement | null;
-		onclose: () => void;
+		ref = $bindable(),
+		value = $bindable(),
+		loading,
+		current,
+		clearSearch,
+		results,
 	} = $props();
 
-	let query = $state("");
-	let prevQuery = $state("");
-
-	let results = $state<SearchResult[]>([]);
-	let count = $state(0);
-	let loading = $state(false);
-	const baseUrl = new URL(`${Rh.proto}://${Rh.api}/search/by-login`);
-
-	function clearSearch(blur = false) {
-		query = "";
-		prevQuery = "";
-		results = [];
-
-		if (blur && inputElement) inputElement.blur();
-	}
-
-	async function searchForLogin(signal: AbortSignal, login: string) {
-		if (!login.trim()) {
-			clearSearch();
-			return;
-		}
-
-		try {
-			const queryUrl = baseUrl;
-			queryUrl.searchParams.set("login", login);
-			const res = await fetch(queryUrl.href, { signal });
-			if (!signal.aborted) {
-				const body = await res.json();
-				results = body[0];
-				count = body[1];
-			}
-		} finally {
-			prevQuery = query;
-			loading = false;
-		}
-	}
-
-	const debouncedSearch = debounce(searchForLogin, 500);
-
-	$effect(() => {
-		if (query !== "" && query !== prevQuery) {
-			loading = true;
-			debouncedSearch(query);
-		}
-	});
-
-	function handleKeydown(event: KeyboardEvent) {
-		console.log(event);
-		const { key, ctrlKey } = event;
-
-		if (key === "j" && ctrlKey) {
-			event.preventDefault();
-			inputElement?.focus();
-		}
-	}
+	// const BASE_URL = new URL(`${Rh.proto}://${Rh.api}/search/by-login`);
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
 <InputGroup.Input
-	bind:value={query}
-	bind:ref={inputElement}
+	bind:ref
+	bind:value
 	type="text"
 	class="w-full placeholder:px-2 placeholder:text-muted-foreground/55"
 	placeholder="search..."
@@ -98,7 +39,7 @@
 		>
 			<Spinner class="shrink-0" />
 		</div>
-	{:else if query != ""}
+	{:else if !!current && current !== ""}
 		<div
 			in:fade={{ delay: 250, duration: 500, easing: expoOut }}
 			out:fade={{ delay: 0, duration: 0 }}
@@ -107,7 +48,7 @@
 				variant="ghost"
 				size="icon-sm"
 				class="-mr-2 rounded-full"
-				onclick={() => clearSearch(true)}
+				onclick={() => clearSearch()}
 			>
 				<DeleteIcon />
 			</Button>
@@ -129,7 +70,7 @@
 	{/if}
 </InputGroup.Addon>
 
-{#if query !== "" && !loading}
+{#if current !== "" && !loading}
 	<div class="absolute top-11 z-10 w-full">
 		<div
 			class="flex h-full w-full flex-col rounded-sm border border-border bg-background text-sm"
@@ -153,7 +94,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each results as result, idx}
+						{#each results as result}
 							{@const colorMode = mode.current === "dark" ? "light" : "dark"}
 							<tr
 								class="rounded-xl"

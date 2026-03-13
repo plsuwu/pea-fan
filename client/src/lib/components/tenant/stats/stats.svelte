@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ScoreWindows } from "$lib/types";
 	import { readableColor, type UntypedEntry } from "$lib/utils";
+	import type { Snippet } from "svelte";
 	import ExternalLinks from "./external.svelte";
 	import Nameplate from "./nameplate.svelte";
 	import Periodic from "./periodic.svelte";
@@ -8,10 +9,12 @@
 		channelLogin,
 		channelData,
 		scoreWindows,
+		children,
 	}: {
 		channelLogin: string;
 		channelData: UntypedEntry<UntypedEntry>;
 		scoreWindows: ScoreWindows;
+		children: Snippet;
 	} = $props();
 
 	let {
@@ -46,7 +49,7 @@
 			color={readableColor(channelData.color)}
 			image={channelData.image}
 		/>
-		<ExternalLinks {channelLogin} channelId={channelData.id} />
+		{@render children()}
 		<div
 			class="mt-1 mb-4 border-b border-b-muted lg:w-[30%] lg:max-w-[500px] xl:w-[35%] xl:max-w-[600px]"
 		></div>

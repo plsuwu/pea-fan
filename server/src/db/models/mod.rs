@@ -1,6 +1,5 @@
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-
-// use crate::db::repositories::leaderboard::ScorePagination;
 
 pub mod channel;
 pub mod chatter;
@@ -16,10 +15,13 @@ const fn default_limit() -> i64 {
     50
 }
 
-// #[inline]
-// fn default_score_pagination() -> ScorePagination {
-//     ScorePagination::new(50, 0)
-// }
+#[derive(Debug, sqlx::FromRow, Default)]
+pub struct Session {
+    pub id: i32,
+    pub token: String,
+    pub created_at: NaiveDateTime,
+    pub expires_at: NaiveDateTime,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Pagination {
@@ -41,7 +43,6 @@ pub struct PaginatedResponse<T> {
     pub total_pages: i64,
     #[serde(default = "default_limit")]
     pub page_size: i64,
-    
     // #[serde(default = "default_offset")]
     // pub chatter_offset: i64,
 }

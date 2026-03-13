@@ -127,8 +127,8 @@ export function clamp(num: number, min = 0, max = num): number {
 }
 
 export function getAltImageSizeUrl(url: string, size: TwitchImageSize): string {
-	// i think this regex covers all possible variations, but i am not 100% on 
-    // this claim being reliable or even mostly true 
+	// i think this regex covers all possible variations, but i am not 100% on
+	// this claim being reliable or even mostly true
 	const suffixRegex = /-(\d+x\d+)\.(png|jpe?g)/;
 	return url.replace(suffixRegex, `-${TWITCH_IMAGE_SIZE[size]}.$2`);
 }

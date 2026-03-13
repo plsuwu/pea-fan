@@ -7,6 +7,7 @@
 	import SkeletonImage from "./skeleton-image.svelte";
 
 	let { login, totalScores, scores, variant } = $props();
+
 	let preposition = $derived(variant === "Channel" ? "by" : "in");
 	let { host } = $derived(page.url);
 

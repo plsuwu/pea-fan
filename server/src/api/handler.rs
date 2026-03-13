@@ -2,18 +2,22 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::extract::{Path, Query, State};
+use axum::response::{IntoResponse, Response};
 use axum::{Json, debug_handler};
+use chrono::NaiveDateTime;
 use http::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::instrument;
 
+use crate::api::middleware::verify_internal::SessionToken;
 // use crate::api::middleware::verify_external::VerifiedBody;
 use crate::api::server::{AppState, JsonResult, RouteError};
+use crate::db::models::channel::ChannelReplies;
 use crate::db::models::chatter::ChatterSearchResult;
 use crate::db::models::leaderboard::TimeWindow;
 use crate::db::models::{PaginatedResponse, Pagination};
-use crate::db::prelude::{ChannelId, ChatterId, Tx};
+use crate::db::prelude::{ChannelId, ChannelRepository, ChatterId, Tx};
 use crate::db::prelude::{ChannelLeaderboardEntry, Repository};
 use crate::db::prelude::{ChatterLeaderboardEntry, ChatterRepository, LeaderboardRepository};
 use crate::db::redis::migrator::{
@@ -228,6 +232,62 @@ pub async fn update_chatter_in_cache(
     }
 }
 
+#[instrument(skip(state))]
+pub async fn print_totp(State(state): State<Arc<AppState>>) -> JsonResult<&'static str> {
+    let mut guard = state.totp.lock().await;
+    guard.write_code_out();
+
+    Ok(Json("OK"))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TOTPResponse {
+    pub valid: bool,
+    pub session: String,
+}
+
+impl TOTPResponse {
+    pub fn new(valid: bool, session: String) -> Json<Self> {
+        Json(Self { valid, session })
+    }
+}
+
+#[instrument(skip(state))]
+pub async fn totp_compare(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<Value>,
+) -> Result<Json<TOTPResponse>, StatusCode> {
+    #[derive(Debug, Serialize, Deserialize)]
+    struct TOTPPayload {
+        token: String,
+    }
+
+    let json_body: TOTPPayload =
+        serde_json::from_value::<TOTPPayload>(payload).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    tracing::debug!(?json_body, "RECEIVED CODE");
+    let mut guard = state.totp.lock().await;
+    let valid = guard.totp_cmp(&json_body.token).map_err(|e| {
+        tracing::error!(error = ?e, "unknown error during TOTP validation");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    if valid {
+        // create new session token and store in db
+        let session = SessionToken::new_token();
+        SessionToken::store_token(state.db_pool, &session)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = ?e, "failed to store new session token");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+        Ok(TOTPResponse::new(valid, session))
+    } else {
+        Ok(TOTPResponse::new(valid, String::default()))
+    }
+}
+
 #[instrument(skip(payload))]
 pub async fn update_channel_in_cache(
     Json(payload): Json<Value>,
@@ -357,29 +417,41 @@ impl WindowedScores {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ScoreWindowVariant {
+    variant: String,
+}
+
 #[instrument(skip(state))]
 pub async fn get_channel_scores_window(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
+    Query(window): Query<ScoreWindowVariant>,
 ) -> Result<Json<WindowedScores>, StatusCode> {
     let pool = state.db_pool;
-    let channel_id = ChannelId(id);
+    if window.variant != "chatter" && window.variant != "channel" {
+        tracing::warn!(
+            window.variant,
+            "query param for windowed score query not 'channel' || 'chatter'"
+        );
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     match tokio::spawn(async move {
         Tx::with_tx(pool, |mut tx| async move {
             let result = async {
                 let mut query_results = Vec::new();
                 let queries: [String; 6] = [
-                    TimeWindow::Yesterday.into_query("channel"),
-                    TimeWindow::PrevWeek.into_query("channel"),
-                    TimeWindow::PrevMonth.into_query("channel"),
-                    TimeWindow::PrevYear.into_query("channel"),
-                    TimeWindow::Last7Days.into_query("channel"),
-                    TimeWindow::Last30Days.into_query("channel"),
+                    TimeWindow::Yesterday.into_query(&window.variant),
+                    TimeWindow::PrevWeek.into_query(&window.variant),
+                    TimeWindow::PrevMonth.into_query(&window.variant),
+                    TimeWindow::PrevYear.into_query(&window.variant),
+                    TimeWindow::Last7Days.into_query(&window.variant),
+                    TimeWindow::Last30Days.into_query(&window.variant),
                 ];
                 for query in queries {
                     let q_res = sqlx::query_scalar::<_, i64>(&query)
-                        .bind(&channel_id.0)
+                        .bind(&id)
                         .fetch_one(&mut **tx.inner_mut()?)
                         .await
                         .unwrap_or(0);
@@ -412,14 +484,33 @@ pub async fn get_channel_scores_window(
 }
 
 #[instrument(skip(state))]
-pub async fn get_chatter_scores_window(
+#[axum::debug_handler]
+pub async fn channel_configs(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> JsonResult<WindowedScores> {
-    let repo = LeaderboardRepository::new(state.db_pool);
-    let chatter_id = ChatterId(id);
+    Query(param): Query<SearchByIdParam>,
+) -> JsonResult<Vec<ChannelReplies>> {
+    let channel_repo = ChannelRepository::new(state.db_pool);
 
-    todo!()
+    if param.id == "all" {
+        let all_configs = channel_repo.get_all_reply_configs().await?;
+        Ok(Json(all_configs))
+    } else {
+        let config = channel_repo.get_reply_config(&param.id).await?;
+        Ok(Json(vec![config]))
+    }
+}
+
+#[instrument(skip(state))]
+pub async fn update_channel_config(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SearchByIdParam>,
+) -> Result<Response<axum::body::Body>, RouteError> {
+    let channel_repo = ChannelRepository::new(state.db_pool);
+    let id = payload.id;
+
+    channel_repo.update_channel_config(&ChannelId(id)).await?;
+
+    Ok("OK".into_response())
 }
 
 // #[instrument(skip(state))]

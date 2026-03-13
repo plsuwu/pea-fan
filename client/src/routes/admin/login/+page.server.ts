@@ -1,38 +1,56 @@
-import { ADMIN_COOKIE_KEY } from "$env/static/private";
-import { type Actions } from "@sveltejs/kit";
+import { fail, redirect, type Actions } from "@sveltejs/kit";
 import { logger } from "$lib/observability/server/logger.svelte";
-import { getTokenHash } from "$lib/utils";
+import { invalidateCookie, setCookie } from "$lib/server";
+import type { PageServerLoad } from "../$types";
+import { ADMIN_SESSION_TOKEN } from "$env/static/private";
 
-function setCookieValue(verified: boolean, hashedTokenHex: string) {
-	return verified ? hashedTokenHex : "";
-}
+export const load: PageServerLoad = async ({ cookies, locals, url }) => {
+	const hasToken = cookies.get(ADMIN_SESSION_TOKEN);
+	if (hasToken) {
+		locals.logger.warn(
+			{ token: hasToken },
+			"session token present, redirecting instead"
+		);
+
+		redirect(302, "/admin");
+	}
+    
+    const redirectReason = url.searchParams.get('err') || null;
+    console.log("search params:", redirectReason);
+
+    return {
+        redirectReason,
+    }
+};
 
 export const actions = {
-	login: async ({ cookies, request, fetch }) => {
+	default: async ({ cookies, request, fetch }) => {
 		const data = await request.formData();
-		const tokenRaw = (data.get("token") as string) ?? "AAAAA";
+		const token = data.get("token");
 
-		logger.info({ tokenRaw }, "[ACTION] submitted login token");
+		if (!token) {
+			logger.error("missing token");
+			fail(400, { reason: "invalid" });
+		}
 
-        const token = getTokenHash(tokenRaw);
-        logger.info({ token }, "[ACTION] hashed token"); 
-
-		const res = await fetch("/api/verify-token", {
+		const res = await fetch("/api/verify-totp", {
 			method: "POST",
-			body: JSON.stringify({ token })
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ token }),
 		});
 
-		const { verified } = await res.json();
-		logger.debug({ verified: verified }, "[ACTION] login handler result");
+		const body = await res.json();
+		logger.debug(
+			{ valid: body.valid, session: body.session },
+			"login handler result"
+		);
 
-		const cookieValue = setCookieValue(verified, token);
+		if (!body.valid) {
+			invalidateCookie(cookies);
+			fail(400, { reason: "invalid" });
+		}
 
-		cookies.set(ADMIN_COOKIE_KEY, cookieValue, {
-			path: "/",
-			httpOnly: true,
-			sameSite: "lax"
-		});
-
-		return { verified };
-	}
+		setCookie(cookies, body.session);
+		return { ...body };
+	},
 } satisfies Actions;

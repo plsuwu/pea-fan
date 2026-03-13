@@ -1,22 +1,13 @@
 <script lang="ts">
 	import * as BGrp from "$lib/shadcn-components/ui/button-group";
 	import Button from "$lib/shadcn-components/ui/button/button.svelte";
-	import { setModeCookie } from "$lib/utils/mode-cookie";
-	import { Moon, Sun } from "@lucide/svelte";
-	import { mode, setMode } from "mode-watcher";
-
-	function toggleMode() {
-		mode.current === "dark" ? setMode("light") : setMode("dark");
-		setModeCookie(mode.current ?? "system");
-	}
+	import { setModeCookie } from "$lib/utils/mode-cookie.svelte";
+	import { Moon, MoonIcon, Sun, SunIcon } from "@lucide/svelte";
+	import { mode, toggleMode } from "mode-watcher";
 </script>
 
-<BGrp.Root>
-	<Button variant="ghost" onclick={toggleMode}>
-		{#if mode.current === "dark"}
-			<Moon />
-		{:else}
-			<Sun />
-		{/if}
-	</Button>
-</BGrp.Root>
+{#if mode.current === "dark"}
+	<SunIcon />
+{:else}
+	<MoonIcon />
+{/if}

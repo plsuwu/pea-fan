@@ -11,7 +11,7 @@
 	let {
 		waiting,
 		setWaiting,
-		formActionResult
+		formActionResult,
 	}: {
 		waiting: boolean;
 		setWaiting: (state: boolean) => void;
@@ -66,7 +66,7 @@
 		<Current bind:current bind:userType {waiting} />
 		<Historic bind:aliasInputState {addAlias} {waiting} />
 	</Fields>
-	<div class="mt-8 flex w-full flex-row justify-end">
+	<div class="mt-8 mb-12 flex w-[350px] flex-row justify-end self-end">
 		<ButtonGroup {aliases} {current} {waiting} />
 	</div>
 </form>
@@ -92,6 +92,7 @@
 		variant="outline"
 		type="submit"
 	>
+		<div>run migration</div>
 		<GitMergeIcon />
 	</Button>
 </form>
