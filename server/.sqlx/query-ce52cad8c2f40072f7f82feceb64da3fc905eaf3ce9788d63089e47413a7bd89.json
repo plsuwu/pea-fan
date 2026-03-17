@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE reply SET\n                enabled = NOT enabled,\n                updated_at = NOW()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce52cad8c2f40072f7f82feceb64da3fc905eaf3ce9788d63089e47413a7bd89"
+}

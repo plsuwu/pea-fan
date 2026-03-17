@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE score_event DISABLE TRIGGER score_event_increment_trigger",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "992bb27ed61780d5c1ce6a10e9e8c203661422a2ecf1d6ad1f3b1184c1cf91f0"
+}

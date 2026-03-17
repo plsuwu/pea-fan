@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO score_event (chatter_id, channel_id, earned_at)\n            SELECT \n                $1::varchar(16),\n                $2::varchar(16),\n                $3::timestamp + make_interval(secs => generate_series(1, $4))\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Timestamp",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "58300b900cf3fc259263d3c76e7b2ce89d9e0d73c95bb2bb232bd5edfde0d01d"
+}

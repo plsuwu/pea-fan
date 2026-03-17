@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO score_event (chatter_id, channel_id, earned_at)\n            VALUES ($1, $2, NOW())\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e5fc5afe1c6a97b680a5ab0907b235bb23f0ba73922eaece17f31268b325df87"
+}
