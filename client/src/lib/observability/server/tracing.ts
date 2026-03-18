@@ -4,10 +4,9 @@ import {
 	SpanStatusCode,
 	type Span,
 	type Tracer,
-	type SpanContext
+	type SpanContext,
 } from "@opentelemetry/api";
 import { logger } from "./logger.svelte";
-import { browser } from "$app/environment";
 
 type TracedOptions = {
 	name?: string;
@@ -30,7 +29,7 @@ export const createSpanAttributes = (
 	let attributes: Record<string, string | number | boolean> = {
 		"code.namespace": attrs.class,
 		"code.function": attrs.method,
-		...(attrs.options.attributes || {})
+		...(attrs.options.attributes || {}),
 	};
 
 	if (attrs.options.captureArgs) {
@@ -89,7 +88,7 @@ export class TraceHandler {
 					);
 
 					throw err;
-				}
+				},
 			});
 		});
 	}
@@ -122,7 +121,7 @@ export class TraceHandler {
 					);
 
 					throw err;
-				}
+				},
 			});
 		});
 	}
@@ -195,7 +194,6 @@ export function traced(
 		method: (this: T, ...args: A) => R,
 		context: ClassMethodDecoratorContext<T, (this: T, ...args: A) => R>
 	): (this: T, ...args: A) => R | Promise<R> {
-
 		const methodName = String(context.name);
 		const spanName = options.name || methodName;
 
@@ -206,7 +204,7 @@ export function traced(
 				class: className,
 				method: methodName,
 				options,
-				args
+				args,
 			});
 
 			return traceHandler.withSpan(
@@ -243,7 +241,7 @@ export function traced(
 					return success(result as R);
 				},
 				{
-					attributes
+					attributes,
 				}
 			);
 		};

@@ -122,14 +122,13 @@ impl Migrator {
                 "filtered invalid chatter logins",
             );
 
-            // TODO:
-            //  perhaps we write filtered logins to a file to read this list of users
-            //  easily??
-            //      e.g:
-            //     ```
-            //     /var/log/piss-fan-server/[yyyy-mm-dd]_migrator_unknown-userlist.log
-            //     ```
-            //  .. or something
+            let invalid: Vec<_> = existing_logins
+                .iter()
+                .filter(|user| !chatter_logins.contains(user))
+                .collect();
+
+            // log out invalid users
+            tracing::error!(invalid_logins = ?invalid, "INVALID USER LIST");
         } else {
             tracing::debug!("no invalid chatter logins found in cache");
         }
@@ -198,7 +197,7 @@ impl Migrator {
 
         let base_timestamp = chrono::Utc::now()
             .naive_utc()
-            .checked_sub_signed(chrono::Duration::days(1)) // idk just whenever really
+            .checked_sub_signed(chrono::Duration::days(80)) // idk just whenever really
             .unwrap_or_default();
 
         Tx::with_tx(pool, |mut tx| async move {

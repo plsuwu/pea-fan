@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as Accordion from "$lib/shadcn-components/ui/accordion";
-	import { AccordionState } from "./periodic-accordion-state.svelte";
+	import { accordionState } from "./periodic-accordion-state.svelte";
 	import calendar from "dayjs/plugin/calendar";
 	import dayjs, { type Dayjs } from "dayjs";
 
@@ -69,7 +69,6 @@
 <Accordion.Root
 	type="single"
 	class="w-full"
-	bind:ref={AccordionState.element}
 >
 	<Accordion.Item value="periodic-piss-stats">
 		<Accordion.Trigger

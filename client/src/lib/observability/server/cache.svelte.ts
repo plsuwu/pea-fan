@@ -1,13 +1,10 @@
-import { Rh } from "$lib/utils/route";
 import { logger } from "./logger.svelte";
-import { Result } from "$lib/types/result/result";
-import { traced } from "./tracing";
-import {
-	PUBLIC_DEVL_API,
-	PUBLIC_DEVL_PROTO,
-	PUBLIC_PROD_API,
-	PUBLIC_PROD_PROTO,
-} from "$env/static/public";
+import { env } from "$env/dynamic/public";
+
+const PUBLIC_DEVL_API = env.PUBLIC_DEVL_API;
+const PUBLIC_DEVL_PROTO = env.PUBLIC_DEVL_PROTO;
+const PUBLIC_PROD_API = env.PUBLIC_PROD_API;
+const PUBLIC_PROD_PROTO = env.PUBLIC_PROD_PROTO;
 
 export type RawIrcInfo = {
 	likely_missing: string[];
@@ -26,50 +23,41 @@ export abstract class Cache<T extends string> {
 	constructor(url: string, cacheName: string, ttl = 300000) {
 		this.url = url;
 		this.name = cacheName;
-		// this._ttlMs = ttl;
+		this._ttlMs = ttl;
 		this._ttlMs = 1000;
 	}
 
-	@traced()
 	public async refresh(method = "GET"): Promise<void> {
+        logger.info("[CACHE] beginning cache update");
 		if (!this.ttlElapsed()) {
 			logger.debug({ cache: this }, "[CACHE] up to date");
 			return;
 		}
 
-		logger.debug({ cache: this }, "[CACHE] running refresh");
+		logger.info({ cache: this }, "[CACHE] running refresh");
 		const response = await fetch(this.url, { method });
 		if (!response.ok) {
 			logger.error({ response }, "[CACHE] error during update");
 			return;
 		}
 
-		(await Result.fromPromise(response.json())).match({
-			Ok: (data) => {
-				this.data = new Set(data as string[] as Iterable<T>);
-				this._lastRefresh = Date.now();
-			},
-			Err: (err) => {
-				logger.error(
-					{ cache: this, error: err },
-					"[CACHE] JSON response error"
-				);
+		try {
+			this.data = await response.json();
+			this._lastRefresh = Date.now();
 
-				throw err;
-			},
-		});
+			logger.info({ cache: this }, "[CACHE] retrieved channel data");
+		} catch (err) {
+			logger.error({ error: err }, "[CACHE] channel cache update failed");
+		}
 
-		logger.info({ cache: this }, "[CACHE] retrieved channel data");
 		return;
 	}
 
-	@traced()
 	public async exists(name: T): Promise<boolean> {
 		await this.refresh();
 		return this._data.has(name);
 	}
 
-	@traced()
 	protected ttlElapsed(): boolean {
 		const stale =
 			this._lastRefresh == null || this._lastRefresh + this._ttlMs < Date.now();
@@ -118,8 +106,7 @@ export abstract class Cache<T extends string> {
 	}
 }
 
-type Broadcaster = string; //`#${string}`;
-// type Leaderboard = "channel" | "chatter";
+type Broadcaster = string;
 
 class ChannelCache extends Cache<Broadcaster> {
 	set channels(names: Iterable<Broadcaster>) {

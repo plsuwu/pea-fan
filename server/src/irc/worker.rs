@@ -275,7 +275,7 @@ pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> Cli
         .await
     {
         Ok(_) => {
-            tracing::trace!(
+            tracing::debug!(
                 channel = tags.channel_id,
                 chatter = tags.user_id,
                 channel_name = tags.channel_name,

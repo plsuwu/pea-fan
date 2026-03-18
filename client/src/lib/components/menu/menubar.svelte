@@ -2,13 +2,12 @@
 	import { type Component } from "svelte";
 	import { page } from "$app/state";
 	import {
-		House,
 		Tv,
+		House,
+        MenuIcon,
+        SearchIcon,
 		UsersRound,
 		ChevronDown,
-		FileQuestionMark,
-		SearchIcon,
-		MenuIcon,
 		CircleQuestionMarkIcon,
 	} from "@lucide/svelte";
 	import { Rh } from "$lib/utils/route";
@@ -70,7 +69,6 @@
 	let count = $state(0);
 
 	let inputVisible = $state(true);
-	// let inputValue = $state("");
 
 	$effect(() => {
 		if (current !== previous && !!current) {
@@ -221,7 +219,7 @@
 						href={routeUrl("faq").href}
 						class="flex w-full flex-row items-center justify-between px-2"
 					>
-						<div>FAQ</div>
+						<div>about</div>
 						<CircleQuestionMarkIcon />
 					</a>
 				</Dropdown.Item>

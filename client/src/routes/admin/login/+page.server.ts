@@ -2,7 +2,9 @@ import { fail, redirect, type Actions } from "@sveltejs/kit";
 import { logger } from "$lib/observability/server/logger.svelte";
 import { invalidateCookie, setCookie } from "$lib/server";
 import type { PageServerLoad } from "../$types";
-import { ADMIN_SESSION_TOKEN } from "$env/static/private";
+import { env } from "$env/dynamic/private";
+
+const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
 export const load: PageServerLoad = async ({ cookies, locals, url }) => {
 	const hasToken = cookies.get(ADMIN_SESSION_TOKEN);
@@ -14,13 +16,13 @@ export const load: PageServerLoad = async ({ cookies, locals, url }) => {
 
 		redirect(302, "/admin");
 	}
-    
-    const redirectReason = url.searchParams.get('err') || null;
-    console.log("search params:", redirectReason);
 
-    return {
-        redirectReason,
-    }
+	const redirectReason = url.searchParams.get("err") || null;
+	console.log("search params:", redirectReason);
+
+	return {
+		redirectReason,
+	};
 };
 
 export const actions = {

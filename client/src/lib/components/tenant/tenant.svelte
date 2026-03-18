@@ -29,9 +29,6 @@
 
 	let currentUrl = $derived.by(() => {
 		const currentUrlBase = page.url;
-		const { score_page } = Object.fromEntries(page.url.searchParams);
-		$inspect(score_page);
-
 		return currentUrlBase;
 	});
 </script>

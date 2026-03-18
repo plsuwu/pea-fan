@@ -1,89 +1,87 @@
 import { createAddHookMessageChannel } from "import-in-the-middle";
 import { register } from "node:module";
+
+// register module loader hook with `import-in-the-middle` to intercept ESM imports,
+// making their exports mutable such that instrumentations can patch them
 const { registerOptions, waitForAllMessagesAcknowledged } =
 	createAddHookMessageChannel();
 register("import-in-the-middle", import.meta.url, registerOptions);
-await waitForAllMessagesAcknowledged();
 
-// import { diag, DiagConsoleLogger, DiagLogLevel } from "@opentelemetry/api";
-// diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
+await waitForAllMessagesAcknowledged(); // ensure loader hook is fully registered
 
 import { NodeSDK } from "@opentelemetry/sdk-node";
+import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
-import { resourceFromAttributes } from "@opentelemetry/resources";
-import { OTEL_EXPORTER_OTLP_ENDPOINT } from "$env/static/private";
-
-import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
-// import { PinoInstrumentation } from "@opentelemetry/instrumentation-pino";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
+
+import packageJson from "../package.json";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import {
-	PUBLIC_CLIENT_SERVICE_NAME,
-	PUBLIC_CLIENT_SERVICE_VERSION
-} from "$env/static/public";
+	ATTR_SERVICE_NAME,
+	ATTR_SERVICE_VERSION,
+} from "@opentelemetry/semantic-conventions";
 
-const SPAN_EXPORTER = new OTLPTraceExporter({
-	url: `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces`,
-	headers: {}
-});
+const ATTR_DEPLOYMENT_ENVIRONMENT = "deployment.environment.name";
+const DEPLOYMENT_ENVIRONMENT = import.meta.env.MODE;
+const SERVICE_NAME = packageJson.name;
+const SERVICE_VERSION = packageJson.version;
 
-const METRIC_EXPORTER = new OTLPMetricExporter({
-	url: `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/metrics`,
-	headers: {}
-});
+const INSTRUMENTATION_IGNORE_ENDPOINTS = ["/favico"];
 
-const LOG_EXPORTER = new OTLPLogExporter({
-	url: `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs`,
-	headers: {}
-});
+const otlpUrl = (path: string) =>
+	`http://localhost:4318/v1/${path}`;
 
-let sdk = new NodeSDK({
-	serviceName: PUBLIC_CLIENT_SERVICE_NAME,
+const sdk = new NodeSDK({
 	resource: resourceFromAttributes({
-		"service.name": PUBLIC_CLIENT_SERVICE_NAME || "piss-fan-client",
-		"service.version": PUBLIC_CLIENT_SERVICE_VERSION || "0.0.1",
-		"deployment.environment.name": import.meta.env.DEV
-			? "development"
-			: "production"
+		[ATTR_SERVICE_NAME]: SERVICE_NAME,
+		[ATTR_SERVICE_VERSION]: SERVICE_VERSION,
+		[ATTR_DEPLOYMENT_ENVIRONMENT]: DEPLOYMENT_ENVIRONMENT,
 	}),
-	spanProcessors: [new BatchSpanProcessor(SPAN_EXPORTER)],
-	logRecordProcessors: [new BatchLogRecordProcessor(LOG_EXPORTER)],
+
+	spanProcessors: [
+		new BatchSpanProcessor(new OTLPTraceExporter({ url: otlpUrl("traces") })),
+	],
+	logRecordProcessors: [
+		new BatchLogRecordProcessor(new OTLPLogExporter({ url: otlpUrl("logs") })),
+	],
 	metricReaders: [
 		new PeriodicExportingMetricReader({
-			exporter: METRIC_EXPORTER
-		})
+			exporter: new OTLPMetricExporter({ url: otlpUrl("metrics") }),
+		}),
 	],
 	instrumentations: [
-		// new PinoInstrumentation({
-		// 	disableLogCorrelation: false,
-		// 	disableLogSending: false,
-		// 	logHook: (span, record) => {
-		// 		record["traceId"] = span.spanContext().traceId;
-		// 		record["spanId"] = span.spanContext().spanId;
-		// 	}
-		// }),
-		new HttpInstrumentation()
-	]
+		getNodeAutoInstrumentations({
+			"@opentelemetry/instrumentation-http": {
+				ignoreIncomingRequestHook: (req) => {
+					const url = req.url || "";
+					return INSTRUMENTATION_IGNORE_ENDPOINTS.some((endpoint) =>
+						url.includes(endpoint)
+					);
+				},
+			},
+		}),
+	],
 });
 
+sdk.start();
+
 const shutdown = () => {
-	process.removeAllListeners();
-	let status = 0;
+	process.off("SIGTERM", shutdown);
+	process.off("SIGINT", shutdown);
 
 	sdk
 		.shutdown()
 		.then(() => console.log("tracing terminated"))
-		.catch((error) => {
-			console.log("error during tracing termination", error);
-			status = 1;
+		.catch((err) => {
+			console.error("error during tracing termination", err);
+			process.exitCode = 1;
 		})
-		.finally(() => process.exit(status));
+		.finally(() => process.exit());
 };
-
-sdk.start();
 
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);

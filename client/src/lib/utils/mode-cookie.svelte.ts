@@ -1,9 +1,12 @@
+import { isIpAddr } from ".";
+
 export const MODE_COOKIE_NAME = "mode-preference" as const;
 const MAX_AGE = 60 * 60 * 24 * 365;
 
 export function getParentDomain(): string {
-	const parts = window.location.hostname.split(".");
-	if (parts.length >= 2) {
+	const hostname = window.location.hostname;
+	const parts = hostname.split(".");
+	if (parts.length >= 2 && !isIpAddr(hostname)) {
 		const parent = "." + parts.slice(-2).join(".");
 
 		console.log("parent domain:", parent);

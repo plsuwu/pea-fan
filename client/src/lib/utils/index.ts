@@ -46,7 +46,10 @@ export const reroutable = async (_: RequestEvent, channel: string) => {
 
 export const isLocalDomain = (host: string): boolean => {
 	const parts = host.split(".");
-	return parts.length === 2 && parts[1].split(":")[0] === "local";
+	return (
+		(parts.length === 1 && host.includes("localhost")) ||
+		(parts.length === 2 && parts[1].split(":")[0] === "local")
+	);
 };
 
 export const isIpAddr = (host: string): boolean => {

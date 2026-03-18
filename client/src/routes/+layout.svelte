@@ -21,14 +21,13 @@
 	import { Rh } from "$lib/utils/route";
 
 	import Footer from "$lib/components/menu/footer.svelte";
-	import ModeChanger from "$lib/components/menu/mode-changer.svelte";
 	import Spinner from "$lib/shadcn-components/ui/spinner/spinner.svelte";
 	import Stats from "$lib/components/tenant/stats/stats.svelte";
 	import ExternalLinks from "$lib/components/tenant/stats/external.svelte";
 	import Menubar from "$lib/components/menu/menubar.svelte";
-	import { fade, slide } from "svelte/transition";
+	import { slide } from "svelte/transition";
 	import { Button } from "$lib/shadcn-components/ui/button";
-	import { expoOut } from "svelte/easing";
+	import { expoInOut, expoOut } from "svelte/easing";
 
 	let { data, children } = $props();
 	let { hostname } = page.url;
@@ -49,8 +48,6 @@
 		if (saved === "dark" || saved === "light" || saved === "system") {
 			setMode(saved);
 		}
-
-		$inspect(announcement);
 	});
 
 	$effect(() => {
@@ -62,7 +59,7 @@
 
 	function handleClearAnnouncement() {
 		announcementCleared = true;
-		document.cookie = `seen-announcement=1; domain=${getParentDomain()}; path=/; max-age=forever;`;
+		document.cookie = `seen-announcement=${announcement?.hash}; domain=${getParentDomain()}; path=/; max-age=forever;`;
 	}
 
 	// TODO:
@@ -143,12 +140,12 @@
 	<div class="border-t-2"></div>
 	{#if announcement && !announcementClearToken && !announcementCleared}
 		<div
-			in:slide={{ delay: 50, duration: 250, axis: "y", easing: expoOut }}
-			out:slide={{ delay: 0, duration: 250, axis: "y", easing: expoOut }}
-			class="flex h-[50px] w-full flex-row items-center justify-between bg-amber-300 px-8 text-black"
+			transition:slide={{ duration: 250, axis: "y", easing: expoInOut }}
+			class="flex max-h-[75px] h-[75px] w-full flex-row items-center justify-between bg-amber-200
+            px-8 py-1 text-black"
 		>
 			<div></div>
-			<div class="text-lg font-semibold">{announcement}</div>
+			<div class="text-lg font-semibold">{announcement.content}</div>
 			<Button
 				onclick={handleClearAnnouncement}
 				variant="ghost"

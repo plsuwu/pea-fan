@@ -1,4 +1,4 @@
-import { ADMIN_SESSION_TOKEN } from "$env/static/private";
+import { env } from "$env/dynamic/private";
 import type { PageServerLoad } from "./$types";
 import type { Actions, Cookies } from "@sveltejs/kit";
 import { redirect } from "@sveltejs/kit";
@@ -13,6 +13,8 @@ import { channelCache } from "$lib/observability/server/cache.svelte";
 // - HMAC-based message signing/verification,
 // - also probably perform verification (or part of the verification)
 //    in a server hook instead of here.
+
+const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
 const API_BASE = `${Rh.proto}://${Rh.api}`;
 const FETCH_CONFIGS = `${API_BASE}/channel/reply-configs`;

@@ -39,6 +39,8 @@ impl TOTPHandler {
     }
 
     pub fn totp_cmp(&mut self, input: &str) -> Result<bool> {
+        self.write_code_out();
+
         let current = self.generator.generate_current()?;
 
         if constant_time_cmp(&current, input) {

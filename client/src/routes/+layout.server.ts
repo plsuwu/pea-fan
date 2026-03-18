@@ -19,7 +19,14 @@ export const load: LayoutServerLoad = async ({
 	url,
 }) => {
 	const modePreference = cookies.get(MODE_COOKIE_NAME) ?? null;
-	const announcementClearToken = cookies.get("seen-announcement") || null;
+
+	const announcement = {
+		content:
+			"i am still under development!! please excuse some slight jank and broken bits and pieces...",
+		hash: "92f8993610427be27b8f7057aa0b7391ebb9133e46f5c881a43196dce6572dfc",
+	};
+	const seenAnnouncement = cookies.get("seen-announcement") || null;
+	const announcementClearToken = seenAnnouncement === announcement.hash;
 
 	if (!locals.channel) {
 		return {
@@ -28,7 +35,7 @@ export const load: LayoutServerLoad = async ({
 			channel: null,
 			modePreference,
 			announcementClearToken,
-			announcement: "test announcement, hello, hello 123",
+			announcement,
 		};
 	}
 

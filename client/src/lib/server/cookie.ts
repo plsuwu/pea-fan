@@ -1,5 +1,7 @@
-import { ADMIN_SESSION_TOKEN } from "$env/static/private";
+import { env } from "$env/dynamic/private";
 import type { Cookies } from "@sveltejs/kit";
+
+const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
 export function invalidateCookie(cookies: Cookies): void {
 	cookies.delete(ADMIN_SESSION_TOKEN, {

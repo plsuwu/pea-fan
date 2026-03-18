@@ -5,9 +5,9 @@ import { Rh } from "$lib/utils/route";
 import { getBaseURLFromRequest, isIpAddr, isLocalDomain } from "$lib/utils";
 
 export const handleError: HandleServerError = ({ event, error, status }) => {
-	const context = event.tracing.current
-		? event.tracing.current.spanContext()
-		: event.tracing.root.spanContext();
+	const context = event.tracing?.current
+		? event.tracing?.current.spanContext()
+		: event.tracing?.root?.spanContext();
 
 	const { spanId, traceId } = context;
 	const { url, locals, getClientAddress } = event;
@@ -18,7 +18,7 @@ export const handleError: HandleServerError = ({ event, error, status }) => {
 			extra: {
 				url,
 				locals,
-				client: getClientAddress(),
+				client: getClientAddress() ?? "undefined client IP",
 				spanId,
 				traceId,
 			},
@@ -55,7 +55,11 @@ export const handleError: HandleServerError = ({ event, error, status }) => {
 };
 
 const tenantHook: Handle = async ({ event, resolve }) => {
-	const requestHost = event.request.headers.get("host") || null;
+	const requestHost = event.request.headers.get("Host") || null;
+	event.locals.logger.debug(
+		{ requestHost: requestHost },
+		"[HOOK] REQUEST INIT"
+	);
 	if (!requestHost || isIpAddr(requestHost) || isLocalDomain(requestHost)) {
 		event.locals.logger.debug(
 			"not a tenant request (direct IP request or host missing)"
@@ -68,8 +72,7 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 	if (
 		!requestedTenant ||
 		requestedTenant === Rh.base ||
-		// [api].base.url is routed by nginx to rust backend,
-		// so this check might be redundant (??)
+        requestHost === Rh.base ||
 		requestHost === Rh.api
 	) {
 		event.locals.logger.debug("[ALLOW] (no tenant)");
@@ -103,8 +106,8 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 const logInitHook: Handle = async ({ event, resolve }) => {
 	event.locals.logger = logger.child({
 		client: event.getClientAddress(),
-		spanId: event.tracing.current.spanContext().spanId,
-		traceId: event.tracing.current.spanContext().traceId,
+		spanId: event.tracing?.current?.spanContext().spanId,
+		traceId: event.tracing?.current?.spanContext().traceId,
 	});
 	event.locals.logger.debug("pushed logger to request event locals");
 	return resolve(event);

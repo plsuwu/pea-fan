@@ -38,9 +38,9 @@ type Result<T> = core::result::Result<T, RunnerErr>;
 async fn main() -> Result<()> {
     let telemetry_registry = telemetry::Telemetry::new().await?.register();
 
-    tracing::info!("------------------------");
-    tracing::info!("MAIN APPLICATION RUNNING");
-    tracing::info!("------------------------");
+    tracing::info!("--------------------------");
+    tracing::info!(" MAIN APPLICATION RUNNING ");
+    tracing::info!("--------------------------");
 
     let channels_updated = util::channel::update_channels(None).await?;
     let channel_names: Vec<String> = channels_updated.into_keys().collect();

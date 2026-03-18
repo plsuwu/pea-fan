@@ -1,5 +1,4 @@
 import { logger } from "$lib/observability/server/logger.svelte";
-import type { Span } from "@opentelemetry/api";
 import { Ok, Err } from ".";
 
 export interface ResultPattern<T, E, R> {

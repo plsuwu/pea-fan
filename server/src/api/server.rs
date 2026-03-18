@@ -70,19 +70,19 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
     let secret_key = get_hmac_key().await.unwrap();
     tracing::info!(secret_key, "HMAC SECRET KEY");
 
-    //
     // twitch hook callback
     let external_post_routes = Router::new()
         .route("/callback", post(webhook_handler))
         .route_layer(middleware::from_fn(verify_external_ident));
 
     let init_auth_routes = Router::new()
-        // .route("/auth/print-totp", get(print_totp))
         .route("/auth/totp-session", post(totp_compare));
 
-    //
     // runtime administration
     let internal_post_routes = Router::new()
+        //
+        // internal stuff
+        //
         .route(
             "/auth/validate-session",
             get(|| async { "OK".into_response() }),
@@ -94,6 +94,11 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
         .route("/update/migrate", get(run_cache_migration))
         .route("/update/db-entries", get(irc_joins))
         .route("/irc/force-reconnect", get(force_irc_reconnect))
+        //
+        // helix proxying
+        //
+        .route("/helix/by-login/{login}", get(helix_user_by_login))
+        .route("/helix/by-id/{id}", get(helix_user_by_id))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             verify_session_ident,
@@ -102,10 +107,15 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
     let main_api_routes = Router::new()
         //
         // general
-        .route("/", get(|| async { Response::new(Body::empty()) }))
+        //
+        .route(
+            "/",
+            get(|| async { Response::new(Body::empty()) }),
+        )
         .route("/search/by-login", get(search_by_login))
         //
         // channel-related routes
+        //
         .route("/channel/leaderboard", get(global_channels))
         .route("/channel/windowed/{id}", get(get_channel_scores_window))
         .route("/channel/by-login/{login}", get(channel_by_login))
@@ -114,13 +124,10 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
         .route("/channel/all", get(all_channels))
         //
         // chatter-related routes
+        //
         .route("/chatter/leaderboard", get(global_chatters))
         .route("/chatter/by-login/{login}", get(chatter_by_login))
         .route("/chatter/by-id/{id}", get(chatter_by_id))
-        //
-        // proxied helix requests
-        .route("/helix/by-login/{login}", get(helix_user_by_login))
-        .route("/helix/by-id/{id}", get(helix_user_by_id))
         .layer(cors_layer().await);
 
     let app = Router::new()

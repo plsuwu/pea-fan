@@ -1,7 +1,9 @@
 import { json, type RequestEvent, type RequestHandler } from "@sveltejs/kit";
-import { ADMIN_SESSION_TOKEN } from "$env/static/private";
+import { env } from "$env/dynamic/private";
 import { Rh } from "$lib/utils/route";
 import { logger } from "$lib/observability/server/logger.svelte";
+
+const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
 const TOKEN_ENDPOINT = new URL(`${Rh.proto}://${Rh.api}/auth/validate-session`);
 const buildHeaders = (token: string): Headers => {
@@ -24,10 +26,10 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
 		headers,
 	});
 
-    logger.debug({ response: res }, "api validation response");
-    if (res.status === 200 && res.statusText === "OK") {
-        return json({ valid: true });
-    }
+	logger.debug({ response: res }, "api validation response");
+	if (res.status === 200 && res.statusText === "OK") {
+		return json({ valid: true });
+	}
 
 	return json({ valid: false });
 };

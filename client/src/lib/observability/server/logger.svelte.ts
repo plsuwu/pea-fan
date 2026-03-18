@@ -1,4 +1,4 @@
-import { PUBLIC_CLIENT_SERVICE_VERSION } from "$env/static/public";
+import { env } from "$env/dynamic/public";
 import pino, { type Logger, type LoggerOptions } from "pino";
 import type { Cache } from "./cache.svelte";
 import type { Span } from "@opentelemetry/api";
@@ -9,8 +9,10 @@ import type {
 	ChatterEntry,
 	Entry,
 	PaginatedResponse,
-	Score
+	Score,
 } from "$lib/types";
+
+const PUBLIC_CLIENT_SERVICE_VERSION = env.PUBLIC_CLIENT_SERVICE_VERSION;
 
 const TRUNC_BOARD_LEN = 3;
 const TRUNC_NESTED_LEN = 5;
@@ -32,7 +34,7 @@ export const serializeHandlers = {
 		return {
 			status: res.status,
 			statusText: res.statusText,
-			headers: Object.fromEntries(res.headers)
+			headers: Object.fromEntries(res.headers),
 		};
 	},
 
@@ -44,7 +46,7 @@ export const serializeHandlers = {
 				lastRefresh: cache.lastRefresh,
 				nextRefresh: cache.nextRefresh,
 				data: cache.data,
-				ttl: cache.ttl
+				ttl: cache.ttl,
 			};
 		} else {
 			const slice = cache.data.slice(0, 8);
@@ -55,7 +57,7 @@ export const serializeHandlers = {
 				data:
 					Array.isArray(cache.data) && cache.data.length > 0
 						? [...slice, `...(${cache.data.length - slice.length} more)`]
-						: []
+						: [],
 			};
 		}
 	},
@@ -66,7 +68,7 @@ export const serializeHandlers = {
 			traceId: spanCtx.traceId,
 			spanId: spanCtx.spanId,
 			traceFlags: spanCtx.traceFlags,
-			isRemote: spanCtx.isRemote
+			isRemote: spanCtx.isRemote,
 		};
 
 		if (isReadableSpan(span)) {
@@ -74,7 +76,7 @@ export const serializeHandlers = {
 			serialized.kind = span.kind;
 			serialized.status = {
 				code: span.status.code,
-				message: span.status.message
+				message: span.status.message,
 			};
 			serialized.attributes = span.attributes;
 			serialized.duration = span.duration;
@@ -85,7 +87,7 @@ export const serializeHandlers = {
 				serialized.events = span.events.map((e) => ({
 					name: e.name,
 					time: e.time,
-					attributes: e.attributes
+					attributes: e.attributes,
 				}));
 			}
 		}
@@ -108,7 +110,7 @@ export const serializeHandlers = {
 			return {
 				channel: `${entry.data.login}:${entry.data.id}`,
 				scores: scores.length == 0 ? [] : scores,
-				totalChannel: entry.data.total_channel
+				totalChannel: entry.data.total_channel,
 			};
 		} else if (entry._tag === "Chatter") {
 			const len = entry.data.channel_scores?.length || 0;
@@ -124,7 +126,7 @@ export const serializeHandlers = {
 			return {
 				chatter: `${entry.data.login}:${entry.data.id}`,
 				scores: scores.length == 0 ? [] : scores,
-				total: entry.data.total
+				total: entry.data.total,
 			};
 		}
 	},
@@ -139,7 +141,7 @@ export const serializeHandlers = {
 
 	leaderboard: ({
 		leaderboard,
-		variant
+		variant,
 	}: {
 		leaderboard: PaginatedResponse;
 		variant: "chatter" | "channel";
@@ -153,7 +155,7 @@ export const serializeHandlers = {
 			leaderboard.items?.slice(0, TRUNC_BOARD_LEN).forEach((item) => {
 				const entry: Entry = {
 					_tag: "Chatter",
-					data: item as ChatterEntry
+					data: item as ChatterEntry,
 				};
 
 				leaderboardSlice.push(serializeHandlers.entry(entry));
@@ -162,7 +164,7 @@ export const serializeHandlers = {
 			leaderboard.items?.slice(0, TRUNC_BOARD_LEN).forEach((item) => {
 				const entry: Entry = {
 					_tag: "Channel",
-					data: item as ChannelEntry
+					data: item as ChannelEntry,
 				};
 
 				leaderboardSlice.push(serializeHandlers.entry(entry));
@@ -174,7 +176,7 @@ export const serializeHandlers = {
 			currentPage: leaderboard.page,
 			totalPages: leaderboard.total_pages,
 			items: leaderboardSlice,
-			totalItems: leaderboard.total_items
+			totalItems: leaderboard.total_items,
 		};
 	},
 
@@ -182,7 +184,7 @@ export const serializeHandlers = {
 		span,
 		entry,
 		payload,
-		addr
+		addr,
 	}: {
 		span: Span;
 		entry: LogEntry;
@@ -198,9 +200,9 @@ export const serializeHandlers = {
 			sessionId: payload.sessionId,
 			clientAddr: addr,
 			timestamp: entry.timestamp,
-			source: "client"
+			source: "client",
 		};
-	}
+	},
 };
 
 const pinoLogger = (() => {
@@ -208,19 +210,15 @@ const pinoLogger = (() => {
 	targets.push({
 		target: "pino-opentelemetry-transport",
 		options: {
-			serviceVersion: PUBLIC_CLIENT_SERVICE_VERSION
+			serviceVersion: PUBLIC_CLIENT_SERVICE_VERSION,
 		},
-		level: "trace"
+		level: process.env.NODE_ENV === "production" ? "debug" : "trace",
 	});
 
 	targets.push({
-		target: "pino-pretty",
-		options: {
-			colorize: true,
-			translateTime: true,
-			ignore: "pid,hostname"
-		},
-		level: import.meta.env.DEV ? "trace" : "info"
+		...(import.meta.env.DEV
+			? { target: "pino-pretty", options: { colorize: true } }
+			: { }),
 	});
 
 	let pinoOptions: LoggerOptions = {
@@ -241,12 +239,12 @@ const pinoLogger = (() => {
 					span,
 					entry,
 					payload,
-					addr
+					addr,
 				});
 			},
 
-			error: pino.stdSerializers.err
-		}
+			error: pino.stdSerializers.err,
+		},
 	};
 
 	return pino(pinoOptions);

@@ -1,25 +1,19 @@
-import {
-	PUBLIC_PROD_API,
-	PUBLIC_PROD_BASE,
-	PUBLIC_PROD_PROTO,
-	PUBLIC_DEVL_API,
-	PUBLIC_DEVL_BASE,
-	PUBLIC_DEVL_PROTO,
-} from "$env/static/public";
+import { env } from "$env/dynamic/public";
 import { channelCache } from "$lib/observability/server/cache.svelte";
 import type { RequestEvent } from "@sveltejs/kit";
+import { isIpAddr } from ".";
+import { logger } from "$lib/observability/server/logger.svelte";
 
 /**
  * Rh => `RouteHandler`
  */
 export class Rh {
-	private static readonly dev = import.meta.env.DEV;
+	private static readonly dev =
+		env.PUBLIC_NODE_ENV === "development" || env.PUBLIC_NODE_ENV == null;
 
-	private static readonly _proto = Rh.dev
-		? PUBLIC_DEVL_PROTO
-		: PUBLIC_PROD_PROTO;
-	private static readonly _api = Rh.dev ? PUBLIC_DEVL_API : PUBLIC_PROD_API;
-	private static readonly _base = Rh.dev ? PUBLIC_DEVL_BASE : PUBLIC_PROD_BASE;
+	private static readonly _proto = Rh.dev ? "http" : "https";
+	private static readonly _base = Rh.dev ? "piss.local" : "rat.moe";
+	private static readonly _api = Rh.dev ? "localhost:8080" : "api.rat.moe";
 
 	static deriveBase(host: string) {
 		const parts = host.split(".");
@@ -27,7 +21,9 @@ export class Rh {
 			return parts.slice(1).join(".");
 		}
 
-		return parts.length > 2 ? parts.slice(1).join(".") : host;
+		return parts.length > 2 && !isIpAddr(host)
+			? parts.slice(1).join(".")
+			: host;
 	}
 
 	static getTenantedURL(login: string, host?: string): URL {
@@ -36,6 +32,8 @@ export class Rh {
 	}
 
 	static async reroutable(_: RequestEvent, channel: string) {
+		logger.debug({ requestHost: _.url.host }, "[SHOULD REROUTE] checking");
+
 		const isValid = await channelCache.exists(channel);
 		return isValid;
 	}

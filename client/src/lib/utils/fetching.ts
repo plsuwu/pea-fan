@@ -19,7 +19,6 @@ import { traced } from "$lib/observability/server/tracing";
 import { Rh } from "$lib/utils/route";
 
 export class FetchUtil {
-	@traced()
 	async fetchLeaderboard(
 		{ fetch }: Partial<RequestEvent>,
 		variant: "channel" | "chatter",
@@ -45,9 +44,6 @@ export class FetchUtil {
 		logger.info({ response }, "[API] query response");
 
 		if (!response.ok) {
-			// TODO check this
-			//   the server SHOULD return some error info on error in its
-			//   JSON body (i think lmfao but who KNOWS)
 			logger.error({ response }, "[API] received error response");
 		}
 
@@ -67,7 +63,6 @@ export class FetchUtil {
 		return body;
 	}
 
-	@traced()
 	async fetchSingle(
 		{ fetch }: Partial<RequestEvent>,
 		variant: "channel" | "chatter",
@@ -113,7 +108,6 @@ export class FetchUtil {
 		return response;
 	}
 
-	@traced()
 	async fetchWindowed(
 		{ fetch }: Partial<RequestEvent>,
 		variant: "channel" | "chatter",

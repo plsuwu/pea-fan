@@ -1,5 +1,4 @@
-import adapter from "svelte-adapter-bun";
-// import adapter from "@sveltejs/adapter-node";
+import adapter from "@sveltejs/adapter-node";
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 
 /** @type {import('@sveltejs/kit').Config} */
@@ -12,13 +11,13 @@ const config = {
 		adapter: adapter(),
 		experimental: {
 			tracing: {
-				server: true
+				server: true,
 			},
 			instrumentation: {
-				server: true
-			}
-		}
-	}
+				server: true,
+			},
+		},
+	},
 };
 
 export default config;
