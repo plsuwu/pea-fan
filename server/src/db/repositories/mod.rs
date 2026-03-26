@@ -7,7 +7,7 @@ use sqlx::{Pool, Postgres, Result as SqlxResult, Transaction};
 use tracing::instrument;
 
 use crate::db::models::channel::ChannelId;
-use crate::db::models::chatter::{ChatterId, ChatterSearchResult};
+use crate::db::models::chatter::ChatterId;
 use crate::db::prelude::{Channel, Chatter, ScoreSummary};
 
 pub mod channel;
@@ -18,12 +18,11 @@ pub struct Tx<'a> {
     inner: Option<Transaction<'a, Postgres>>,
 }
 
+// TODO remove this struct entirely:
+///     this is genuinely just a really bad implementation for handling transactions and makes
+///     error handling REALLY unweildy when trying to gracefully recover from an error
 impl<'a> Tx<'a> {
     /// "Automatic" transaction handler
-    ///
-    /// # Usage
-    ///
-    /// God help me
     #[instrument(skip(pool, f))]
     pub async fn with_tx<F, Fut, T>(pool: &'static Pool<Postgres>, f: F) -> SqlxResult<T>
     where
@@ -59,7 +58,6 @@ impl<'a> Tx<'a> {
     #[instrument(skip(self))]
     pub async fn enable_score_event_triggers(&mut self) -> SqlxResult<()> {
         tracing::warn!("enabling score_event-score incrementer triggers");
-
         sqlx::query!("ALTER TABLE score_event ENABLE TRIGGER score_event_increment_trigger")
             .execute(&mut **self.inner_mut()?)
             .await?;
@@ -91,7 +89,7 @@ impl<'a> Tx<'a> {
                 image = $5,
                 updated_at = NOW()
             "#,
-            &item.id.to_string(),
+            &item.id.0,
             item.login,
             item.name,
             item.color,
@@ -420,7 +418,7 @@ pub trait Repository {
     }
 
     #[instrument(skip(self, login))]
-    async fn get_by_login(&self, login: String) -> SqlxResult<Self::Output> {
+    async fn get_by_login(&self, login: &str) -> SqlxResult<Self::Output> {
         sqlx::query_as::<_, Self::Output>(&format!(
             "SELECT {} FROM {} WHERE login = $1",
             Self::BASE_FIELDS,

@@ -41,9 +41,12 @@ const CHANNEL_WHITELIST: [&str; 7] = [
     "sleepiebug",
 ];
 
-const ID_BLACKLIST: [&str; 3] = [
-    "19264788",   // Nightbot
-    "100135110",  // StreamElements
+const ID_BLACKLIST: [&str; 1] = [
+    // allowing bots because its kind of funny
+    //
+    // "19264788",   // Nightbot
+    // "100135110",  // StreamElements
+    //
     "1152307157", // us
 ];
 
@@ -222,7 +225,7 @@ pub async fn build_query_response(
         }
 
         let chatter_login = parts[1].to_lowercase();
-        repo.get_by_login(chatter_login)
+        repo.get_by_login(&chatter_login)
             .await
             .map_err(ConnectionClientError::SqlxError)
     } else {

@@ -2,13 +2,15 @@
 	import { cn } from "$lib/shadcn-components/utils";
 	import type { Component } from "svelte";
 	import Diamond from "$lib/components/misc/diamond.svelte";
+	import { goto, pushState } from "$app/navigation";
+	import { page } from "$app/state";
 
 	let {
 		icon: Icon,
 		href,
 		disabled = false,
 		direction,
-		class: className = ""
+		class: className = "",
 	}: {
 		icon: Component;
 		href: string;
@@ -16,6 +18,10 @@
 		direction: "forward" | "backward";
 		class?: string;
 	} = $props();
+
+	const navigateNoScroll = (url: string) => {
+		goto(url, { noScroll: true });
+	};
 
 	const hoverShift = $derived.by(() =>
 		direction === "forward"
@@ -47,10 +53,13 @@
 		</div>
 	</div>
 {:else}
-	<a {href} class="group flex items-center justify-center p-2">
+	<button
+		onclick={() => navigateNoScroll(href)}
+		class="group flex items-center justify-center p-2"
+	>
 		<Icon class={iconClass} />
 		<div class={diamondClass}>
 			<Diamond size={40} {disabled} />
 		</div>
-	</a>
+	</button>
 {/if}

@@ -57,13 +57,8 @@ impl TimeWindow {
             TimeWindow::Last30Days => "CURRENT_TIMESTAMP - interval '30 days'",
         }
     }
-
-    /// `user_type` should be either "chatter" or "channel", I just can't be bothered fixing its
-    /// type safety at present.
-    ///
-    /// # Todo
-    ///
-    /// TODO fix `user_type` typing smile
+    
+    // TODO: `user_type` should be typed with an enum of some kind, I just can't be bothered fixing it currently...
     pub fn into_query(&self, user_type: &str) -> String {
         format!(
             r#"

@@ -4,8 +4,8 @@
 	import {
 		Tv,
 		House,
-        MenuIcon,
-        SearchIcon,
+		MenuIcon,
+		SearchIcon,
 		UsersRound,
 		ChevronDown,
 		CircleQuestionMarkIcon,
@@ -24,7 +24,7 @@
 	import { setModeCookie } from "$lib/utils/mode-cookie.svelte";
 
 	const BASE_HOST_URL = `${Rh.proto}://${Rh.deriveBase(page.url.host)}`;
-	const BASE_API_URL = `${Rh.proto}://${Rh.api}`;
+	const BASE_API_URL = `${Rh.apiBase}`;
 
 	const searchDebounceCallback = debounce(handleSearch, 350);
 
@@ -51,7 +51,6 @@
 			if (!signal.aborted) {
 				const body = await res.json();
 				results = body[0];
-				count = body[1];
 			}
 		} finally {
 			previous = current;
@@ -66,7 +65,6 @@
 	let previous = $state("");
 
 	let results = $state<SearchResult[]>([]);
-	let count = $state(0);
 
 	let inputVisible = $state(true);
 
@@ -80,7 +78,7 @@
 	const ROUTE = {
 		channel: "/leaderboard/channel",
 		chatter: "/leaderboard/chatter",
-		faq: "/faq",
+		about: "/about",
 	} as const;
 
 	type Route = keyof typeof ROUTE;
@@ -216,7 +214,7 @@
 				<!-- </Dropdown.Label> -->
 				<Dropdown.Item class="w-full">
 					<a
-						href={routeUrl("faq").href}
+						href={routeUrl("about").href}
 						class="flex w-full flex-row items-center justify-between px-2"
 					>
 						<div>about</div>

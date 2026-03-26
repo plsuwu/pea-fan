@@ -3,10 +3,8 @@ use core::fmt;
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    db::models::chatter::{ChatterId, ChatterScoreSummary},
-    util::helix::HelixUser,
-};
+use crate::db::models::chatter::{ChatterId, ChatterScoreSummary};
+use crate::util::helix::HelixUser;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(transparent)]
@@ -138,9 +136,3 @@ impl From<super::chatter::Chatter> for Channel {
         }
     }
 }
-
-// impl From<Vec<super::chatter::Chatter>> for Channel {
-//     fn from(values: Vec<super::chatter::Chatter>) -> Vec<Self> {
-//         values.into_iter().map(Self::from).collect()
-//     }
-// }

@@ -4,7 +4,9 @@
 	import { readableColor, type UntypedEntry } from "$lib/utils";
 	import Stats from "./stats/stats.svelte";
 	import Pagination from "../leaderboard/filtering/pagination.svelte";
-	import { page } from "$app/state";
+	import { navigating, page } from "$app/state";
+	import Spinner from "$lib/shadcn-components/ui/spinner/spinner.svelte";
+	import { fade } from "svelte/transition";
 
 	let {
 		channelLogin,
@@ -33,6 +35,15 @@
 	});
 </script>
 
+{#snippet Loader()}
+	<div
+		in:fade={{ delay: 0, duration: 150 }}
+		out:fade={{ delay: 0, duration: 150 }}
+		class="absolute z-30 flex h-full min-h-screen w-full items-center justify-center bg-background/75"
+	>
+		<Spinner />
+	</div>
+{/snippet}
 <div class="my-10 lg:my-4 xl:mx-14"></div>
 <div
 	class="w-full self-center lg:max-w-[610px] lg:min-w-[610px] lg:self-start xl:min-w-[350px]"
@@ -53,6 +64,12 @@
 				pageParam={"score_page"}
 			/>
 			<div class="my-8"></div>
+
+			<div class="relative h-full w-full">
+				{#if navigating.to}
+					{@render Loader()}
+				{/if}
+			</div>
 			{#each scoreEntries as entry}
 				<RowLayout
 					{entry}
@@ -63,7 +80,7 @@
 			{/each}
 		</div>
 	{:else}
-		<div class="relative flex min-h-[70vh] items-center justify-center">
+		<div class="relative flex min-h-[70vh] items-start mt-8 lg:mt-0 lg:items-center justify-center">
 			piss has never been mentioned here
 		</div>
 	{/if}

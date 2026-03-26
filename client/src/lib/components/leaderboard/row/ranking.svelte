@@ -2,7 +2,7 @@
 	import Square from "$lib/components/misc/square.svelte";
 	import { getRankColor, readableColor } from "$lib/utils";
 	let { ranking }: { ranking: number } = $props();
-
+    
 	let { color, thickness } = $derived(getRankColor(ranking));
 </script>
 
@@ -10,7 +10,7 @@
 	<div class="group flex items-center justify-center pl-2.5 lg:p-4">
 		<div
 			class="absolute text-sm font-bold lg:text-xl"
-			style={`color: ${color}`}
+			style={`color: ${ranking <= 3 ? color : 'var(--color-foreground)'}`}
 		>
 			{ranking}
 		</div>

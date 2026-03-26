@@ -4,16 +4,24 @@ import type { RequestEvent } from "@sveltejs/kit";
 import { isIpAddr } from ".";
 import { logger } from "$lib/observability/server/logger.svelte";
 
-/**
- * Rh => `RouteHandler`
- */
+
 export class Rh {
 	private static readonly dev =
-		env.PUBLIC_NODE_ENV === "development" || env.PUBLIC_NODE_ENV == null;
+		env.PUBLIC_NODE_ENV === "development" ||
+		env.PUBLIC_NODE_ENV === "staging" ||
+		env.PUBLIC_NODE_ENV == null;
 
-	private static readonly _proto = Rh.dev ? "http" : "https";
+	private static readonly _proto = Rh.dev ? env.PUBLIC_USE_PROTO : "https";
 	private static readonly _base = Rh.dev ? "piss.local" : "rat.moe";
-	private static readonly _api = Rh.dev ? "localhost:8080" : "api.rat.moe";
+	// private static readonly _api = "api.rat.moe";
+	// private static readonly _apiProto = Rh.dev ? "http" : "https";
+
+	// public static readonly apiBase = "https://api.rat.moe";
+    public static readonly apiBase = "http://api.localhost:8080";
+
+    constructor() {
+        console.log(Rh._proto);
+    }
 
 	static deriveBase(host: string) {
 		const parts = host.split(".");
@@ -42,9 +50,13 @@ export class Rh {
 		return this._proto;
 	}
 
-	static get api(): string {
-		return this._api;
-	}
+	// static get api(): string {
+	// 	return this._api;
+	// }
+	//
+	// static get apiProto(): string {
+	// 	return this._apiProto;
+	// }
 
 	static get base(): string {
 		return this._base;

@@ -35,10 +35,9 @@ pub struct ConnectionSupervisor {
 /// Signals that can be used by any task to request or observe a reconnect
 #[derive(Clone, Debug)]
 pub struct ConnectionHandle {
-    /// Triggers a reconnect
+    /// Triggers a connection reset
     pub reset_tx: mpsc::Sender<()>,
-    /// Reflects the current connection generation;
-    /// updates each time a connection is reset
+    /// Reflects the current connection generation, updates whenever a connection is reset.
     pub generation_rx: watch::Receiver<u64>,
 }
 
@@ -122,8 +121,11 @@ impl ConnectionSupervisor {
 
         loop {
             tokio::select! {
+                // Handle PRIVMSG command
                 Some(msg_result) = stream.next() => {
                         let msg = msg_result?;
+
+                        // Handle PONG commands first
                         if is_pong(&msg) {
                             tracing::info!(
                                 command = ?msg.command,
@@ -133,20 +135,26 @@ impl ConnectionSupervisor {
                             last_ack = Instant::now();
                         }
 
+                        // If we aren't handling a PONG, handle JOIN/PART commands for our user,
+                        // otherwise send message to a worker thread for further parsing to avoid
+                        // blocking the connection thread.
                         match &msg.command {
                             irc::proto::Command::JOIN(channel, _, _) => {
+                                // handle JOIN
                                 if is_counter_user(&msg, COUNTER_USER) {
                                     _ = event_tx.try_send(ChannelEvent::Joined(channel.clone()));
                                 }
                             }
 
                             irc::proto::Command::PART(channel, _) => {
+                                // handle PART
                                 if is_counter_user(&msg, COUNTER_USER) {
                                     _ = event_tx.try_send(ChannelEvent::Parted(channel.clone()));
                                 }
                             }
 
                             _ => {
+                                // offload to worker
                                 if let Some(parsed) = parse_incoming(&msg) {
                                     _ = msg_tx.send(parsed).await;
                                 }
@@ -155,6 +163,7 @@ impl ConnectionSupervisor {
 
                     }
 
+                // Send a PING if we haven't seen one recently to make sure we are still connected
                 _ = ping_interval.tick() => {
                     if last_ack.elapsed() > ack_deadline + Duration::from_secs(KEEPALIVE_INTERVAL) {
                         tracing::warn!(
@@ -168,6 +177,7 @@ impl ConnectionSupervisor {
                     client.inner.send("PING :tmi.twitch.tv")?;
                 }
 
+                // Handle a query from an API request
                 Some(query) = query_rx.recv() => {
                     match query {
                         IrcQuery::GetJoinedChannels { reply } => {
@@ -179,6 +189,7 @@ impl ConnectionSupervisor {
                     }
                 }
 
+                // Worker action (internal)
                 Some(action) = action_rx.recv() => {
                     match action {
                         ChannelAction::Join(channels) => {
@@ -190,6 +201,7 @@ impl ConnectionSupervisor {
                     }
                 }
 
+                // Worker command (external)
                 Some(command) = cmd_rx.recv() => {
                     match command {
                         OutgoingCommand::Reply { message } => {
@@ -200,6 +212,7 @@ impl ConnectionSupervisor {
                     }
                 }
 
+                // Handle a reset request
                 Some(()) = self.reset_rx.recv() => {
                     _ = event_tx.send(ChannelEvent::Disconnected).await;
                     mgr_handle.abort();

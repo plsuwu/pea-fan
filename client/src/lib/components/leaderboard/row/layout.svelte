@@ -102,7 +102,7 @@
 				class="w-max flex-1 transition-all duration-300 ease-in-out"
 				bind:this={nameElement}
 			>
-				<Name color={entry.color} name={entry.name} />
+				<Name name={entry.name} />
 			</div>
 		</Link>
 	</div>

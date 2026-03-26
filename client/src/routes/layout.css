@@ -7,6 +7,10 @@
     --breakpoint-xxl: 99rem;
 }
 
+@layer base {
+     
+}
+
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));

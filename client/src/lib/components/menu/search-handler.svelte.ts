@@ -31,7 +31,7 @@ export function debounce<
 }
 
 export class SearchHandler {
-	readonly apiUrl = new URL(`${Rh.proto}://${Rh.api}/search/by-login`);
+	readonly apiUrl = new URL(`${Rh.apiBase}/search/by-login`);
 
 	loading = $state(false);
 	results = $state<SearchResult[]>([]);
@@ -42,9 +42,7 @@ export class SearchHandler {
 
 	constructor() {}
 
-
-	public async search(signal: AbortSignal, q: string) {
-	}
+	public async search(signal: AbortSignal, q: string) {}
 
 	private createQueryUrl(login: string): URL {
 		const url = this.apiUrl;
@@ -70,5 +68,4 @@ export class SearchHandler {
 		this.current = "";
 		this.previous = "";
 	}
-
 }

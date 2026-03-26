@@ -11,14 +11,15 @@
       nixpkgs,
       flake-utils,
       crane,
+      ...
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        craneLib = crane.mkLib pkgs;
 
-        src =
+        craneLib = crane.mkLib pkgs;
+        cargoSrc =
           let
             fs = pkgs.lib.fileset;
             unfilteredRoot = ./server;
@@ -37,7 +38,7 @@
           };
 
         commonArgs = {
-          inherit src;
+          src = cargoSrc;
           strictDeps = true;
           SQLX_OFFLINE = true;
 
@@ -57,40 +58,49 @@
               pkgs.sqlx-cli
             ];
 
-            # unnecessary, perhaps
             prebuild = ''
               export SQLX_OFFLINE_DIR="./server/.sqlx" 
             '';
 
-            # don't run tests because i didnt write any meaningful ones
             doCheck = false;
+
+            installPhaseCommand = ''
+              mkdir -p $out/bin
+              mkdir -p $out/lib
+
+              cp -R ./target/release/piss-fan-server $out/bin/piss-fan-server
+              cp -R ./migrations $out/lib/
+            '';
           }
         );
 
-        # client = pkgs.stdenv.mkDerivation {
-        #   pname = "piss-fan-client";
-        #   version = "1.0.0";
-        #   src = ./client;
-        #
-        #   nativeBuildInputs = [ pkgs.bun ];
-        #
-        #   buildPhase = ''
-        #     export HOME=$TMPDIR
-        #     bun install --frozen-lockfile
-        #     bun run build
-        #   '';
-        #
-        #   installPhase = ''
-        #     mkdir -p $out
-        #     cp -r dist/* $out/
-        #   '';
-        # };
+        client = pkgs.buildNpmPackage {
+          pname = "piss-fan-client";
+          version = "1.1.3";
+          src = ./client;
+
+          npmDepsHash = "sha256-2zTTJ2YnaE2VcWKsb82iDHpgNxbb7lX6Bz1YwOzh204";
+
+          buildPhase = ''
+            npm install
+            npm run build -- --sourcemap
+
+            rm -rf ./node_modules
+            npm install --omit dev
+
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp -R ./node_modules $out/
+            cp -R ./build $out/
+          '';
+        };
 
       in
       {
         packages = {
-          # inherit api client;
-          inherit api;
+          inherit api client;
           default = api;
         };
 

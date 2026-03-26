@@ -4,61 +4,69 @@ import { logger } from "$lib/observability/server/logger.svelte";
 import { Rh } from "$lib/utils/route";
 import { getBaseURLFromRequest, isIpAddr, isLocalDomain } from "$lib/utils";
 
-export const handleError: HandleServerError = ({ event, error, status }) => {
-	const context = event.tracing?.current
-		? event.tracing?.current.spanContext()
-		: event.tracing?.root?.spanContext();
-
-	const { spanId, traceId } = context;
-	const { url, locals, getClientAddress } = event;
-
-	logger.error(
-		{
-			error,
-			extra: {
-				url,
-				locals,
-				client: getClientAddress() ?? "undefined client IP",
-				spanId,
-				traceId,
-			},
-		},
-		"ERROR"
-	);
-
-	let displayMessage;
-
-	switch (status.toString()) {
-		case "404":
-			displayMessage = "the requested page doesn't exist";
-			break;
-
-		case "401":
-			displayMessage = "you arent authorized to view this page";
-			break;
-
-		case "500":
-			displayMessage = "an internal error occurred";
-			break;
-
-		default:
-			displayMessage = "an unknown error occurred";
-			break;
-	}
-
-	return {
-		message: displayMessage,
-		code: status,
-		traceId,
-		spanId,
-	};
-};
+// export const handleError: HandleServerError = ({ event, error, status }) => {
+// 	const context = event.tracing?.current
+// 		? event.tracing?.current.spanContext()
+// 		: event.tracing?.root?.spanContext();
+//
+// 	const { spanId, traceId } = context;
+// 	const { url, locals, getClientAddress } = event;
+//
+// 	logger.error(
+// 		{
+// 			error,
+// 			extra: {
+// 				url,
+// 				locals,
+// 				client: getClientAddress() ?? "undefined client IP",
+// 				spanId,
+// 				traceId,
+// 			},
+// 		},
+// 		"ERROR"
+// 	);
+//
+// 	let displayMessage;
+//
+// 	switch (status.toString()) {
+// 		case "404":
+// 			displayMessage = "the requested page doesn't exist";
+// 			break;
+//
+// 		case "401":
+// 			displayMessage = "you arent authorized to view this page";
+// 			break;
+//
+// 		case "500":
+// 			displayMessage = "an internal error occurred";
+// 			break;
+//
+// 		default:
+// 			displayMessage = "an unknown error occurred";
+// 			break;
+// 	}
+//
+// 	return {
+// 		message: displayMessage,
+// 		code: status,
+// 		traceId,
+// 		spanId,
+// 	};
+// };
 
 const tenantHook: Handle = async ({ event, resolve }) => {
 	const requestHost = event.request.headers.get("Host") || null;
-	event.locals.logger.debug(
-		{ requestHost: requestHost },
-		"[HOOK] REQUEST INIT"
+	const xForwardedFor =
+		event.request.headers.get("x-forwarded-for") || "NO_X-Forwarded-For";
+	event.locals.logger.info(
+		{
+			clientAdapterIP: event.getClientAddress(),
+			clientIp: xForwardedFor,
+			eventUrl: event.url,
+			request: event.request,
+			route: event.route,
+		},
+		"[@ -> HOOK] REQUEST RX INITIAL"
 	);
 	if (!requestHost || isIpAddr(requestHost) || isLocalDomain(requestHost)) {
 		event.locals.logger.debug(
@@ -72,8 +80,8 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 	if (
 		!requestedTenant ||
 		requestedTenant === Rh.base ||
-        requestHost === Rh.base ||
-		requestHost === Rh.api
+		requestHost === Rh.base ||
+		requestHost === Rh.apiBase
 	) {
 		event.locals.logger.debug("[ALLOW] (no tenant)");
 		event.locals.channel = null;
@@ -106,8 +114,14 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 const logInitHook: Handle = async ({ event, resolve }) => {
 	event.locals.logger = logger.child({
 		client: event.getClientAddress(),
-		spanId: event.tracing?.current?.spanContext().spanId,
-		traceId: event.tracing?.current?.spanContext().traceId,
+		spanId:
+			event.tracing?.current?.spanContext().spanId ??
+			event.tracing?.root?.spanContext()?.spanId ??
+			"0",
+		traceId:
+			event.tracing?.current?.spanContext().traceId ??
+			event.tracing?.root?.spanContext()?.traceId ??
+			"0",
 	});
 	event.locals.logger.debug("pushed logger to request event locals");
 	return resolve(event);

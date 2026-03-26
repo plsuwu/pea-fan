@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 
 use redis::{AsyncCommands, CopyOptions, from_redis_value};
@@ -15,26 +13,12 @@ use crate::util::helix::{Helix, HelixUser};
 use crate::db::prelude::*;
 
 #[derive(Debug)]
-pub struct Migrator {
-    pub channels: Vec<Channel>,
-    pub chatters: Vec<Chatter>,
-    pub scores: Vec<i32>,
-}
+pub struct Migrator;
 
 impl Migrator {
     #[instrument]
     pub fn new() -> Self {
-        tracing::info!("migrator init");
-
-        let channels = Vec::new();
-        let chatters = Vec::new();
-        let scores = Vec::new();
-
-        Self {
-            channels,
-            chatters,
-            scores,
-        }
+        Migrator
     }
 
     #[instrument(skip(self))]
@@ -55,13 +39,14 @@ impl Migrator {
                 fetched.into_iter().map(Chatter::from).collect::<Vec<_>>(),
             )
         };
+
         tracing::debug!(
             channels_count = channels.len(),
             broadcasters_count = broadcasters.len(),
             "fetched channel and broadcaster data from helix"
         );
 
-        // (re)map redis channel login names onto the new channel structure for database upset
+        // (re)map redis channel login names onto the new channel structure for database upsert
         let mut channel_map = HashMap::new();
         let channels: Vec<_> = channels
             .into_iter()
@@ -133,8 +118,6 @@ impl Migrator {
             tracing::debug!("no invalid chatter logins found in cache");
         }
 
-        // TODO: turn this block into a function call i reckon
-        // --
         {
             let _span = tracing::debug_span!("sort_and_validate").entered();
             chatter_logins.sort_by_key(|a| a.to_lowercase());
@@ -195,6 +178,10 @@ impl Migrator {
             "merged leaderboard data"
         );
 
+        // --------------------------------
+        // | main transaction query block |
+        // --------------------------------
+
         let base_timestamp = chrono::Utc::now()
             .naive_utc()
             .checked_sub_signed(chrono::Duration::days(80)) // idk just whenever really
@@ -202,8 +189,13 @@ impl Migrator {
 
         Tx::with_tx(pool, |mut tx| async move {
             let result = async {
-                tx.disable_score_event_triggers().await?;
+                
+                // async fn populate_scores_from_map( ... )
 
+                tx.disable_score_event_triggers().await?;
+                
+                // scores: HashMap<String, Vec<String, i64>> (i32 here but i think this will
+                // still serialize fine)
                 for (chatter_id, scoremap) in scores.into_iter() {
                     for (channel_id, score) in scoremap.into_iter() {
                         tracing::debug!(
@@ -684,17 +676,6 @@ impl Migrator {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Aliases {
-    pub current: String,
-    pub historic: Vec<String>,
-}
-
-impl Aliases {
-    pub fn new(current: String, historic: Vec<String>) -> Self {
-        Self { current, historic }
-    }
-}
 
 // TODO:
 //  this should be implemtned with `update_historic_user` as a single function,
@@ -807,6 +788,117 @@ pub async fn update_historic_channel(aliases: Aliases) -> RedisResult<()> {
     Ok(())
 }
 
+#[instrument]
+pub async fn migrate_user_immediate(prev_login: &str, curr_login: &str) -> RedisResult<()> {
+    tracing::info!(historic = ?prev_login, current = ?curr_login, "running redis migration for single user");
+
+    let user_leaderboard_key = redis_key!(user, leaderboard, prev_login);
+    let mut conn = redis_pool().await?.manager.clone();
+    let cached_leaderboard: Vec<(String, isize)> = conn
+        .zrange_withscores::<_, Option<Vec<(String, isize)>>>(&user_leaderboard_key, 0, -1)
+        .await?
+        .unwrap_or_default();
+
+    if cached_leaderboard.is_empty() {
+        tracing::error!(historic = ?prev_login, "unable to retrieve leaderboard data for user");
+        return Err(RedisErr::UpdateEmpty);
+    }
+
+    let chatter_repo = ChatterRepository::new(db_pool().await?);
+    let chatter = chatter_repo.get_by_login(curr_login.to_string()).await?;
+
+    tracing::info!(
+        historic = prev_login,
+        current_id = ?chatter.id,
+        "merging prev login scores into chatter.id"
+    );
+
+    let base_timestamp = chrono::Utc::now()
+        .naive_utc()
+        .checked_sub_signed(chrono::Duration::days(80)) // idk just whenever really
+        .unwrap_or_default();
+
+    Tx::with_tx(db_pool().await?, |mut tx| async move {
+        let result: Result<(), sqlx::Error> = async {
+            tx.disable_score_event_triggers().await?;
+
+            for (channel, score) in cached_leaderboard {
+                let channel = chatter_repo.get_by_login(channel.to_string()).await?;
+                tracing::info!(
+                    prev_login,
+                    channel_login = channel.login,
+                    score,
+                    "found target channel for score"
+                );
+                tx.record_score_events_multi(
+                    &chatter.id.clone(),
+                    &channel.id.into(),
+                    score as _,
+                    base_timestamp,
+                )
+                .await?;
+            }
+
+            tx.enable_score_event_triggers().await?;
+
+            sqlx::query!(
+                r#"
+                UPDATE chatter
+                SET total = (
+                    SELECT COALESCE(COUNT(*), 0)
+                    FROM score_event
+                    WHERE chatter_id = chatter.id
+                ),
+                updated_at = NOW()
+                "#,
+            )
+            .execute(&mut **tx.inner_mut()?)
+            .await?;
+
+            sqlx::query!(
+                r#"
+                UPDATE channel
+                SET channel_total = (
+                    SELECT COALESCE(COUNT(*), 0)
+                    FROM score_event
+                    WHERE channel_id = channel.id
+                ),
+                updated_at = NOW()
+                "#,
+            )
+            .execute(&mut **tx.inner_mut()?)
+            .await?;
+
+            sqlx::query!(
+                r#"
+                INSERT INTO score (chatter_id, channel_id, score, updated_at)
+                SELECT 
+                    chatter_id,
+                    channel_id,
+                    COUNT(*) as score,
+                    NOW() as updated_at
+                FROM score_event
+                GROUP BY chatter_id, channel_id
+                ON CONFLICT (chatter_id, channel_id)
+                DO UPDATE SET
+                    score = EXCLUDED.score,
+                    updated_at = EXCLUDED.updated_at
+                "#
+            )
+            .execute(&mut **tx.inner_mut()?)
+            .await?;
+
+            Ok(())
+        }
+        .await;
+
+        (tx, Ok(result))
+    })
+    .await??;
+
+    Ok(())
+}
+
 #[instrument(skip(aliases))]
 pub async fn update_historic_user(aliases: Aliases) -> RedisResult<()> {
     tracing::info!(
@@ -910,74 +1002,4 @@ pub async fn update_historic_user(aliases: Aliases) -> RedisResult<()> {
 pub async fn migrate_redis_into_pg() -> RedisResult<()> {
     Migrator::new().process().await?;
     Ok(())
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::util::telemetry;
-
-    #[tokio::test]
-    async fn test_historic_updater() {
-        let provider = telemetry::Telemetry::new().await.unwrap().register();
-
-        let user = String::from("cowtitties__");
-        let historic = vec![String::from("cowtitties_"), String::from("cowtitties")];
-
-        let aliases = Aliases::new(user, historic);
-
-        update_historic_user(aliases).await.unwrap();
-
-        provider.shutdown();
-    }
-
-    #[tokio::test]
-    /// Technically this is not a test, but rather can be run manually as a one-off to fix
-    /// out-of-date channel or chatter names:
-    /// ```
-    /// cargo test run_updater -- --show-output
-    /// ```
-    ///
-    /// # Note
-    ///
-    /// This would be good to serve as an endpoint so we can just update without rebuilding,
-    /// but it needs to be more robust before this should be implemented.
-    async fn run_updater() {
-        let provider = telemetry::Telemetry::new().await.unwrap().register();
-
-        // [
-        //      "old_name_1", "new_name_1",
-        //      "old_name_2", "new_name_2",
-        //      ...
-        //  ];
-
-        let names_map = Vec::new();
-        for update in names_map.chunks_exact(2) {
-            tracing::info!("processing: {} -> {}", update[0], update[1]);
-            Migrator::update_historic_channel(update[0], update[1])
-                .await
-                .unwrap();
-        }
-
-        Migrator::new().process().await.unwrap();
-
-        provider.shutdown();
-
-        // let mut conn = redis_pool().await.unwrap().manager.clone();
-        // let mut pipeline = redis::pipe();
-        //
-        // for pairs in names_map.chunks_exact(2) {
-        //     pipeline.del(&format!("user:{}:total", pairs[0]));
-        //     pipeline.del(&format!("user:{}:leaderboard", pairs[0]));
-        //     pipeline.del(&format!("channel:#{}:total", pairs[0]));
-        //     pipeline.del(&format!("channel:#{}:leaderboard", pairs[0]));
-        // }
-        //
-        // let res: redis::Value = pipeline.query_async(&mut conn).await.unwrap();
-
-        // info!(
-        //     "successfully updated {:?} names and deleted corresponding old keys",
-        //     res
-        // );
-    }
 }

@@ -11,7 +11,7 @@ use axum::{Json, Router};
 use http::StatusCode;
 use redis::aio::ConnectionManager;
 use serde::Serialize;
-use sqlx::PgPool;
+use sqlx::{PgPool, Pool, Postgres};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::error::SendError;
@@ -27,7 +27,6 @@ use crate::api::middleware::verify_external::{get_hmac_key, verify_external_iden
 use crate::api::middleware::verify_internal::verify_session_ident;
 use crate::api::webhook::webhook_handler;
 use crate::db::prelude::*;
-use crate::db::redis::redis_pool::redis_pool;
 use crate::irc::{ConnectionClientError, IrcHandle};
 use crate::util::channel::ChannelError;
 use crate::util::env::Var;
@@ -37,34 +36,30 @@ use crate::var;
 
 pub type JsonResult<T> = core::result::Result<Json<T>, RouteError>;
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct AppState {
-    pub db_pool: &'static PgPool,
+    pub database_pool: &'static PgPool,
     pub redis_pool: ConnectionManager,
-    pub irc_client: IrcHandle,
+    pub irc_connection: IrcHandle,
     pub channels: Vec<String>,
-    pub totp: Arc<Mutex<TOTPHandler>>,
+    pub totp_handler: Arc<Mutex<TOTPHandler>>,
 }
 
-#[instrument(skip(tx))]
-pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels: Vec<String>) {
-    let db_pool = db_pool().await.unwrap();
-    let redis_pool = redis_pool().await.unwrap().manager.clone();
-
-    let irc_client = crate::irc::start(channels.clone(), db_pool, 6)
-        .await
-        .unwrap();
-
-    let totp_key = var!(Var::TOTPKey).await.unwrap();
-    let totp = Arc::new(Mutex::new(TOTPHandler::new(totp_key)));
-
+#[instrument(skip(tx, database_pool, redis_pool, irc_connection, totp_handler, channels))]
+pub async fn router(
+    tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>,
+    database_pool: &'static Pool<Postgres>,
+    redis_pool: ConnectionManager,
+    irc_connection: IrcHandle,
+    totp_handler: Arc<Mutex<TOTPHandler>>,
+    channels: Vec<String>,
+) {
     let state = Arc::new(AppState {
-        db_pool,
-        irc_client,
+        database_pool,
+        irc_connection,
         redis_pool,
         channels,
-        totp,
+        totp_handler,
     });
 
     let secret_key = get_hmac_key().await.unwrap();
@@ -75,8 +70,11 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
         .route("/callback", post(webhook_handler))
         .route_layer(middleware::from_fn(verify_external_ident));
 
-    let init_auth_routes = Router::new()
-        .route("/auth/totp-session", post(totp_compare));
+    let init_auth_routes = Router::new().route("/auth/totp-session", post(totp_compare));
+
+    // -----------------------------------------------------------------------------------
+    // TODO: refactor route creation below into their own function to clean this up a bit
+    // -----------------------------------------------------------------------------------
 
     // runtime administration
     let internal_post_routes = Router::new()
@@ -89,8 +87,9 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
         )
         .route("/channel/reply-configs", get(channel_configs))
         .route("/update/reply-configs", post(update_channel_config))
-        .route("/update/channel", post(update_channel_in_cache))
+        // .route("/update/channel", post(update_channel_in_cache))
         .route("/update/chatter", post(update_chatter_in_cache))
+        .route("/update/clear-scores/chatter/{id}", get(clear_chatter_scores))
         .route("/update/migrate", get(run_cache_migration))
         .route("/update/db-entries", get(irc_joins))
         .route("/irc/force-reconnect", get(force_irc_reconnect))
@@ -108,10 +107,7 @@ pub async fn router(tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>, channels
         //
         // general
         //
-        .route(
-            "/",
-            get(|| async { Response::new(Body::empty()) }),
-        )
+        .route("/", get(|| async { Response::new(Body::empty()) }))
         .route("/search/by-login", get(search_by_login))
         //
         // channel-related routes
@@ -184,11 +180,24 @@ async fn log_route_errors(request: Request, next: Next) -> Response {
 pub async fn start_server(
     tx: UnboundedSender<SocketAddr>,
     mut rx: UnboundedReceiver<SocketAddr>,
+    database_pool: &'static Pool<Postgres>,
+    redis_pool: ConnectionManager,
+    irc_connection: IrcHandle,
+    totp_handler: Arc<Mutex<TOTPHandler>>,
     channels: Vec<String>,
 ) -> Result<Vec<JoinHandle<()>>, RouteError> {
-    tracing::info!("starting server");
+    tracing::info!("starting server...");
+
     let server_handle = tokio::task::spawn(async move {
-        router(tx, channels).await;
+        router(
+            tx,
+            database_pool,
+            redis_pool,
+            irc_connection,
+            totp_handler,
+            channels,
+        )
+        .await;
     });
 
     let logging_handle = tokio::task::spawn(async move {
@@ -362,36 +371,3 @@ impl IntoResponse for RouteError {
         response
     }
 }
-
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-//     use crate::util::telemetry as otlp_trace;
-//     use futures::future::join_all;
-//     // use futures_util::future::join_all;
-//     use tokio::sync::oneshot::Sender;
-//
-//     #[tokio::test]
-//     async fn test_run_server() {
-//         let provider = otlp_trace::Telemetry::new().await.unwrap().register();
-//
-//         let (tx_server, rx) = tokio::sync::mpsc::unbounded_channel::<SocketAddr>();
-//         let (tx_from_api, rx_from_api) =
-//             tokio::sync::mpsc::unbounded_channel::<(String, Sender<Vec<String>>)>();
-//
-//         let channels = ["vacu0usly", "plss", "chikogaki"]
-//             .into_iter()
-//             .map(|ch| ch.to_string())
-//             .collect();
-//
-//         let mut handles = start_server(tx_server, tx_from_api, rx).await.unwrap();
-//         handles.extend(
-//             crate::irc::client::start_irc_handler(channels, rx_from_api)
-//                 .await
-//                 .unwrap(),
-//         );
-//
-//         _ = join_all(handles).await;
-//         provider.shutdown();
-//     }
-// }

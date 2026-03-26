@@ -2,11 +2,9 @@ use sqlx::{Pool, Postgres, Result as SqlxResult};
 use tracing::instrument;
 
 use super::sql_fragment;
-use crate::db::{
-    models::channel::{Channel, ChannelId, ChannelReplies},
-    prelude::Tx,
-    repositories::Repository,
-};
+use crate::db::models::channel::{Channel, ChannelId, ChannelReplies};
+use crate::db::prelude::Tx;
+use crate::db::repositories::Repository;
 
 #[derive(Debug)]
 pub struct ChannelRepository {
@@ -148,7 +146,7 @@ impl ChannelRepository {
     pub async fn get_reply_config(&self, channel: &str) -> SqlxResult<ChannelReplies> {
         let result = sqlx::query_as::<_, ChannelReplies>(
             r#"
-            SELECT * FROM replies_and_chatter_data
+            SELECT * FROM reply_configuration
             WHERE id = $1
             "#,
         )
@@ -158,13 +156,13 @@ impl ChannelRepository {
 
         Ok(result)
     }
-    
+
     #[instrument(skip(self))]
     pub async fn get_all_reply_configs(&self) -> SqlxResult<Vec<ChannelReplies>> {
         // TODO rename this view if ever bothered
         let configs = sqlx::query_as::<_, ChannelReplies>(
             r#"
-            SELECT * FROM replies_and_chatter_data;
+            SELECT * FROM reply_configuration
             "#,
         )
         .fetch_all(self.pool)

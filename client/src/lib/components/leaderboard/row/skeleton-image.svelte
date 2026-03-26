@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { fade } from "svelte/transition";
+
 	let {
 		src,
 		alt,
@@ -22,7 +24,8 @@
 <span class="skeleton-host inline-grid place-items-center">
 	{#if !loaded && !errored}
 		<span
-			class="skeleton bg-accent-foreground {skeletonClass} img-fade"
+			out:fade={{ duration: 250 }}
+			class="skeleton rounded-full {skeletonClass}"
 			aria-hidden="true"
 		></span>
 	{/if}
@@ -51,30 +54,38 @@
 	.skeleton {
 		width: 100%;
 		height: 100%;
-		background: color-mix(in srgb, currentColor 12%, transparent);
+
+		background: color-mix(in srgb, currentColor 1%, var(--color-background));
 		overflow: hidden;
-		position: relative;
 		isolation: isolate;
+		position: relative;
+
+		&::after {
+			content: "";
+			position: absolute;
+			inset: 0;
+			background: linear-gradient(
+				90deg,
+				transparent 0%,
+				color-mix(in srgb, currentColor 4%, transparent) 5%,
+				color-mix(in srgb, currentColor 14%, transparent) 40%,
+				color-mix(in srgb, currentColor 4%, transparent) 95%,
+				transparent 100%
+			);
+			background-size: 800% 600%;
+			transform: translateX(-100%);
+			animation: shimmer 1.5s ease-in-out infinite;
+		}
 	}
 
-	.skeleton::after {
-		content: "";
-		position: absolute;
-		inset: 0;
-		background: linear-gradient(
-			90deg,
-			transparent 0%,
-			color-mix(in srgb, currentColor 20%, transparent) 50%,
-			transparent 100%
-		);
-		transform: translateX(-100%);
-		animation: shimmer 1.4s ease-out infinite;
-		will-change: transform;
+	@keyframes shimmer {
+		to {
+			transform: translateX(600%);
+		}
 	}
 
 	.img-fade {
 		opacity: 0;
-		transition: opacity 0.2s ease-out;
 	}
 
 	.img-fade.visible {

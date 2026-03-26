@@ -10,16 +10,37 @@ use crate::util::env::{EnvErr, Var};
 use crate::util::helix::HelixErr;
 use crate::var;
 
-static REDIS_POOL: LazyLock<OnceCell<RedisPool>> = LazyLock::new(OnceCell::new);
-pub async fn redis_pool() -> RedisResult<&'static RedisPool> {
+static REDIS_POOL: OnceCell<ConnectionManager> = OnceCell::const_new();
+
+/// Retrieves a reference to a `redis::aio::ConnectionManager`.
+///
+/// As the `redis::aio::ConnectionManager` is an `Arc<_>` under the hood, this reference can be
+/// cloned to produce an owned instance of a Redis connection.
+pub async fn redis_pool() -> RedisResult<&'static ConnectionManager> {
     REDIS_POOL
-        .get_or_try_init(|| async { RedisPool::new().await })
+        .get_or_try_init(|| async {
+            let redis_url = var!(Var::RedisUrl).await?;
+            let client = redis::Client::open(redis_url)?;
+
+            Ok(ConnectionManager::new(client).await?)
+        })
         .await
 }
 
 #[macro_export]
+/// Usage:
+/// ```no_run
+/// redis_key!(
+///     channel | user,
+///     total | score | leaderboard,
+///     "USER_LOGIN"
+/// );
+/// ```
 macro_rules! redis_key {
     ($prefix:ident, $keytype:ident) => {{
+        use crate::db::redis::redis_pool::KeyType;
+        use crate::db::redis::redis_pool::RedisKey;
+
         let key_type = match stringify!($prefix) {
             "channel" => KeyType::Channel,
             "user" => KeyType::Chatter,
@@ -32,12 +53,15 @@ macro_rules! redis_key {
             _ => panic!("invalid key prefix: '{}'", stringify!($keytype)),
         }
         .wildcard();
-        tracing::info!(key = ?key, "built wildcard redis key");
+        tracing::trace!(key = ?key, "built wildcard redis key");
 
         key
     }};
 
     ($prefix:ident, $keytype:ident, $name:expr) => {{
+        use crate::db::redis::redis_pool::KeyType;
+        use crate::db::redis::redis_pool::RedisKey;
+
         let key_type = match stringify!($prefix) {
             "channel" => KeyType::Channel,
             "user" => KeyType::Chatter,
@@ -51,7 +75,7 @@ macro_rules! redis_key {
         }
         .with_name($name);
 
-        tracing::info!(key = ?key, "built named redis key");
+        tracing::trace!(key = ?key, "built named redis key");
 
         key
     }};
@@ -63,7 +87,7 @@ pub enum RedisKey {
     Leaderboard(KeyType),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, PartialOrd)]
 pub enum KeyType {
     Chatter,
     Channel,
@@ -102,19 +126,6 @@ impl RedisKey {
     }
 }
 
-impl RedisPool {
-    #[instrument]
-    pub async fn new() -> RedisResult<Self> {
-        let redis_url = var!(Var::RedisUrl).await?;
-        tracing::debug!(redis_url, "connecting to redis server");
-
-        let client = redis::Client::open(redis_url)?;
-        let manager = ConnectionManager::new(client).await?;
-
-        Ok(Self { manager })
-    }
-}
-
 pub type RedisResult<T> = core::result::Result<T, RedisErr>;
 
 #[derive(Debug, Error)]
@@ -140,13 +151,6 @@ pub enum RedisErr {
     #[error("attempted to update non-existent dataset")]
     UpdateEmpty,
 
-    // #[error("unable to parse resulting redis key")]
-    // BadKey,
-
     #[error(transparent)]
     SqlxError(#[from] sqlx::error::Error),
-}
-
-pub struct RedisPool {
-    pub manager: ConnectionManager,
 }

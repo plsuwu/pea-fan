@@ -2,11 +2,9 @@ use sqlx::{Pool, Postgres, Result as SqlxResult};
 use tracing::instrument;
 
 use super::sql_fragment;
-use crate::db::{
-    models::chatter::{Chatter, ChatterId, ChatterSearchResult},
-    prelude::Tx,
-    repositories::Repository,
-};
+use crate::db::models::chatter::{Chatter, ChatterId, ChatterSearchResult};
+use crate::db::prelude::Tx;
+use crate::db::repositories::Repository;
 
 #[derive(Debug)]
 pub struct ChatterRepository {

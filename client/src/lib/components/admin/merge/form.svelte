@@ -18,7 +18,7 @@
 		formActionResult: unknown;
 	} = $props();
 
-	let userType = $state<"channel" | "chatter">("channel");
+	let userType = $state<"channel" | "chatter">("chatter");
 	let current = $state<string>("");
 
 	let aliases = $state<string[]>([]);

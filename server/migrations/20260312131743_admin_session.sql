@@ -12,7 +12,7 @@ CREATE TABLE reply (
 	CONSTRAINT reply_channel_id_pk PRIMARY KEY(id)
 );
 
-CREATE VIEW replies_and_chatter_data AS
+CREATE VIEW reply_configuration AS
 SELECT 
     r.id,
     r.enabled,

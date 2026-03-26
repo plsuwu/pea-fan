@@ -24,7 +24,7 @@ export class FetchUtil {
 		variant: "channel" | "chatter",
 		pagination: PaginatedRequest
 	): Promise<PaginatedResponse> {
-		let url = new URL(`${Rh.proto}://${Rh.api}/${variant}/leaderboard`);
+		let url = new URL(`${Rh.apiBase}/${variant}/leaderboard`);
 
 		logger.info({ pageinfo: { ...pagination } }, "pagination");
 
@@ -71,7 +71,7 @@ export class FetchUtil {
 		pagination: PaginatedRequest
 	): Promise<PaginatedResponse<UntypedEntry>> {
 		const url = new URL(
-			`${Rh.proto}://${Rh.api}/${variant}/by-${identVariant}/${ident}`
+			`${Rh.apiBase}/${variant}/by-${identVariant}/${ident}`
 		);
 
 		url.searchParams.set("score_limit", pagination.scoreLimit!);
@@ -113,7 +113,7 @@ export class FetchUtil {
 		variant: "channel" | "chatter",
 		id: string
 	): Promise<ScoreWindows> {
-		const url = new URL(`${Rh.proto}://${Rh.api}/${variant}/windowed/${id}`);
+		const url = new URL(`${Rh.apiBase}/${variant}/windowed/${id}`);
 		url.searchParams.set("variant", variant);
 
 		logger.info({ url: url.href }, "querying for windowed scores");

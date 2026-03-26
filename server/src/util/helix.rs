@@ -1,6 +1,7 @@
 use core::fmt;
 use std::sync::LazyLock;
 
+use async_trait::async_trait;
 use futures::{StreamExt, stream};
 use http::header::{AUTHORIZATION, InvalidHeaderValue};
 use http::{HeaderMap, HeaderValue};
@@ -12,17 +13,16 @@ use tokio::sync::OnceCell;
 use tracing::{Instrument, error, instrument, warn};
 
 use crate::api::middleware::{MiddlewareErr, verify_external};
-use crate::api::webhook::{
-    StreamGenericRequest, StreamGenericRequestType, SubscriptionGenericData,
-};
-use crate::db::prelude::ChannelId;
+use crate::api::webhook::SubscriptionGenericData;
+use crate::api::webhook::{StreamGenericRequest, StreamGenericRequestType};
+use crate::db::prelude::{ChannelId, ChatterId};
 use crate::util::env::{EnvErr, Var};
 use crate::var;
 
-// TODO:
-//  these can probably be removed i think
-// pub const NOT_PRESENT_IN_CACHE: &str = "[NOT_PRESENT_IN_CACHE]";
-// pub const NOT_VALID_HELIX_USER: &str = "[NOT_VALID_HELIX_USER]";
+#[async_trait]
+pub trait HelixClient: Send + Sync {
+    async fn fetch_users_by_login(&self, logins: Vec<String>) -> HelixResult<Vec<HelixUser>>;
+}
 
 pub struct Helix;
 impl Helix {
@@ -510,7 +510,7 @@ pub struct HelixDataResponse<T> {
     data: Vec<T>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, Hash)]
 pub struct HelixUser {
     pub id: String,
     pub login: String,
@@ -525,6 +525,24 @@ pub struct HelixUser {
     pub total: i64,
     #[serde(default)]
     pub private: bool,
+}
+
+impl PartialEq<str> for HelixUser {
+    fn eq(&self, other: &str) -> bool {
+        self.login == other
+    }
+}
+
+impl PartialEq<ChatterId> for HelixUser {
+    fn eq(&self, other: &ChatterId) -> bool {
+        self.id == other.0
+    }
+}
+
+impl PartialEq<ChannelId> for HelixUser {
+    fn eq(&self, other: &ChannelId) -> bool {
+        self.id == other.0
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

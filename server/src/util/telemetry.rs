@@ -62,7 +62,7 @@ impl Telemetry {
             .with(log_layer)
             .with(meter_layer)
             .with(EnvFilter::new(
-                "piss_fan_server=debug,tower_http=debug,axum=debug,sqlx=info,info",
+                "piss_fan_server=debug,tower_http=info,axum=info,sqlx=info,info",
             ))
             .with(
                 tracing_subscriber::fmt::layer()

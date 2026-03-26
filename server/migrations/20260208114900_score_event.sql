@@ -20,7 +20,7 @@ BEGIN
     UPDATE chatter
     SET total = total + 1,
         updated_at = NOW()
-    WHERE id = NEW.channel_id;
+    WHERE id = NEW.chatter_id;
 
     UPDATE channel
     SET channel_total = channel_total + 1,

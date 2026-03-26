@@ -1,5 +1,3 @@
-// #![allow(dead_code)]
-
 use tokio::sync::oneshot;
 
 #[derive(Debug, Default)]
@@ -18,7 +16,6 @@ pub struct IrcTags {
 #[derive(Debug)]
 pub enum UserNoticeType {
     // Sub,
-    Resub,
     // SubGift,
     // SubMysteryGift,
     // GiftPaidUpgrade,
@@ -28,6 +25,7 @@ pub enum UserNoticeType {
     // Unraid,
     // BitsBadgeTier,
     // SharedChatNotice,
+    Resub,
     Other(String),
 }
 

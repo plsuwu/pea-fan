@@ -30,10 +30,12 @@
 			return "yesterday";
 		}
 
-		if (ts === "last7Days" || ts === "last30Days") {
-			const period = timestamps[ts] as Dayjs;
-			const str = `since ${period.format("MMM D")}`.toLowerCase();
-			return str;
+		if (ts === "last7Days") {
+			return "over the last 7 days";
+		}
+
+		if (ts === "last30Days") {
+			return "over the last 30 days";
 		}
 
 		const { start } = timestamps[ts] as { start: Dayjs; end: Dayjs };
@@ -49,6 +51,10 @@
 
 	let { yesterday, prevWeek, prevMonth, prevYear, last7Days, last30Days } =
 		$props();
+
+	let opened = $derived.by(() =>
+		accordionState === true ? "periodic-piss-stats" : null
+	);
 </script>
 
 {#snippet StatLine(title: string, stat: string | number)}
@@ -66,10 +72,7 @@
 	</div>
 {/snippet}
 
-<Accordion.Root
-	type="single"
-	class="w-full"
->
+<Accordion.Root type="single" class="w-full" value={opened}>
 	<Accordion.Item value="periodic-piss-stats">
 		<Accordion.Trigger
 			class="rounded-none border-b border-b-muted pt-2 pb-3 text-sm font-semibold 
@@ -77,11 +80,6 @@
 			>other periodic piss stats</Accordion.Trigger
 		>
 		<Accordion.Content class="rounded-b-lg border-r border-b border-l p-4">
-			{@render StatLine(
-				getCalendarPeriod("yesterday"),
-				yesterday.toLocaleString()
-			)}
-			<div class="my-4"></div>
 			{@render StatLine(
 				getCalendarPeriod("last7Days"),
 				last7Days.toLocaleString()
@@ -92,9 +90,14 @@
 			)}
 			<div class="my-4"></div>
 			{@render StatLine(
+				getCalendarPeriod("yesterday"),
+				yesterday.toLocaleString()
+			)}
+			{@render StatLine(
 				getCalendarPeriod("lastWeek"),
 				prevWeek.toLocaleString()
 			)}
+			<div class="my-4"></div>
 			{@render StatLine(
 				getCalendarPeriod("lastMonth"),
 				prevMonth.toLocaleString()

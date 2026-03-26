@@ -1,17 +1,10 @@
-// #![allow(dead_code)]
-
 use core::fmt;
 
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    db::{
-        models::channel::{ChannelId, ChannelScoreSummary},
-        // repositories::leaderboard::ScorePagination,
-    },
-    util::helix::HelixUser,
-};
+use crate::db::models::channel::{ChannelId, ChannelScoreSummary};
+use crate::util::helix::HelixUser;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(transparent)]

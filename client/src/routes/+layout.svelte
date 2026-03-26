@@ -48,6 +48,10 @@
 		if (saved === "dark" || saved === "light" || saved === "system") {
 			setMode(saved);
 		}
+
+		if (announcementClearToken) {
+			announcementCleared = true;
+		}
 	});
 
 	$effect(() => {
@@ -117,7 +121,9 @@
 			if (!location) return;
 
 			// cannot call `goto()` on this location if we are on a tenant
-			channel ? (window.location.href = location) : goto(location);
+			channel
+				? (window.location.href = location)
+				: goto(location, { noScroll: false });
 		}
 	}
 </script>
@@ -138,20 +144,22 @@
 	</header>
 
 	<div class="border-t-2"></div>
-	{#if announcement && !announcementClearToken && !announcementCleared}
+	{#if announcement && !announcementCleared && !announcementClearToken}
 		<div
 			transition:slide={{ duration: 250, axis: "y", easing: expoInOut }}
-			class="flex max-h-[75px] h-[75px] w-full flex-row items-center justify-between bg-amber-200
-            px-8 py-1 text-black"
+			class="flex max-h-[105px] w-full flex-row items-center justify-between bg-amber-200
+            px-2 py-1 text-xs text-black lg:px-8 lg:py-2 lg:text-base"
 		>
 			<div></div>
-			<div class="text-lg font-semibold">{announcement.content}</div>
+			<div class="text-[11px] font-semibold sm:text-sm lg:text-base">
+				{@html announcement.content}
+			</div>
 			<Button
 				onclick={handleClearAnnouncement}
 				variant="ghost"
 				size="icon-sm"
-				class="flex flex-row items-center justify-center rounded-full border text-black
-                hover:cursor-pointer hover:text-black"
+				class="ml-2 flex flex-row items-center justify-center rounded-full border
+                text-black hover:cursor-pointer hover:text-black"
 			>
 				<X size={3} />
 			</Button>
@@ -172,34 +180,31 @@
 			</div>
 		{/if}
 		<Tt.Provider delayDuration={0}>
-			{#if waitForLoad}
-				<div
-					class="fixed top-0 left-0 z-10 flex h-full w-full flex-row items-center
-                    justify-center bg-background/50 backdrop-blur-[2px]"
-				>
-					<Spinner class="size-5" />
-				</div>
-			{:else}
-				<div class="mt-12 flex h-full min-h-[450px] flex-col">
-					<div class="w-[93%] self-center xl:w-[90%]">
-						<div class="flex flex-col lg:flex-row xl:justify-center">
-							{#if channel && channelData && scoreWindows}
-								<div
-									class="w-full px-2 md:min-w-[320px] lg:pr-6 lg:pl-2 xl:w-[35%]"
-								>
-									<Stats channelLogin={channel} {channelData} {scoreWindows}>
-										<ExternalLinks
-											channelLogin={channelData.login}
-											channelId={channelData.id}
-										/>
-									</Stats>
-								</div>
-							{/if}
-							{@render children()}
-						</div>
+			<!-- <div -->
+			<!-- 	class="fixed top-0 left-0 z-10 flex h-full w-full flex-row items-center -->
+			<!--                 justify-center bg-background/50 backdrop-blur-[2px]" -->
+			<!-- > -->
+			<!-- 	<Spinner class="size-5" /> -->
+			<!-- </div> -->
+			<div class="mt-12 flex h-full min-h-[450px] flex-col">
+				<div class="w-[93%] self-center xl:w-[90%]">
+					<div class="flex flex-col lg:flex-row xl:justify-center">
+						{#if channel && channelData && scoreWindows}
+							<div
+								class="w-full px-2 md:min-w-[320px] lg:pr-6 lg:pl-2 xl:w-[35%]"
+							>
+								<Stats channelLogin={channel} {channelData} {scoreWindows}>
+									<ExternalLinks
+										channelLogin={channelData.login}
+										channelId={channelData.id}
+									/>
+								</Stats>
+							</div>
+						{/if}
+						{@render children()}
 					</div>
 				</div>
-			{/if}
+			</div>
 		</Tt.Provider>
 	</main>
 

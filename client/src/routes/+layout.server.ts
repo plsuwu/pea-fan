@@ -1,6 +1,8 @@
 import type { LayoutServerLoad } from "./$types";
 import { fetchUtil } from "$lib/utils/fetching";
 import { MODE_COOKIE_NAME } from "$lib/utils/mode-cookie.svelte";
+import { sha256 } from "@oslojs/crypto/sha2";
+import { encodeHexLowerCase } from "@oslojs/encoding";
 import type {
 	PaginatedRequest,
 	PaginatedResponse,
@@ -12,6 +14,11 @@ import {
 	type UntypedSubEntry,
 } from "$lib/utils";
 
+function makeSha256Hash(str: string): string {
+	const bytes = new TextEncoder().encode(str);
+	return encodeHexLowerCase(sha256(bytes));
+}
+
 export const load: LayoutServerLoad = async ({
 	locals,
 	cookies,
@@ -20,10 +27,20 @@ export const load: LayoutServerLoad = async ({
 }) => {
 	const modePreference = cookies.get(MODE_COOKIE_NAME) ?? null;
 
+	const announcementContent = `<div class='text-center>
+    <div class='pt-1'>thanks for checking the new version out!!
+        <a href='/about'
+            class='text-blue-500 hover:opacity-50'
+        >
+            click here
+        </a>
+        if your count doesnt seem right (or see the 'about' page later).
+    </div>
+</div>`;
+
 	const announcement = {
-		content:
-			"i am still under development!! please excuse some slight jank and broken bits and pieces...",
-		hash: "92f8993610427be27b8f7057aa0b7391ebb9133e46f5c881a43196dce6572dfc",
+		content: announcementContent,
+		hash: makeSha256Hash(announcementContent),
 	};
 	const seenAnnouncement = cookies.get("seen-announcement") || null;
 	const announcementClearToken = seenAnnouncement === announcement.hash;

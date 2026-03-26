@@ -8,7 +8,9 @@
 
 	let { login, totalScores, scores, variant } = $props();
 
-	let preposition = $derived(variant === "Channel" ? "by" : "in");
+	// let preposition = $derived(variant === "Channel" ? "by" : "in");
+	let subvariant = $derived(variant === "Channel" ? "chatter" : "channel");
+
 	let { host } = $derived(page.url);
 
 	const PREVIEWS_COUNT = 6;
@@ -43,7 +45,7 @@
 })}
 	{@const href = `https://twitch.tv/${login}`}
 
-	<a {href} rel="noreferrer noopener" target="_blank">
+	<a {href} rel="noreferrer noopener" target="_blank" class="cursor-pointer">
 		<Tt.Root>
 			<Tt.Trigger>
 				<SkeletonImage
@@ -76,7 +78,7 @@
 		<div
 			class="mt-1 ml-3 text-sm -tracking-wider text-accent-foreground/55 italic"
 		>
-			mentioned most {preposition}:
+			top {subvariant}s:
 		</div>
 
 		<div class="items-row flex flex-row">

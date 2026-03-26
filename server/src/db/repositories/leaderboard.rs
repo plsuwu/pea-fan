@@ -3,16 +3,13 @@ use sqlx::{Pool, Postgres, Result as SqlxResult};
 use tracing::instrument;
 
 use crate::db::models::PaginatedResponse;
-use crate::db::models::channel::{
-    ChannelId, ChannelLeaderboardEntry, ChannelLeaderboardRow, ChannelScoreSummary,
-};
-use crate::db::models::chatter::{
-    ChatterId, ChatterLeaderboardEntry, ChatterLeaderboardRow, ChatterScoreSummary,
-};
+use crate::db::models::channel::{ChannelId, ChannelLeaderboardEntry};
+use crate::db::models::channel::{ChannelLeaderboardRow, ChannelScoreSummary};
+use crate::db::models::chatter::{ChatterId, ChatterLeaderboardEntry};
+use crate::db::models::chatter::{ChatterLeaderboardRow, ChatterScoreSummary};
 use crate::db::models::leaderboard::TimeWindow;
-use crate::db::prelude::{
-    Channel, ChannelRepository, Chatter, ChatterRepository, Repository, Score, ScoreSummary,
-};
+use crate::db::prelude::{Channel, ChannelRepository, Chatter};
+use crate::db::prelude::{ChatterRepository, Repository, Score, ScoreSummary};
 
 pub struct LeaderboardRepository {
     pool: &'static Pool<Postgres>,
@@ -291,7 +288,7 @@ impl LeaderboardRepository {
     pub async fn get_single_chatter_leaderboard(
         &self,
         id: ChatterId,
-        score_pagination: ScorePagination,
+        // score_pagination: ScorePagination,
     ) -> SqlxResult<Option<ChatterLeaderboardEntry>> {
         let chatter = sqlx::query_as!(
             ChatterLeaderboardRow,
@@ -322,9 +319,7 @@ impl LeaderboardRepository {
 
         match chatter {
             Some(ch) => {
-                let scores = self
-                    .get_channel_scores_batch(&[ch.id.clone()], &score_pagination)
-                    .await?;
+                let scores = self.get_channel_scores_batch(&[ch.id.clone()]).await?;
                 let score_summaries: Vec<ChannelScoreSummary> = scores
                     .iter()
                     .filter(|s| s.chatter_id == ch.id)
@@ -343,7 +338,6 @@ impl LeaderboardRepository {
         &self,
         limit: i64,
         offset: i64,
-        score_pagination: ScorePagination,
     ) -> SqlxResult<PaginatedResponse<ChatterLeaderboardEntry>> {
         let total_items: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM chatter")
             .fetch_one(self.pool)
@@ -381,8 +375,7 @@ impl LeaderboardRepository {
 
         let ids = &chatters.iter().map(|c| c.id.clone()).collect::<Vec<_>>();
         let scores = if !ids.is_empty() {
-            self.get_channel_scores_batch(ids, &score_pagination)
-                .await?
+            self.get_channel_scores_batch(ids).await?
         } else {
             Vec::new()
         };
@@ -542,7 +535,6 @@ impl LeaderboardRepository {
     async fn get_channel_scores_batch(
         &self,
         ids: &[ChatterId],
-        _: &ScorePagination,
     ) -> SqlxResult<Vec<ChannelScoreSummary>> {
         let ids: &[String] = &ids.iter().map(|id| id.0.clone()).collect::<Vec<_>>();
 

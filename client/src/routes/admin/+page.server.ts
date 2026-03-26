@@ -1,41 +1,24 @@
 import { env } from "$env/dynamic/private";
 import type { PageServerLoad } from "./$types";
-import type { Actions, Cookies } from "@sveltejs/kit";
+import type { Actions } from "@sveltejs/kit";
 import { redirect } from "@sveltejs/kit";
 import { logger } from "$lib/observability/server/logger.svelte";
 import { invalidateCookie } from "$lib/server";
 import { Rh } from "$lib/utils/route";
+import { buildHeaders, verifyToken } from "$lib/server/verify";
 import { channelCache } from "$lib/observability/server/cache.svelte";
 
 // TODO:
 // -------------------------------------------------------------------
 // - endpoint needs rate limit hook,
 // - HMAC-based message signing/verification,
-// - also probably perform verification (or part of the verification)
-//    in a server hook instead of here.
+// - also probably perform (some of) the verification in a server hook instead of here.
 
-const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
-
-const API_BASE = `${Rh.proto}://${Rh.api}`;
+// const API_BASE = `${Rh.apiProto}://${Rh.api}`;
+const API_BASE = `${Rh.apiBase}`;
 const FETCH_CONFIGS = `${API_BASE}/channel/reply-configs`;
 const UPDATE_CONFIGS = `${API_BASE}/update/reply-configs`;
-
-function getClientInfo(request: Request, getClientAddress: () => string) {
-	const userAgent = request.headers.get("user-agent") ?? "[NO_USER_AGENT]";
-	const host = request.headers.get("host") ?? "[NO_HOST]";
-	const cookie = request.headers.get("cookie") ?? "[NO_COOKIE]";
-	return {
-		client: {
-			addr: getClientAddress(),
-			url: request.url,
-			headers: {
-				user_agent: userAgent,
-				host,
-				cookies: cookie,
-			},
-		},
-	};
-}
+const CLEAR_CHATTER_SCORE = `${API_BASE}/update/clear-scores/chatter`;
 
 async function getChannelConfigs(token: string, id = "all") {
 	const headers = buildHeaders(true, token);
@@ -73,50 +56,6 @@ export const load: PageServerLoad = async ({
 		channels,
 	};
 };
-
-async function verifyToken(
-	cookies: Cookies,
-	request: Request,
-	getClientAddress: () => string,
-	fetch: typeof globalThis.fetch
-): Promise<string | null> {
-	const token = cookies.get(ADMIN_SESSION_TOKEN);
-	if (!token) {
-		logger.warn("no session cookie");
-		return null;
-	}
-
-	const res = await fetch("/api/verify-session", {
-		method: "POST",
-		headers: buildHeaders(true, token),
-		body: JSON.stringify({ token }),
-	});
-
-	const { valid } = await res.json();
-	logger.info({ valid }, "initial session validation response");
-
-	if (token && valid !== true) {
-		logger.warn(
-			{ ...getClientInfo(request, getClientAddress) },
-			"unauthorized"
-		);
-
-		return null;
-	}
-
-	return token;
-}
-
-function buildHeaders(isJSON: boolean, token: string) {
-	const headers = new Headers();
-	headers.set("authorization", token);
-
-	if (isJSON) {
-		headers.set("content-type", "application/json");
-	}
-
-	return headers;
-}
 
 export const actions = {
 	update: async ({ cookies, request, fetch, getClientAddress }) => {
@@ -197,9 +136,58 @@ export const actions = {
 		logger.info({ response: res }, "config update successful");
 		return { success: true };
 	},
+
+	clearScore: async ({ cookies, request, fetch, getClientAddress }) => {
+		const token = await verifyToken(cookies, request, getClientAddress, fetch);
+		if (!token) {
+			invalidateCookie(cookies);
+			return { success: false };
+		}
+
+		const headers = buildHeaders(false, token);
+		const formData = await request.formData();
+		const id = formData.get("id") as string;
+
+		const res = await fetch(`${CLEAR_CHATTER_SCORE}/${id}`, {
+			method: "GET",
+			headers,
+		});
+
+		if (res.status !== 200) {
+			logger.error({ response: res, id: id }, "failed to clear chatter score");
+			return { success: false, status: res.status };
+		}
+
+		logger.info({ response: res }, "successfully cleared chatter score");
+		return { success: true };
+	},
+
+	searchChatter: async ({ cookies, request, fetch, getClientAddress }) => {
+		const formData = await request.formData();
+		const query = formData.get("query") as string;
+
+		const url = new URL(`${API_BASE}/search/by-login`);
+		url.searchParams.set("login", query);
+
+		const res = await fetch(url, {
+			method: "GET",
+		});
+
+		if (res.status !== 200) {
+			logger.error({ response: res, query: query }, "chatter query failed");
+			return { success: false, status: res.status };
+		}
+
+		logger.info({ response: res }, "query ok");
+		return {
+			success: true,
+			from: "searchChatter",
+			results: await res.json(),
+		};
+	},
 } satisfies Actions;
 
-const UPDATE_API_ROUTE = `${Rh.proto}://${Rh.api}/update`;
+const UPDATE_API_ROUTE = `${API_BASE}/update`;
 
 async function runUpdate(
 	keytype: "channel" | "chatter",

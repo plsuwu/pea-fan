@@ -1,10 +1,6 @@
 import { logger } from "./logger.svelte";
-import { env } from "$env/dynamic/public";
 
-const PUBLIC_DEVL_API = env.PUBLIC_DEVL_API;
-const PUBLIC_DEVL_PROTO = env.PUBLIC_DEVL_PROTO;
-const PUBLIC_PROD_API = env.PUBLIC_PROD_API;
-const PUBLIC_PROD_PROTO = env.PUBLIC_PROD_PROTO;
+const API_BASE_URL = "https://api.rat.moe";
 
 export type RawIrcInfo = {
 	likely_missing: string[];
@@ -117,10 +113,8 @@ class ChannelCache extends Cache<Broadcaster> {
 	}
 }
 
-const protocol = import.meta.env.DEV ? PUBLIC_DEVL_PROTO : PUBLIC_PROD_PROTO;
-const apiUrl = import.meta.env.DEV ? PUBLIC_DEVL_API : PUBLIC_PROD_API;
 
 export const channelCache = new ChannelCache(
-	`${protocol}://${apiUrl}/channel/all`,
+	`${API_BASE_URL}/channel/all`,
 	"channels"
 );

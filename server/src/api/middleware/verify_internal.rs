@@ -43,7 +43,7 @@ pub async fn verify_session_ident(
     req: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let db = state.db_pool;
+    let db = state.database_pool;
 
     let headers = req.headers().clone();
     let ident = headers
