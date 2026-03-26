@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE channel \n            SET \n                channel_total = (\n                    SELECT COALESCE(COUNT(*), 0) \n                    FROM score_event\n                    WHERE channel_id = channel.id\n                ),\n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "fc2b2112afa394f5ee55a281168f2b23576d6463d0178943f1b36b6738b71640"
+}

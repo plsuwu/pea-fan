@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE chatter \n            SET \n                total = (\n                    SELECT COALESCE(COUNT(*), 0) \n                    FROM score_event\n                    WHERE chatter_id = chatter.id\n                ), \n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6bc172f7ab159aa91fdd1aec1f763dd5bf7e99f7363c69bd8f3f47f7ff0956e3"
+}

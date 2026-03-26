@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO reply (id) \n            SELECT channel.id FROM channel\n            ON CONFLICT (id) \n            DO NOTHING;\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ebb51de8a6d92782e7bada330ad1040d73ba1e3693e02b1d49d3bfa66af33fce"
+}

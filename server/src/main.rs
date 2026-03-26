@@ -19,7 +19,6 @@ use crate::util::totp;
 mod api;
 mod db;
 mod irc;
-mod tests;
 mod util;
 
 #[derive(Debug, Error)]

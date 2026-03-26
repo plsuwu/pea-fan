@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM score_event \n            WHERE chatter_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "23394fd5694770632f1d9568a5c49bec419a8bfbc1b30108482c077c71a3c9b4"
+}
