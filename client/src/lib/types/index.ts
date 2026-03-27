@@ -1,3 +1,13 @@
+export type HelixUser = {
+	id: string;
+	login: string;
+	display_name: string;
+	profile_image_url: string;
+	color: string;
+	total: number;
+	private: boolean;
+};
+
 export type ChannelEntry = {
 	id: string;
 	name: string;

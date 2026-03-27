@@ -4,7 +4,6 @@ import type { RequestEvent } from "@sveltejs/kit";
 import { isIpAddr } from ".";
 import { logger } from "$lib/observability/server/logger.svelte";
 
-
 export class Rh {
 	private static readonly dev =
 		env.PUBLIC_NODE_ENV === "development" ||
@@ -13,15 +12,12 @@ export class Rh {
 
 	private static readonly _proto = Rh.dev ? env.PUBLIC_USE_PROTO : "https";
 	private static readonly _base = Rh.dev ? "piss.local" : "rat.moe";
-	// private static readonly _api = "api.rat.moe";
-	// private static readonly _apiProto = Rh.dev ? "http" : "https";
+	public static readonly apiBase =
+		env.PUBLIC_API_BASE_URL ?? "https://api.rat.moe";
 
-	// public static readonly apiBase = "https://api.rat.moe";
-    public static readonly apiBase = "http://api.localhost:8080";
-
-    constructor() {
-        console.log(Rh._proto);
-    }
+	constructor() {
+		console.log(Rh._proto);
+	}
 
 	static deriveBase(host: string) {
 		const parts = host.split(".");

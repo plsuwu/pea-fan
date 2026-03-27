@@ -21,6 +21,7 @@ use crate::db::prelude::{ChannelLeaderboardEntry, Repository};
 use crate::db::prelude::{ChatterLeaderboardEntry, ChatterRepository, LeaderboardRepository};
 use crate::db::redis::migrator::{self, process_alias_migration};
 use crate::db::repositories::leaderboard::ScorePagination;
+use crate::util;
 use crate::util::helix::{Helix, HelixUser};
 
 #[instrument(skip(state))]
@@ -200,6 +201,45 @@ pub struct Aliases {
 //         Self { current, historic }
 //     }
 // }
+
+pub async fn force_update_channel(
+    State(state): State<Arc<AppState>>,
+    // Query(param): Query<SearchByLoginParam>,
+) -> Result<Json<String>, StatusCode> {
+    let handle = tokio::spawn(async move {
+        let mut channel_ids = sqlx::query_scalar!(
+            r#"
+            SELECT id FROM channel;
+            "#
+        )
+        .fetch_all(state.database_pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_iter()
+        .map(|id| ChatterId(id))
+        .collect::<Vec<_>>();
+
+        match util::channel::update_stored_channels(&mut channel_ids, true).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                tracing::error!(error = ?e, "failed to perform channel refresh");
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    });
+
+    match handle.await {
+        Ok(Ok(_)) => Ok(Json(String::from("OK"))),
+        Ok(Err(e)) => {
+            tracing::error!("error in task: {e}");
+            Ok(Json(e.to_string()))
+        }
+        Err(e) => {
+            tracing::error!("task panic: {e}");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
 
 // #[instrument(skip(payload))]
 pub async fn update_chatter_in_cache(
@@ -565,13 +605,14 @@ pub async fn update_channel_config(
 }
 
 // #[instrument(skip(state))]
-// pub async fn get_channel_weekly(
+// pub async fn add_new_channel(
 //     State(state): State<Arc<AppState>>,
-//     Query(param): Query<SearchByIdParam>,
-// ) -> JsonResult<i64> {
-//     let repo = LeaderboardRepository::new(state.database_pool);
-//     let res = repo.get_channel_daily_total(&crate::db::prelude::ChatterId(param.id))
-//         .await?;
+//     Query(param): Query<SearchByLoginParam>,
+// ) -> JsonResult<String> {
+//     let chatter_repo = ChatterRepository::new(state.database_pool);
+//     let channel_repo = ChannelRepository::new(state.database_pool);
 //
-//     Ok(Json(res))
+//     match tokio::spawn(async move {
+//         let helix_chatter =
+//     });
 // }

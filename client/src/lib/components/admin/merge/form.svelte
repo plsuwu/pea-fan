@@ -44,7 +44,7 @@
 </script>
 
 <form
-	class="w-[435px]"
+	class="w-full max-w-[435px]"
 	method="POST"
 	action="?/update"
 	use:enhance={({ formData }) => {
@@ -66,13 +66,15 @@
 		<Current bind:current bind:userType {waiting} />
 		<Historic bind:aliasInputState {addAlias} {waiting} />
 	</Fields>
-	<div class="mt-8 mb-12 flex w-[350px] flex-row justify-end self-end">
+	<div
+		class="mt-8 mb-12 flex w-full max-w-[350px] flex-row justify-end self-end"
+	>
 		<ButtonGroup {aliases} {current} {waiting} />
 	</div>
 </form>
 
 <form
-	class="flex w-[350px] flex-row justify-end"
+	class="flex w-full max-w-[350px] flex-row justify-end"
 	method="POST"
 	action="?/merge"
 	use:enhance={() => {
@@ -88,7 +90,7 @@
 	<Button
 		class="flex flex-row items-center justify-between space-x-3 self-end 
         text-muted-foreground/55 hover:text-muted-foreground"
-		disabled={waiting}
+		disabled
 		variant="outline"
 		type="submit"
 	>

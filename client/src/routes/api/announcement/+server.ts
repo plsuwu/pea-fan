@@ -14,17 +14,14 @@ const buildHeaders = (token: string): Headers => {
 	return headers;
 };
 
-// export const POST: RequestHandler = async (event: RequestEvent) => {
-//
-// };
+export const POST: RequestHandler = async (event: RequestEvent) => {
+	return json({ success: "" });
+};
 
-async function retrieveAnnouncement(event: RequestEvent) {
-    
-}
+async function retrieveAnnouncement(event: RequestEvent) {}
 
 async function createAnnouncement(event: RequestEvent) {
-    const validated = await event.fetch("/api/verify-session", {
-        method: 'POST',
-    });
+	const validated = await event.fetch("/api/verify-session", {
+		method: "POST",
+	});
 }
-

@@ -19,6 +19,7 @@ const API_BASE = `${Rh.apiBase}`;
 const FETCH_CONFIGS = `${API_BASE}/channel/reply-configs`;
 const UPDATE_CONFIGS = `${API_BASE}/update/reply-configs`;
 const CLEAR_CHATTER_SCORE = `${API_BASE}/update/clear-scores/chatter`;
+const HELIX_PROXY_SEARCH = `${API_BASE}/helix/by-login`;
 
 async function getChannelConfigs(token: string, id = "all") {
 	const headers = buildHeaders(true, token);
@@ -107,6 +108,29 @@ export const actions = {
 		return { success, status, body };
 	},
 
+	refreshChannel: async ({ cookies, request, fetch, getClientAddress }) => {
+		const token = await verifyToken(cookies, request, getClientAddress, fetch);
+
+		if (!token) {
+			invalidateCookie(cookies);
+			return { success: false };
+		}
+
+		const headers = buildHeaders(false, token);
+		const res = await fetch(`${API_BASE}/update/channel?login=all`, {
+			method: "GET",
+			headers,
+		});
+
+		if (res.status !== 200) {
+			logger.error({ response: res }, "full channel update failed");
+			return { success: false, status: res.status };
+		}
+
+		logger.info({ response: res }, "full channel update successful");
+		return { success: true };
+	},
+
 	toggleReply: async ({ cookies, request, fetch, getClientAddress }) => {
 		const token = await verifyToken(cookies, request, getClientAddress, fetch);
 		if (!token) {
@@ -121,7 +145,6 @@ export const actions = {
 		const body = { id };
 
 		console.log(UPDATE_CONFIGS, id, body);
-
 		const res = await fetch(UPDATE_CONFIGS, {
 			method: "POST",
 			headers,
@@ -162,9 +185,34 @@ export const actions = {
 		return { success: true };
 	},
 
-	searchChatter: async ({ cookies, request, fetch, getClientAddress }) => {
+	searchHelix: async ({ cookies, request, fetch, getClientAddress }) => {
+		const token = await verifyToken(cookies, request, getClientAddress, fetch);
+		if (!token) {
+			invalidateCookie(cookies);
+			return { success: false };
+		}
+
+		const headers = buildHeaders(false, token);
 		const formData = await request.formData();
-		const query = formData.get("query") as string;
+		const login = formData.get("login") as string;
+
+		const res = await fetch(`${HELIX_PROXY_SEARCH}/${login}`, {
+			method: "GET",
+			headers,
+		});
+
+		if (res.status !== 200) {
+			logger.error({ response: res, login: login }, "helix query failed");
+			return { success: false, status: res.status };
+		}
+
+		logger.info({ response: res }, "query ok");
+		return { success: true, from: "searchHelix", results: await res.json() };
+	},
+
+	searchChatter: async ({ request, fetch }) => {
+		const formData = await request.formData();
+		const query = formData.get("login") as string;
 
 		const url = new URL(`${API_BASE}/search/by-login`);
 		url.searchParams.set("login", query);
