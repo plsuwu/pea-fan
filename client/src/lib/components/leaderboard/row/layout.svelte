@@ -17,7 +17,7 @@
 		mode,
 		showScoreIcons = true,
 	}: {
-		entry: UntypedEntry;
+		entry: UntypedEntry & { isLive: boolean };
 		variant: "Channel" | "Chatter";
 		mode: SystemModeValue;
 		showScoreIcons?: boolean;
@@ -36,14 +36,16 @@
 				"style",
 				`color: ${entryColor}; 
                 transition-property: all; 
-                transition-timing-function: var(--tw-ease, var(--default-transition-timing-function);`
+                transition-duration: 300ms;
+                transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));`
 			);
 			if (ringedElement) {
 				ringedElement.setAttribute(
 					"style",
 					`--tw-ring-color: ${entryColor};
                     transition-property: all; 
-                    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function);`
+                    transition-duration: 300ms;
+                    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));`
 				);
 			}
 		} else {
@@ -51,14 +53,17 @@
 				"style",
 				`color: var(--foreground);
                 transition-property: all; 
-                transition-timing-function: var(--tw-ease, var(--default-transition-timing-function);`
+                transition-duration: 300ms;
+                transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));`
 			);
 			if (ringedElement) {
 				ringedElement.setAttribute(
 					"style",
 					`--tw-ring-color: var(--foreground);
                     transition-property: all; 
-                    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function);`
+                    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+                    transition-duration: 300ms;
+                    `
 				);
 			}
 		}
@@ -82,14 +87,14 @@
 	class={cn(
 		`relative flex items-center justify-between space-x-4 overflow-x-hidden
         rounded-[1px] border-2 border-foreground bg-background py-4 pl-4 transition-all
-        duration-200 ease-out hover:-translate-y-4 md:pl-6`,
+        duration-300 ease-out hover:-translate-y-4 md:pl-6`,
 		containerClass
 	)}
 >
 	<div class="group flex h-full w-max min-w-0 grow flex-row justify-between">
 		<Link href={isChannel ? href : undefined} {handleMouseEvent}>
 			<div class="mr-6">
-				<Ranking ranking={entry.ranking} />
+				<Ranking ranking={entry.ranking} isLive={entry.isLive} />
 			</div>
 			<div class="flex-none transition-all duration-300 ease-in-out">
 				<ProfileImage
@@ -102,7 +107,8 @@
 				class="w-max flex-1 transition-all duration-300 ease-in-out"
 				bind:this={nameElement}
 			>
-				<Name name={entry.name} />
+				<Name isLive={entry.isLive} name={entry.name} />
+					
 			</div>
 		</Link>
 	</div>

@@ -10,13 +10,12 @@ use serde_json::Value;
 use tracing::instrument;
 
 use crate::api::middleware::verify_internal::SessionToken;
-// use crate::api::middleware::verify_external::VerifiedBody;
 use crate::api::server::{AppState, JsonResult, RouteError};
 use crate::db::models::channel::ChannelReplies;
 use crate::db::models::chatter::ChatterSearchResult;
 use crate::db::models::leaderboard::TimeWindow;
 use crate::db::models::{PaginatedResponse, Pagination};
-use crate::db::prelude::{ChannelId, ChannelRepository, ChatterId, Tx};
+use crate::db::prelude::{ChannelId, ChannelRepository, Chatter, ChatterId, Tx};
 use crate::db::prelude::{ChannelLeaderboardEntry, Repository};
 use crate::db::prelude::{ChatterLeaderboardEntry, ChatterRepository, LeaderboardRepository};
 use crate::db::redis::migrator::{self, process_alias_migration};
@@ -94,6 +93,45 @@ pub async fn all_channels(State(state): State<Arc<AppState>>) -> JsonResult<Vec<
 }
 
 #[instrument(skip(state))]
+pub async fn bot_enabled_channels(
+    State(state): State<Arc<AppState>>,
+) -> JsonResult<Vec<ChannelReplies>> {
+    let enabled_channels = sqlx::query_as::<_, ChannelReplies>(
+        r#"
+        SELECT * FROM reply_configuration 
+        WHERE enabled = TRUE
+        "#,
+    )
+    .fetch_all(state.database_pool)
+    .await?;
+
+    Ok(Json(enabled_channels))
+}
+
+#[instrument(skip(state))]
+#[axum::debug_handler]
+pub async fn live_channels(State(state): State<Arc<AppState>>) -> JsonResult<Vec<Chatter>> {
+    let live_ids = crate::db::redis::get_all_live(&mut state.redis_pool.clone())
+        .await
+        .unwrap_or(Vec::new());
+
+    if live_ids.is_empty() {
+        return Ok(Json(Vec::new()));
+    }
+
+    let broadcasters = ChatterRepository::new(state.database_pool)
+        .get_many_by_id(
+            &live_ids
+                .into_iter()
+                .map(|id| ChatterId::from(id))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+
+    Ok(Json(broadcasters))
+}
+
+#[instrument(skip(state))]
 pub async fn irc_joins(
     State(state): State<Arc<AppState>>,
 ) -> JsonResult<HashMap<&'static str, Vec<String>>> {
@@ -129,9 +167,6 @@ pub async fn global_chatters(
 ) -> JsonResult<PaginatedResponse<ChatterLeaderboardEntry>> {
     let limit = param.limit;
     let offset = param.page * limit;
-
-    let score_limit = param.score_limit;
-    let score_offset = param.score_page * score_limit;
 
     let lb_repo = LeaderboardRepository::new(state.database_pool);
     let segment = lb_repo.get_chatter_leaderboard(limit, offset).await?;
@@ -196,15 +231,8 @@ pub struct Aliases {
     pub historic: Vec<String>,
 }
 
-// impl Aliases {
-//     pub fn new(current: String, historic: Vec<String>) -> Self {
-//         Self { current, historic }
-//     }
-// }
-
 pub async fn force_update_channel(
     State(state): State<Arc<AppState>>,
-    // Query(param): Query<SearchByLoginParam>,
 ) -> Result<Json<String>, StatusCode> {
     let handle = tokio::spawn(async move {
         let mut channel_ids = sqlx::query_scalar!(
@@ -241,7 +269,7 @@ pub async fn force_update_channel(
     }
 }
 
-// #[instrument(skip(payload))]
+#[instrument(skip(payload))]
 pub async fn update_chatter_in_cache(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<Value>,
@@ -307,13 +335,13 @@ pub async fn clear_chatter_scores(
     }
 }
 
-#[instrument(skip(state))]
-pub async fn print_totp(State(state): State<Arc<AppState>>) -> JsonResult<&'static str> {
-    let mut guard = state.totp_handler.lock().await;
-    guard.write_code_out();
-
-    Ok(Json("OK"))
-}
+// #[instrument(skip(state))]
+// pub async fn print_totp(State(state): State<Arc<AppState>>) -> JsonResult<&'static str> {
+//     let mut guard = state.totp_handler.lock().await;
+//     guard.write_code_out();
+//
+//     Ok(Json("OK"))
+// }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TOTPResponse {

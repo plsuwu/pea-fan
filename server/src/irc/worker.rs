@@ -11,8 +11,10 @@ use tracing::instrument;
 
 use crate::db::prelude::{
     ChannelId, ChannelRepository, Chatter, ChatterId, ChatterRepository, LeaderboardRepository,
-    Repository, Tx,
+    Repository,
 };
+use crate::db::redis::get_stream_state;
+use crate::db::redis::redis_pool::redis_pool;
 use crate::irc::ReplyReason;
 use crate::irc::commands::{IncomingMessage, IrcTags, OutgoingCommand};
 use crate::irc::error::{ClientResult, ConnectionClientError};
@@ -176,6 +178,7 @@ async fn handle_message(
                     String::from("reply-parent-msg-id"),
                     Some(tags.msg_id.clone()),
                 )];
+
                 let response = Message {
                     tags: Some(reply_tag),
                     prefix: None,
@@ -196,8 +199,15 @@ async fn handle_message(
             } else if text.to_lowercase().contains(KEYWORD)
                 && !ID_BLACKLIST.contains(&tags.user_id.as_str())
             {
-                tracing::info!(tags.user_login, tags.channel_name, "incrementing score");
-                increment_score(pool, &tags).await?;
+                let mut conn = redis_pool().await?.clone();
+                let is_online =
+                    get_stream_state(&mut conn, &ChannelId(tags.channel_id.clone())).await;
+
+                // only increment if streaming
+                if is_online {
+                    tracing::info!(tags.user_login, tags.channel_name, "incrementing score");
+                    increment_score(pool, &tags).await?;
+                }
             }
 
             Ok(())

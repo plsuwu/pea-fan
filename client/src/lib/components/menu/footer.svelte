@@ -13,7 +13,7 @@
 })}
 	<a
 		{href}
-		class="flex flex-row items-center"
+		class="flex flex-row items-center space-x-1.5"
 		rel="noopener noreferrer"
 		target="_blank"
 	>
@@ -26,6 +26,6 @@
 	{@render LinkOpt({
 		name: "GitHub",
 		icon: "fa7-brands:github",
-		href: "https://github.com/plsuwu"
+		href: "https://github.com/plsuwu/pea-fan"
 	})}
 </div>

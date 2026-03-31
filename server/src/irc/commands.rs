@@ -5,6 +5,7 @@ pub struct IrcTags {
     pub user_id: String,
     pub user_login: String,
 
+    #[allow(dead_code)]
     pub display_name: String,
 
     pub color: String,
@@ -26,9 +27,13 @@ pub enum UserNoticeType {
     // BitsBadgeTier,
     // SharedChatNotice,
     Resub,
+
+    #[allow(dead_code)]
+    /// Not actually "dead" as we need to assign to it for logging
     Other(String),
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum IncomingMessage {
     Clearchat {

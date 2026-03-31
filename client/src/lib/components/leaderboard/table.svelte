@@ -9,7 +9,10 @@
 	let {
 		entries,
 		variant,
-	}: { entries: UntypedEntry[]; variant: "Chatter" | "Channel" } = $props();
+	}: {
+		entries: (UntypedEntry & { isLive: boolean })[];
+		variant: "Chatter" | "Channel";
+	} = $props();
 	let currentMode = $derived(mode.current);
 </script>
 

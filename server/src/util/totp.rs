@@ -14,6 +14,7 @@ pub enum TOTPError {
     SystemTime(#[from] std::time::SystemTimeError),
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct TOTPHandler {
     generator: TOTP,

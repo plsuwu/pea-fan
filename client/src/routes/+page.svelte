@@ -8,11 +8,11 @@
 	let { data } = $props();
 	const { channel, channelData, paginationData } = $derived(data);
 
-    $effect(() => {
-        if (!channel) {
-            goto("/leaderboard/channel");
-        }
-    });
+	$effect(() => {
+		if (!channel) {
+			goto("/leaderboard/channel");
+		}
+	});
 </script>
 
 {#if channel && channelData && paginationData}

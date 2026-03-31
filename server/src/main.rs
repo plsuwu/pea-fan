@@ -51,14 +51,10 @@ type Result<T> = core::result::Result<T, RunnerErr>;
 async fn main() -> Result<()> {
     let telemetry_registry = Telemetry::new().await?.register();
     log_startup_init();
-
-    let channels_updated = util::channel::update_channels(None).await?;
-    let channel_names: Vec<String> = channels_updated.into_keys().collect();
-
+    
     let database_pool = db_pool().await?;
     let redis_pool = redis_pool().await?;
 
-    let irc_connection = crate::irc::start(channel_names.clone(), database_pool, 6).await?;
     let totp_handler = {
         let totp_key = var!(Var::TOTPKey).await.unwrap();
         Arc::new(Mutex::new(totp::TOTPHandler::new(totp_key)))
@@ -72,9 +68,7 @@ async fn main() -> Result<()> {
         rx_server_ready,
         database_pool,
         redis_pool.clone(),
-        irc_connection,
         totp_handler,
-        channel_names,
     )
     .await?;
 

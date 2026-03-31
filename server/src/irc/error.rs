@@ -2,7 +2,10 @@ use irc::proto::error::MessageParseError;
 use thiserror::Error;
 use tokio::sync::{AcquireError, mpsc::error::SendError, oneshot::error::RecvError};
 
-use crate::irc::commands::{IrcQuery, OutgoingCommand};
+use crate::{
+    db::redis::redis_pool::RedisErr,
+    irc::commands::{IrcQuery, OutgoingCommand},
+};
 
 pub type ClientResult<T> = core::result::Result<T, ConnectionClientError>;
 
@@ -22,6 +25,9 @@ pub enum ConnectionClientError {
 
     #[error(transparent)]
     MessageParse(#[from] MessageParseError),
+
+    #[error(transparent)]
+    Redis(#[from] RedisErr),
 
     #[error(transparent)]
     EnvError(#[from] crate::util::env::EnvErr),

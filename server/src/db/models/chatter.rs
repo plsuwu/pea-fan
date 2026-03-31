@@ -11,7 +11,7 @@ use crate::util::helix::HelixUser;
 pub struct ChatterId(pub String);
 
 /// Base chatter table model
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
 pub struct Chatter {
     pub id: ChatterId,
     pub login: String,
@@ -62,6 +62,7 @@ pub struct ChatterSearchResult {
     pub similarity_score: f32,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct ChatterLeaderboardRow {
     pub id: ChatterId,

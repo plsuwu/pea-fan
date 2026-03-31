@@ -1,19 +1,17 @@
 use chrono::NaiveDateTime;
 use tracing::instrument;
 
-use crate::util::helix::HelixUser;
-
 use std::{collections::HashMap, sync::LazyLock};
 
-pub static LEGACY_REMAPS: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
-    HashMap::from([
-        ("cchiko_", "chikogaki"),
-        ("pekoe_bunny", "dearpekoe"),
-        ("sheriff_baiken", "baikenvt"),
-        ("haelpc", "netuserhael"),
-        ("netaccount", "netuserhael"),
-    ])
-});
+// pub static LEGACY_REMAPS: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
+//     HashMap::from([
+//         ("cchiko_", "chikogaki"),
+//         ("pekoe_bunny", "dearpekoe"),
+//         ("sheriff_baiken", "baikenvt"),
+//         ("haelpc", "netuserhael"),
+//         ("netaccount", "netuserhael"),
+//     ])
+// });
 
 pub static MAPPED_IDS: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     HashMap::from([
@@ -74,10 +72,10 @@ pub static MAPPED_IDS: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
 });
 
 /// Legacy-to-current channel name lookups (based on the `LEGACY_REMAPS` HashMap)
-#[instrument]
-pub fn resolve_channel_login(raw: &str) -> String {
-    LEGACY_REMAPS.get(raw).copied().unwrap_or(raw).to_string()
-}
+// #[instrument]
+// pub fn resolve_channel_login(raw: &str) -> String {
+//     LEGACY_REMAPS.get(raw).copied().unwrap_or(raw).to_string()
+// }
 
 #[instrument]
 pub fn resolve_channel_id(raw: &str) -> String {
@@ -140,32 +138,32 @@ pub struct AlignmentError {
     actual: String,
 }
 
-#[instrument(skip(logins, users))]
-pub fn validate_alignment(
-    logins: &mut [String],
-    users: &mut [HelixUser],
-) -> Result<(), AlignmentError> {
-    logins.sort_by_key(|a| a.to_lowercase());
-    users.sort_by(|a, b| a.login.to_lowercase().cmp(&b.login.to_lowercase()));
-
-    // perform validation on entire vector if debugging, otherwise validate at first element,
-    // center element, and last element
-    let indices: Vec<usize> = if cfg!(debug_assertions) {
-        (0..logins.len()).collect()
-    } else {
-        let len = logins.len();
-        vec![0, len / 2, len.saturating_sub(1)]
-    };
-
-    for &i in &indices {
-        if i < logins.len() && logins[i].to_lowercase() != users[i].login.to_lowercase() {
-            return Err(AlignmentError {
-                index: i,
-                expected: logins[i].clone(),
-                actual: users[i].login.clone(),
-            });
-        }
-    }
-
-    Ok(())
-}
+// #[instrument(skip(logins, users))]
+// pub fn validate_alignment(
+//     logins: &mut [String],
+//     users: &mut [HelixUser],
+// ) -> Result<(), AlignmentError> {
+//     logins.sort_by_key(|a| a.to_lowercase());
+//     users.sort_by(|a, b| a.login.to_lowercase().cmp(&b.login.to_lowercase()));
+//
+//     // perform validation on entire vector if debugging, otherwise validate at first element,
+//     // center element, and last element
+//     let indices: Vec<usize> = if cfg!(debug_assertions) {
+//         (0..logins.len()).collect()
+//     } else {
+//         let len = logins.len();
+//         vec![0, len / 2, len.saturating_sub(1)]
+//     };
+//
+//     for &i in &indices {
+//         if i < logins.len() && logins[i].to_lowercase() != users[i].login.to_lowercase() {
+//             return Err(AlignmentError {
+//                 index: i,
+//                 expected: logins[i].clone(),
+//                 actual: users[i].login.clone(),
+//             });
+//         }
+//     }
+//
+//     Ok(())
+// }

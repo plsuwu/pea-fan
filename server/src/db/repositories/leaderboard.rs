@@ -7,9 +7,10 @@ use crate::db::models::channel::{ChannelId, ChannelLeaderboardEntry};
 use crate::db::models::channel::{ChannelLeaderboardRow, ChannelScoreSummary};
 use crate::db::models::chatter::{ChatterId, ChatterLeaderboardEntry};
 use crate::db::models::chatter::{ChatterLeaderboardRow, ChatterScoreSummary};
-use crate::db::models::leaderboard::TimeWindow;
+use crate::db::models::leaderboard::{Score, TimeWindow};
 use crate::db::prelude::{Channel, ChannelRepository, Chatter};
-use crate::db::prelude::{ChatterRepository, Repository, Score, ScoreSummary};
+use crate::db::prelude::{ChatterRepository, Repository,ScoreSummary};
+ 
 
 pub struct LeaderboardRepository {
     pool: &'static Pool<Postgres>,

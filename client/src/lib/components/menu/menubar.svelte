@@ -9,6 +9,7 @@
 		UsersRound,
 		ChevronDown,
 		CircleQuestionMarkIcon,
+		RouterIcon,
 	} from "@lucide/svelte";
 	import { Rh } from "$lib/utils/route";
 	import * as Dropdown from "$lib/shadcn-components/ui/dropdown-menu";
@@ -79,6 +80,7 @@
 		channel: "/leaderboard/channel",
 		chatter: "/leaderboard/chatter",
 		about: "/about",
+        bot: "/bot",
 	} as const;
 
 	type Route = keyof typeof ROUTE;
@@ -209,9 +211,15 @@
 		</Dropdown.Trigger>
 		<Dropdown.Content align="end" class="mt-2 w-56 font-iosevka">
 			<Dropdown.Group>
-				<!-- <Dropdown.Label class="font-bold text-muted-foreground/75"> -->
-				<!-- 	things -->
-				<!-- </Dropdown.Label> -->
+				<Dropdown.Item class="w-full">
+					<a
+						href={routeUrl("bot").href}
+						class="flex w-full flex-row items-center justify-between px-2"
+					>
+						<div>pee_liker</div>
+						<RouterIcon />
+					</a>
+				</Dropdown.Item>
 				<Dropdown.Item class="w-full">
 					<a
 						href={routeUrl("about").href}

@@ -3,6 +3,11 @@ import { logger } from "$lib/observability/server/logger.svelte";
 import { invalidateCookie, setCookie } from "$lib/server";
 import type { PageServerLoad } from "../$types";
 import { env } from "$env/dynamic/private";
+import {
+	AdminRateLimiter,
+	clientIsRateLimited,
+} from "$lib/server/rate-limit.svelte";
+import { error } from "@sveltejs/kit";
 
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
@@ -18,20 +23,33 @@ export const load: PageServerLoad = async ({ cookies, locals, url }) => {
 	}
 
 	const redirectReason = url.searchParams.get("err") || null;
-	console.log("search params:", redirectReason);
-
 	return {
 		redirectReason,
 	};
 };
 
 export const actions = {
-	default: async ({ cookies, request, fetch }) => {
+	default: async ({ cookies, request, fetch, locals }) => {
+		const childLogger = logger.child({
+			client: locals.client,
+			isRateLimited: locals.rateLimited,
+			request,
+		});
+
+		if (
+			locals.rateLimited ||
+			clientIsRateLimited(locals.client.cfconnecting) ||
+			!AdminRateLimiter.consume(locals.client.cfconnecting)
+		) {
+			childLogger.warn("[ADMIN_LOGIN] FAIL_RATE_LIMITED");
+			fail(429, { reason: "rate_limit" });
+		}
+
 		const data = await request.formData();
 		const token = data.get("token");
 
 		if (!token) {
-			logger.error("missing token");
+			childLogger.error("[ADMIN_LOGIN] FAIL_MISSING_TOKEN");
 			fail(400, { reason: "invalid" });
 		}
 
@@ -42,15 +60,20 @@ export const actions = {
 		});
 
 		const body = await res.json();
-		logger.debug(
-			{ valid: body.valid, session: body.session },
-			"login handler result"
-		);
 
 		if (!body.valid) {
+			childLogger.error(
+				{ valid: body.valid, session: body.session },
+				"[ADMIN_LOGIN] FAIL_INVALID_TOKEN"
+			);
 			invalidateCookie(cookies);
 			fail(400, { reason: "invalid" });
 		}
+
+		childLogger.info(
+			{ valid: body.valid, session: body.session },
+			"[ADMIN_LOGIN] PASS_TOKEN_OK"
+		);
 
 		setCookie(cookies, body.session);
 		return { ...body };

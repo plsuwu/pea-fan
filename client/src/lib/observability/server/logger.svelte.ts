@@ -14,7 +14,7 @@ import type {
 
 const PUBLIC_CLIENT_SERVICE_VERSION = env.PUBLIC_CLIENT_SERVICE_VERSION;
 
-const TRUNC_BOARD_LEN = 3;
+const TRUNC_BOARD_LEN = 5;
 const TRUNC_NESTED_LEN = 5;
 
 export type SerializableClientLogBatch = {
@@ -212,13 +212,13 @@ const pinoLogger = (() => {
 		options: {
 			serviceVersion: PUBLIC_CLIENT_SERVICE_VERSION,
 		},
-		level: process.env.NODE_ENV === "production" ? "debug" : "trace",
+		level: process.env.NODE_ENV === "production" ? "info" : "trace",
 	});
 
 	targets.push({
 		...(import.meta.env.DEV
-			? { target: "pino-pretty", options: { colorize: true } }
-			: { }),
+			? { target: "pino-pretty", options: { colorize: true }, level: "trace" }
+			: {}),
 	});
 
 	let pinoOptions: LoggerOptions = {

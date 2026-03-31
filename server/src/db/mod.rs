@@ -19,7 +19,7 @@ pub mod prelude {
     pub use crate::db::models::channel::{Channel, ChannelId};
     pub use crate::db::models::chatter::ChatterLeaderboardEntry;
     pub use crate::db::models::chatter::{Chatter, ChatterId};
-    pub use crate::db::models::leaderboard::{Score, ScoreSummary};
+    pub use crate::db::models::leaderboard::ScoreSummary;
 
     pub use crate::db::repositories::Repository;
     pub use crate::db::repositories::Tx;

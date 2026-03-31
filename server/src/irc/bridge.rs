@@ -5,6 +5,7 @@ use crate::irc::commands::{IrcQuery, OutgoingCommand};
 use crate::irc::connection::ConnectionHandle;
 use crate::irc::error::ClientResult;
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct IrcHandle {
     pub cmd_tx: mpsc::Sender<OutgoingCommand>,
@@ -24,7 +25,8 @@ impl IrcHandle {
 
         Ok(rx.await?)
     }
-
+    
+    #[allow(dead_code)]
     #[instrument]
     pub async fn force_reconnect(&mut self) {
         tracing::warn!("connection reset requested");

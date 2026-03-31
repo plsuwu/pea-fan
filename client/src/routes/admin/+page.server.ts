@@ -7,6 +7,8 @@ import { invalidateCookie } from "$lib/server";
 import { Rh } from "$lib/utils/route";
 import { buildHeaders, verifyToken } from "$lib/server/verify";
 import { channelCache } from "$lib/observability/server/cache.svelte";
+import { AdminRateLimiter } from "$lib/server/rate-limit.svelte";
+import { error } from "@sveltejs/kit";
 
 // TODO:
 // -------------------------------------------------------------------
@@ -43,6 +45,7 @@ async function getChannelConfigs(token: string, id = "all") {
 export const load: PageServerLoad = async ({
 	fetch,
 	cookies,
+	locals,
 	request,
 	getClientAddress,
 }) => {

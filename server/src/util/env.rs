@@ -20,22 +20,22 @@ pub async fn get_var(var: Var) -> EnvResult<&'static str> {
     let vars = ENV_VARS.get_or_try_init(|| async { Env::new() }).await?;
     Ok(match var {
         Var::ClientId => &vars.client_id,
-        Var::ClientSecret => &vars.client_secret,
+        // Var::ClientSecret => &vars.client_secret,
         Var::UserLogin => &vars.user_login,
         Var::UserToken => &vars.user_token,
         Var::AppToken => &vars.app_token,
         Var::BrowserId => &vars.browser_id,
-        Var::InternalToken => &vars.internal_post_token,
+        // Var::InternalToken => &vars.internal_post_token,
         Var::TOTPKey => &vars.totp_key,
         Var::DatabaseUrl => &vars.database_url,
         Var::RedisUrl => &vars.redis_url,
         Var::CorsAllowOrigins => &vars.cors_allow_origins,
-        Var::DiscordWebhookUrl => &vars.discord_webhook_url,
+        // Var::DiscordWebhookUrl => &vars.discord_webhook_url,
         Var::ServerApiPort => &vars.server_api_port,
         Var::OtelExporterEndpoint => &vars.otel_exporter_otlp_endpoint,
         // Var::OtelTempoGrpc => &vars.otel_tempo_grpc,
         // Var::OtelLokiHttp => &vars.otel_loki_http,
-        Var::OtelExporterProto => &vars.otel_exporter_otlp_protocol,
+        // Var::OtelExporterProto => &vars.otel_exporter_otlp_protocol,
         Var::ApiServiceName => &vars.api_service_name,
         Var::ApiTracerName => &vars.api_tracer_name,
     })
@@ -45,19 +45,19 @@ pub async fn get_var(var: Var) -> EnvResult<&'static str> {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Env {
     pub client_id: String,
-    pub client_secret: String,
+    // pub client_secret: String,
     pub user_login: String,
     pub user_token: String,
     pub app_token: String,
     pub browser_id: String,
-    pub internal_post_token: String,
+    // pub internal_post_token: String,
     pub totp_key: String,
     pub database_url: String,
     pub redis_url: String,
     pub cors_allow_origins: String,
-    pub discord_webhook_url: String,
+    // pub discord_webhook_url: String,
     pub server_api_port: String,
-    pub otel_exporter_otlp_protocol: String,
+    // pub otel_exporter_otlp_protocol: String,
     pub otel_exporter_otlp_endpoint: String,
     // pub otel_tempo_grpc: String,
     // pub otel_loki_http: String,
@@ -74,22 +74,22 @@ impl Env {
 #[derive(Debug)]
 pub enum Var {
     ClientId,
-    ClientSecret,
+    // ClientSecret,
     UserLogin,
     UserToken,
     AppToken,
     BrowserId,
-    InternalToken,
+    // InternalToken,
     TOTPKey,
     DatabaseUrl,
     RedisUrl,
     CorsAllowOrigins,
-    DiscordWebhookUrl,
+    // DiscordWebhookUrl,
     ServerApiPort,
     // OtelTempoGrpc,
     // OtelLokiHttp,
     OtelExporterEndpoint,
-    OtelExporterProto,
+    // OtelExporterProto,
     ApiServiceName,
     ApiTracerName,
 }
@@ -333,7 +333,7 @@ impl serde::de::Error for EnvDeserializeError {
 }
 
 impl<'a> Prefixed<'a> {
-    #[allow(clippy::wrong_self_convention)]
+    #[allow(clippy::wrong_self_convention, dead_code)]
     pub fn from_env<T>(&self) -> Result<T, EnvDeserializeError>
     where
         T: serde::de::DeserializeOwned,
@@ -357,6 +357,7 @@ impl<'a> Prefixed<'a> {
     }
 }
 
+#[allow(dead_code)]
 pub fn prefixed<'a, C>(prefix: C) -> Prefixed<'a>
 where
     C: Into<Cow<'a, str>>,

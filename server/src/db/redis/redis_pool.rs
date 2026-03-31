@@ -1,5 +1,3 @@
-use std::sync::LazyLock;
-
 use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -148,9 +146,9 @@ pub enum RedisErr {
     #[error(transparent)]
     ParseError(#[from] redis::ParsingError),
 
-    #[error("attempted to update non-existent dataset")]
-    UpdateEmpty,
-
     #[error(transparent)]
     SqlxError(#[from] sqlx::error::Error),
 }
+
+unsafe impl Send for RedisErr {}
+unsafe impl Sync for RedisErr {}

@@ -50,15 +50,15 @@ pub async fn update_channels_by_name(
     update_stored_channels(&ids, false).await
 }
 
-#[instrument]
-pub async fn update_channels_by_id(
-    channels: &mut [String],
-) -> ChannelResult<HashMap<String, Chatter>> {
-    let helix_users: Vec<HelixUser> = Helix::fetch_users_by_id(channels).await?;
-
-    let ids: Vec<ChatterId> = helix_users.into_iter().map(|u| u.id.into()).collect();
-    update_stored_channels(&ids, false).await
-}
+// #[instrument]
+// pub async fn update_channels_by_id(
+//     channels: &mut [String],
+// ) -> ChannelResult<HashMap<String, Chatter>> {
+//     let helix_users: Vec<HelixUser> = Helix::fetch_users_by_id(channels).await?;
+//
+//     let ids: Vec<ChatterId> = helix_users.into_iter().map(|u| u.id.into()).collect();
+//     update_stored_channels(&ids, false).await
+// }
 
 #[instrument(skip(chatter), fields(chatter_id = chatter.id.0))]
 pub fn update_threshold_elapsed(chatter: &Chatter) -> bool {

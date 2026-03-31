@@ -13,6 +13,7 @@ pub async fn reset_hooks(ids: &[String]) -> Result<()> {
     tracing::debug!(?active_hooks, "active_hooks");
 
     if !active_hooks.is_empty() {
+        tracing::debug!("active_hooks populated - deleting...");
         Helix::delete_subscriptions(&active_hooks).await?;
     }
 

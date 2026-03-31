@@ -83,7 +83,7 @@
 
 		<div class="items-row flex flex-row">
 			<div class="mt-2 ml-3 space-x-2">
-				<div class="flex flex-row -space-x-1">
+				<div class="flex flex-row -space-x-1 w-[105px] min-w-[105px] justify-end">
 					{#each scores?.slice(0, PREVIEWS_COUNT) as subentry}
 						<div>
 							{@render Hoverable({

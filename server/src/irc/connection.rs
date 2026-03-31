@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::time::Duration;
 use std::time::Instant;
 
@@ -38,6 +40,8 @@ pub struct ConnectionHandle {
     /// Triggers a connection reset
     pub reset_tx: mpsc::Sender<()>,
     /// Reflects the current connection generation, updates whenever a connection is reset.
+
+    #[allow(dead_code)]
     pub generation_rx: watch::Receiver<u64>,
 }
 
@@ -227,6 +231,7 @@ impl ConnectionSupervisor {
 #[derive(Debug)]
 pub struct ConnectionClient {
     pub inner: irc::client::Client,
+    #[allow(dead_code)]
     pub channels: Vec<String>,
     pub joined: Vec<String>,
 }

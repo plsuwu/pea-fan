@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use redis::AsyncCommands;
 use sqlx::{Pool, Postgres};
@@ -10,7 +10,6 @@ use crate::db::redis::migrator::util::KeyList;
 use crate::db::redis::redis_pool::{KeyType, RedisResult};
 use crate::util::helix::Helix;
 
-pub mod handler;
 pub mod io;
 pub mod transform;
 pub mod util;

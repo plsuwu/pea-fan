@@ -19,8 +19,17 @@ declare global {
 		}
 
 		interface Locals {
+			// request
 			channel: string | null;
 			leaderboard: Entry | null;
+			client: {
+				userAgent: string;
+				xforwarded: string;
+				cfconnecting: string;
+				xforwardedList: string[];
+			};
+
+            rateLimited: bool;
 
 			// telemetry
 			traceId?: string;

@@ -1,6 +1,7 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
+#[allow(dead_code)]
 pub struct Score {
     pub channel_id: super::channel::ChannelId,
     pub chatter_id: super::chatter::ChatterId,

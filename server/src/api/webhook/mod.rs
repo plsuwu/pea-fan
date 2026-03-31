@@ -2,14 +2,22 @@
 
 pub mod dispatch;
 
-use axum::body::Body;
+use std::sync::Arc;
+
+use axum::{body::Body, extract::State};
 use http::{HeaderMap, StatusCode};
+use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 use tracing::instrument;
 
 use crate::{
-    api::middleware::verify_external::{TWITCH_MESSAGE_TYPE_HEADER, VerifiedBody},
+    api::{
+        middleware::verify_external::{TWITCH_MESSAGE_TYPE_HEADER, VerifiedBody},
+        server::AppState,
+    },
+    db::{prelude::ChannelId, redis::set_stream_state},
     util::helix::HelixErr,
 };
 
@@ -23,8 +31,12 @@ pub trait StreamCommonSubscription {
     fn r#type(&self) -> &str;
 }
 
-#[instrument(skip(headers, body))]
-pub async fn webhook_handler(headers: HeaderMap, body: VerifiedBody) -> Result<Body, StatusCode> {
+#[instrument(skip(state, headers, body))]
+pub async fn webhook_handler(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: VerifiedBody,
+) -> Result<Body, StatusCode> {
     tracing::debug!("parsing incoming webhook");
 
     let notification: serde_json::Value = body.as_json().map_err(|_| StatusCode::BAD_REQUEST)?;
@@ -35,21 +47,82 @@ pub async fn webhook_handler(headers: HeaderMap, body: VerifiedBody) -> Result<B
         .try_into()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    tracing::info!(msg_type = ?msg_type, notification = %notification, "WEBHOOK::INCOMING");
+    tracing::info!(msg_type = ?msg_type, notification = %notification, "recv webhook notification");
 
     match msg_type {
         WebhookMessageType::Verify => {
             tracing::warn!("verify webhook");
-            todo!()
+            handle_verify(notification)
         }
         WebhookMessageType::Notify => {
             tracing::warn!("notify webhook");
-            todo!()
+            handle_notify(&mut state.redis_pool.clone(), notification).await
         }
         WebhookMessageType::Revoke => {
             tracing::warn!("revoke webhook");
             todo!()
         }
+    }
+}
+
+#[instrument(skip(redis_pool, body))]
+pub async fn stream_event_notify<R: AsyncCommands + Sync, T>(
+    redis_pool: &mut R,
+    body: Value,
+) -> Result<Body, StatusCode>
+where
+    T: StreamCommonEvent + StreamCommonSubscription + serde::de::DeserializeOwned + Clone + 'static,
+{
+    let payload: T = serde_json::from_value(body).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let channel = if payload.broadcaster_login() == "testBroadcaster" {
+        String::from("103033809")
+    } else {
+        payload.broadcaster_id().to_string()
+    };
+
+    let notif_type = format!("{}", payload.r#type());
+    tracing::debug!(channel, notif_type, "recv event notification");
+
+    if notif_type == "stream.online" {
+        set_stream_state(redis_pool, &ChannelId(channel.clone()), true)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    } else if notif_type == "stream.offline" {
+        set_stream_state(redis_pool, &ChannelId(channel.clone()), false)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    Ok(channel.into())
+}
+
+#[instrument]
+pub fn handle_verify(raw_json: Value) -> Result<Body, StatusCode> {
+    if let Some(subscription) =
+        raw_json["subscription"]["condition"]["broadcaster_user_id"].as_str()
+    {
+        tracing::info!(subscription, "deserialized broadcaster id");
+    } else {
+        tracing::error!("failed to deserialize");
+    }
+
+    todo!()
+}
+
+#[instrument(skip(redis_pool))]
+pub async fn handle_notify<R: AsyncCommands + Sync>(
+    redis_pool: &mut R,
+    raw_json: Value,
+) -> Result<Body, StatusCode> {
+    tracing::info!(?raw_json, "raw json body");
+    match &raw_json["subscription"]["type"].as_str() {
+        Some("stream.online") => {
+            stream_event_notify::<R, StreamOnlinePayload>(redis_pool, raw_json).await
+        }
+        Some("stream.offline") => {
+            stream_event_notify::<R, StreamOfflinePayload>(redis_pool, raw_json).await
+        }
+        _ => Err(StatusCode::BAD_REQUEST),
     }
 }
 

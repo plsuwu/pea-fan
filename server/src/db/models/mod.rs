@@ -15,6 +15,7 @@ const fn default_limit() -> i64 {
     50
 }
 
+#[allow(dead_code)]
 #[derive(Debug, sqlx::FromRow, Default)]
 pub struct Session {
     pub id: i32,

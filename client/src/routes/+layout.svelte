@@ -34,6 +34,7 @@
 
 	let {
 		channel,
+        liveBroadcasters,
 		scoreWindows,
 		channelData,
 		announcement,

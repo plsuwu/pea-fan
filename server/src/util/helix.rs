@@ -1,10 +1,13 @@
+#![allow(dead_code)]
+
 use core::fmt;
 use std::sync::LazyLock;
 
 use async_trait::async_trait;
 use futures::{StreamExt, stream};
 use http::header::{AUTHORIZATION, InvalidHeaderValue};
-use http::{HeaderMap, HeaderValue};
+use http::{HeaderMap, HeaderValue, StatusCode};
+use reqwest::Response;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -105,7 +108,7 @@ impl Helix {
         Self::fetch_auxilliary_data(&mut retrieved).await
     }
 
-    /// Makles a request via the `GET` http verb
+    /// Makes a GET request
     #[instrument]
     async fn send(uri: String) -> HelixResult<reqwest::Response> {
         let client = reqwest::Client::new();
@@ -119,7 +122,31 @@ impl Helix {
             .map_err(HelixErr::ReqwestError)
     }
 
-    /// Makes a request via the `DELETE` http verb
+    /// Retrieve the state of a stream (online/offline) plus some extra metadata:
+    ///  - title of stream,
+    ///  - stream category,
+    ///  - idk
+    #[instrument(skip(ids), fields(fetch_for = ids.len()))]
+    pub async fn get_streams(ids: &[String]) -> HelixResult<Vec<HelixStream>> {
+        let mut all_streams = Vec::with_capacity(ids.len());
+        let params = build_query_params(HelixParamType::UserId, &ids);
+
+        for param in params {
+            let uri = format!("{}{}&type=live", String::from(HelixUri::Streams), param);
+            match Self::fetch_users::<RawHelixStream>(uri).await {
+                Ok(data) => all_streams.extend(data.data.into_iter()),
+                Err(e) => {
+                    tracing::error!(error = ?e, "failed to get stream data");
+                    return Err(e);
+                }
+            };
+        }
+
+        tracing::info!(?all_streams, "got stream data");
+        Ok(all_streams)
+    }
+
+    /// Makes a DELETE request
     #[instrument]
     async fn delete(uri: String) -> HelixResult<reqwest::Response> {
         let client = reqwest::Client::new();
@@ -133,6 +160,7 @@ impl Helix {
             .map_err(HelixErr::ReqwestError)
     }
 
+    /// Makes a POST request
     #[instrument]
     async fn post<T>(uri: String, body: &T) -> HelixResult<reqwest::Response>
     where
@@ -148,6 +176,29 @@ impl Helix {
             .send()
             .await
             .map_err(HelixErr::ReqwestError)
+    }
+
+    #[instrument(skip(res))]
+    async fn parse_errored_response(res: Response) -> HelixErr {
+        let status_code = res.status();
+        tracing::error!(code = %status_code, "non-200/OK response");
+        if let Ok(reason) = res.json::<Value>().await {
+            tracing::error!(body = ?reason, "error message in response");
+            let reason_clone = reason["message"].clone();
+            let reason_str = reason_clone
+                .as_str()
+                .ok_or(HelixErr::FetchErrWithBody {
+                    body: reason.clone(),
+                })
+                .unwrap_or_default();
+
+            match reason_str.starts_with("Invalid username") {
+                true => HelixErr::InvalidUsername,
+                false => HelixErr::FetchErrWithBody { body: reason },
+            }
+        } else {
+            HelixErr::FetchErr(status_code.to_string())
+        }
     }
 
     /// Performs a GET request to a given URI and parses the response according to the specified
@@ -169,31 +220,8 @@ impl Helix {
         // if the request was unsuccessful, check to see whether the response
         // contained extra details about the error and return the corresponding
         // detail available
-        if res.status() != 200 {
-            let status_code = res.status();
-            tracing::error!(code = %status_code, "non-200/OK response");
-            if let Ok(reason) = res.json::<Value>().await {
-                tracing::error!(body = ?reason, "error message in response");
-                let reason_clone = reason["message"].clone();
-
-                // check if the error reason was due to an invalid username in the query, which we
-                // handle specifically
-                let reason_str = reason_clone.as_str().ok_or(HelixErr::FetchErrWithBody {
-                    body: reason.clone(),
-                })?;
-
-                // perhaps also a specific handler for `401: Unauthorized`-type errors as this is
-                // due to something like expired app/user tokens
-
-                return Err(match reason_str.starts_with("Invalid username") {
-                    true => HelixErr::InvalidUsername,
-                    false => HelixErr::FetchErrWithBody { body: reason },
-                });
-            } else {
-                // if no extra detail available with error, just return with status code as an
-                // error
-                return Err(HelixErr::FetchErr(status_code.to_string()));
-            }
+        if res.status() != StatusCode::OK {
+            return Err(Self::parse_errored_response(res).await);
         }
 
         // TODO:
@@ -438,7 +466,7 @@ pub const HELIX_URN_COLORS: &str = "chat/color";
 pub const HELIX_WEBHOOK_SUBS: &str = "eventsub/subscriptions";
 const NUM_WORKER_THREADS: usize = 25;
 
-pub const CALLBACK_ROUTE: &str = "http://localhost:8080/callback";
+pub const CALLBACK_ROUTE: &str = "https://api.rat.moe/callback";
 
 #[derive(Debug)]
 pub enum HelixUri {
@@ -546,11 +574,16 @@ impl PartialEq<ChannelId> for HelixUser {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct RawHelixStream {
+    data: Vec<HelixStream>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct HelixStream {
     pub title: String,
     pub tags: Vec<String>,
-    #[serde(rename = "user_id")]
     pub id: String,
+    pub user_id: String,
     #[serde(rename = "user_login")]
     pub login: String,
     #[serde(rename = "thumbnail_url")]
