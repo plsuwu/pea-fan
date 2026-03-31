@@ -4,10 +4,9 @@ import { invalidateCookie, setCookie } from "$lib/server";
 import type { PageServerLoad } from "../$types";
 import { env } from "$env/dynamic/private";
 import {
-	AdminRateLimiter,
+	adminRateLimiter,
 	clientIsRateLimited,
 } from "$lib/server/rate-limit.svelte";
-import { error } from "@sveltejs/kit";
 
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
@@ -39,7 +38,7 @@ export const actions = {
 		if (
 			locals.rateLimited ||
 			clientIsRateLimited(locals.client.cfconnecting) ||
-			!AdminRateLimiter.consume(locals.client.cfconnecting)
+			!adminRateLimiter.consume(locals.client.cfconnecting)
 		) {
 			childLogger.warn("[ADMIN_LOGIN] FAIL_RATE_LIMITED");
 			fail(429, { reason: "rate_limit" });

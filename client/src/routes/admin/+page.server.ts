@@ -1,4 +1,3 @@
-import { env } from "$env/dynamic/private";
 import type { PageServerLoad } from "./$types";
 import type { Actions } from "@sveltejs/kit";
 import { redirect } from "@sveltejs/kit";
@@ -6,9 +5,7 @@ import { logger } from "$lib/observability/server/logger.svelte";
 import { invalidateCookie } from "$lib/server";
 import { Rh } from "$lib/utils/route";
 import { buildHeaders, verifyToken } from "$lib/server/verify";
-import { channelCache } from "$lib/observability/server/cache.svelte";
-import { AdminRateLimiter } from "$lib/server/rate-limit.svelte";
-import { error } from "@sveltejs/kit";
+import { adminRateLimiter } from "$lib/server/rate-limit.svelte";
 
 // TODO:
 // -------------------------------------------------------------------

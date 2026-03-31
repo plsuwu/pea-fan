@@ -1,5 +1,4 @@
 import { logger as serverLogger } from "$lib/observability/server/logger.svelte";
-import { TimeoutError } from "@opentelemetry/sdk-metrics";
 
 export type Bucket = {
 	tokens: number;
