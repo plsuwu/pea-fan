@@ -79,7 +79,7 @@
           version = "1.2.1";
           src = ./client;
 
-          npmDepsHash = "sha256-2zTTJ2YnaE2VcWKsb82iDHpgNxbb7lX6Bz1YwOzh204";
+          npmDepsHash = "sha256-6lLTme8Pq98Ob4TwCeEzoBzN3Vf1QnMJaAWZdyrnmYA=";
 
           buildPhase = ''
             npm install
