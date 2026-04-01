@@ -56,10 +56,10 @@
 			PISS LEADERBOARD
 		</div>
 		<div class="mb-4 rounded-md border border-amber-600 px-3 py-1 text-center text-amber-700">
-			hello there is a new leaderboard frontend that is very close to finished (like a few days? i cant really make time estimates 
-			like this) anyway i put a preview up at
+			hello there is a new leaderboard frontend that is very close to finished (perhaps like a few days out? 
+			i am not so good with time estimates) anyway i put a preview up at
 			<a class="text-blue-600 hover:opacity-50" href="https://rat.moe" target="_blank">rat.moe</a>
-			and it will be moved over to piss.fan when its done! please look if you want ok thank you thanks th
+			and it will be moved back here (piss.fan) when its done, please look if you want ok thank you thanks th
 		</div>
 		<!-- <div class="px-8 pb-8 font-bold"> -->
 		<!-- 	exciting new features such as: -->
