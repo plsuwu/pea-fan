@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { ChevronRight, ChevronLeft } from "@lucide/svelte";
 	import PageButton from "./page-button.svelte";
+	import { page } from "$app/state";
+	import { goto } from "$app/navigation";
 
 	let {
 		pageNumber,
@@ -9,7 +11,7 @@
 		totalItems,
 		itemsPerPage,
 		variant = "Channel",
-        pageParam = "page",
+		pageParam = "page",
 	}: {
 		pageNumber: number;
 		totalPages: number;
@@ -17,7 +19,7 @@
 		totalItems: number;
 		itemsPerPage: number;
 		variant?: string;
-        pageParam?: string;
+		pageParam?: string;
 	} = $props();
 
 	let currentRanks = $derived({
@@ -34,7 +36,23 @@
 
 	let hasPrev = $derived(pageNumber > 1);
 	let hasNext = $derived(pageNumber < totalPages);
+
+	function handleKeydown(event: KeyboardEvent) {
+		let newHref = undefined;
+
+		if (event.key === "ArrowRight" && hasNext) {
+			event.preventDefault();
+			newHref = withPage(pageNumber + 1);
+		} else if (event.key === "ArrowLeft" && hasPrev) {
+			event.preventDefault();
+			newHref = withPage(pageNumber - 1);
+		}
+
+		if (newHref != null) goto(newHref, { noScroll: true });
+	}
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="-mt-6 -mb-3 flex w-full flex-col justify-center">
 	<div class="mb-4 flex justify-center">

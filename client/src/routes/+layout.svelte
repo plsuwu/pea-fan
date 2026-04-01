@@ -30,11 +30,11 @@
 	import { expoInOut, expoOut } from "svelte/easing";
 
 	let { data, children } = $props();
-	let { hostname } = page.url;
+	let { host } = page.url;
 
 	let {
 		channel,
-        liveBroadcasters,
+		liveBroadcasters,
 		scoreWindows,
 		channelData,
 		announcement,
@@ -94,7 +94,8 @@
 	});
 
 	function getNextUrlBase(path: string) {
-		const next = new URL(Rh.deriveBase(hostname));
+		const next = new URL(`${Rh.proto}://${Rh.deriveBase(host)}`);
+
 		next.pathname = path;
 		next.searchParams.set("page", "1");
 

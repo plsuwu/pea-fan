@@ -379,7 +379,7 @@ impl Helix {
             params[0]
         );
         let result = Self::send(uri).await?;
-        let body = match result.text().await {
+        let body: Value = match result.json().await {
             Ok(val) => val,
             Err(e) => {
                 tracing::error!(error = ?e, "failed to unwrap result body text");
@@ -387,11 +387,17 @@ impl Helix {
             }
         };
 
-        let mut deserialized: Value = serde_json::from_str(&body)?;
-        if let Some(total_active) = deserialized["total"].take().as_i64()
+        if let Some(vec_value) = body["data"].as_array()
+            && let Some(total_active) = body["total"].as_i64()
             && total_active > 0
         {
-            return Ok(serde_json::from_value(deserialized["data"].clone())?);
+            let mut result = Vec::new();
+            for element in vec_value {
+                let sub_id = element["id"].as_str().unwrap().to_string();
+                result.push(sub_id);
+            }
+
+            return Ok(result);
         }
 
         Ok(Vec::new())
@@ -408,10 +414,12 @@ impl Helix {
         let uri = String::from(HelixUri::WebhookSubscriptions);
         let response = Self::post(uri, &body).await?;
 
+        tracing::trace!(?response, "received raw response");
+
         let response_status = response.status();
         let deserialized_body: Value = serde_json::from_str(&response.text().await?)?;
 
-        tracing::info!(status = ?response_status, body = ?deserialized_body, "RAW RESPONSE");
+        tracing::info!(status = ?response_status, body = ?deserialized_body, "recv json body for subscription");
 
         if response_status != 200 && response_status != 202 {
             tracing::error!(
@@ -423,19 +431,17 @@ impl Helix {
             return Err(HelixErr::FetchErr(deserialized_body.to_string()));
         }
 
-        if let Some(data_status) = &deserialized_body["data"][0]["status"].as_str()
-            && let Some(sub_type) = &deserialized_body["data"][0]["type"].as_str()
-            && let Some(broadcaster_id) =
-                &deserialized_body["data"][0]["condition"]["broadcaster_user_id"].as_str()
-        {
-            tracing::info!(
-                status = data_status,
-                sub_type = sub_type,
-                broadcaster = broadcaster_id,
-                "created subscription"
-            );
+        if let Some(data_body) = &deserialized_body["data"].as_array() {
+            let element = &data_body[0];
 
-            return Ok(serde_json::from_value(deserialized_body)?);
+            let subscription_type = element["type"].as_str().clone().unwrap();
+            let broadcaster_id = element["condition"]["broadcaster_user_id"]
+                .as_str()
+                .clone()
+                .unwrap();
+
+            tracing::info!(subscription_type, broadcaster_id, "created subscription");
+            return Ok(serde_json::from_value(element.clone())?);
         }
 
         tracing::error!(body = ?deserialized_body, "failed to parse sub creation response");
@@ -450,8 +456,8 @@ impl Helix {
         for param in params {
             let uri = format!("{}{}", String::from(HelixUri::WebhookSubscriptions), param);
             match Self::delete(uri).await {
-                Ok(res) => tracing::info!(response = ?res, "deleted subscription"),
-                Err(e) => tracing::error!(error = ?e, "failed to delete subscription"),
+                Ok(res) => tracing::info!(response = ?res, "delete subscription ok"),
+                Err(e) => tracing::error!(error = ?e, "delete subscription failure"),
             }
         }
 

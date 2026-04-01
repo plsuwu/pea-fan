@@ -12,14 +12,10 @@ use serde_json::Value;
 use thiserror::Error;
 use tracing::instrument;
 
-use crate::{
-    api::{
-        middleware::verify_external::{TWITCH_MESSAGE_TYPE_HEADER, VerifiedBody},
-        server::AppState,
-    },
-    db::{prelude::ChannelId, redis::set_stream_state},
-    util::helix::HelixErr,
-};
+use crate::api::middleware::verify_external::{TWITCH_MESSAGE_TYPE_HEADER, VerifiedBody};
+use crate::api::server::AppState;
+use crate::db::{prelude::ChannelId, redis::set_stream_state};
+use crate::util::helix::HelixErr;
 
 pub trait StreamCommonEvent {
     fn broadcaster_id(&self) -> &str;
@@ -52,7 +48,7 @@ pub async fn webhook_handler(
     match msg_type {
         WebhookMessageType::Verify => {
             tracing::warn!("verify webhook");
-            handle_verify(notification)
+            handle_verify(notification).await
         }
         WebhookMessageType::Notify => {
             tracing::warn!("notify webhook");
@@ -96,17 +92,23 @@ where
     Ok(channel.into())
 }
 
-#[instrument]
-pub fn handle_verify(raw_json: Value) -> Result<Body, StatusCode> {
-    if let Some(subscription) =
-        raw_json["subscription"]["condition"]["broadcaster_user_id"].as_str()
-    {
-        tracing::info!(subscription, "deserialized broadcaster id");
-    } else {
-        tracing::error!("failed to deserialize");
-    }
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ChallengeRequest {
+    pub challenge: String,
+    pub subscription: SubscriptionGenericData,
+}
 
-    todo!()
+#[instrument]
+pub async fn handle_verify(raw_json: Value) -> Result<Body, StatusCode> {
+    let challenge: ChallengeRequest =
+        serde_json::from_value(raw_json).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    // let broadcaster_id = &challenge.subscription.condition.broadcaster_user_id;
+    // if challenge.subscription.r#type == "stream.offline" {
+    //     crate::db::redis::set_stream_state(&mut redis_pool().await?.clone(), broadcaster_id, ).await?;
+
+    tracing::debug!(challenge_str = challenge.challenge, "recv challenge string");
+    Ok(challenge.challenge.into())
 }
 
 #[instrument(skip(redis_pool))]

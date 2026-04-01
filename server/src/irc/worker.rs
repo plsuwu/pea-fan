@@ -199,15 +199,15 @@ async fn handle_message(
             } else if text.to_lowercase().contains(KEYWORD)
                 && !ID_BLACKLIST.contains(&tags.user_id.as_str())
             {
-                let mut conn = redis_pool().await?.clone();
-                let is_online =
-                    get_stream_state(&mut conn, &ChannelId(tags.channel_id.clone())).await;
+                // TODO !!
+                //
+                // let mut conn = redis_pool().await?.clone();
+                // let is_online =
+                //     get_stream_state(&mut conn, &ChannelId(tags.channel_id.clone())).await;
 
                 // only increment if streaming
-                if is_online {
-                    tracing::info!(tags.user_login, tags.channel_name, "incrementing score");
-                    increment_score(pool, &tags).await?;
-                }
+                tracing::info!(tags.user_login, tags.channel_name, "incrementing score");
+                increment_score(pool, &tags).await?;
             }
 
             Ok(())

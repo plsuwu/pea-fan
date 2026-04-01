@@ -61,18 +61,18 @@ pub async fn router(
 
     let channel_logins: Vec<String> = channels_updated.keys().cloned().collect();
     let channel_ids: Vec<String> = channels_updated.into_values().map(|ch| ch.id.0).collect();
-
+    
     match webhook::dispatch::reset_hooks(&channel_ids).await {
         Ok(_) => tracing::debug!("webhook subs reset"),
-        Err(e) => tracing::error!(error = ?e, "reset webhook subs"),
+        Err(e) => tracing::error!(error = ?e, "reset webhook subs failure"),
     }
 
     match crate::db::redis::init_stream_states(&mut redis_pool.clone(), &channel_ids).await {
         Ok(_) => tracing::debug!("initial cache entries created"),
-        Err(e) => tracing::error!(error = ?e, "initial cache entry create"),
+        Err(e) => tracing::error!(error = ?e, "initial cache entry create failure"),
     }
 
-    let irc_connection = crate::irc::start(channel_logins.clone(), database_pool, 8)
+    let irc_connection = crate::irc::start(channel_logins.clone(), database_pool, 10)
         .await
         .unwrap();
 

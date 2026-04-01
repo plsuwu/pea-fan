@@ -80,7 +80,7 @@
 		channel: "/leaderboard/channel",
 		chatter: "/leaderboard/chatter",
 		about: "/about",
-        bot: "/bot",
+		bot: "/bot",
 	} as const;
 
 	type Route = keyof typeof ROUTE;
@@ -91,8 +91,9 @@
 
 	function handleKeydown(event: KeyboardEvent) {
 		const { key, ctrlKey } = event;
-		if (key === "j" && ctrlKey) {
+		if (key === "j" && ctrlKey && inputRef != null) {
 			event.preventDefault();
+			inputRef.focus();
 		}
 	}
 
