@@ -234,7 +234,25 @@ export const actions = {
 		};
 	},
 
-	deleteHooks: async ({ request, fetch }) => {
+	getActiveHooks: async ({ fetch }) => {
+		const res = await fetch("/api/get-active-hooks", {
+			method: "GET",
+		});
+
+		if (res.status !== 200) {
+			return { success: false, status: res.status };
+		}
+
+		logger.info({ response: res }, "hooks retrieved ok");
+        const { hooks } = await res.json();
+		return {
+			success: true,
+			from: "getActiveHooks",
+			results: hooks,
+		};
+	},
+
+	deleteHooks: async ({ fetch }) => {
 		const res = await fetch("/api/delete-hooks", {
 			method: "GET",
 		});
@@ -249,7 +267,7 @@ export const actions = {
 		};
 	},
 
-    resetHooks: async ({ request, fetch }) => {
+	resetHooks: async ({ fetch }) => {
 		const res = await fetch("/api/reset-hooks", {
 			method: "GET",
 		});
@@ -262,7 +280,7 @@ export const actions = {
 		return {
 			success: true,
 		};
-    },
+	},
 } satisfies Actions;
 
 const UPDATE_API_ROUTE = `${API_BASE}/update`;

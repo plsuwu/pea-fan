@@ -16,7 +16,6 @@ pub async fn reset_hooks(ids: &[String]) -> Result<()> {
 
     if !active_hooks.is_empty() {
         tracing::debug!("active_hooks populated - deleting...");
-
         Helix::delete_subscriptions(&active_hooks).await?;
     }
 
@@ -31,10 +30,11 @@ pub async fn reset_hooks(ids: &[String]) -> Result<()> {
         Helix::create_subscription(ChannelId(id.clone()), StreamGenericRequestType::Offline)
     }));
 
-    let mut results = Vec::new();
-
     while let Some(result) = futs.next().await {
-        results.push(result?);
+        match result {
+            Ok(res) => tracing::info!(?res, "HOOK SUBSCRIPTION OK"),
+            Err(e) => tracing::error!(error = ?e, "HOOK SUBSCRIPTION FAIL"),
+        }
     }
 
     Ok(())

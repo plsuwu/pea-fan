@@ -132,6 +132,7 @@ pub async fn router(
         .route("/helix/by-id/{id}", get(helix_user_by_id))
         .route("/helix/delete-hooks", get(force_delete_hooks))
         .route("/helix/reset-hooks", get(force_reset_hooks))
+        .route("/helix/get-hooks", get(get_active_hooks))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             verify_session_ident,

@@ -11,6 +11,7 @@ use tracing::instrument;
 
 use crate::api::middleware::verify_internal::SessionToken;
 use crate::api::server::{AppState, JsonResult, RouteError, stream_online_hook_handler};
+use crate::api::webhook::SubscriptionGenericData;
 use crate::db::PgError;
 use crate::db::models::channel::ChannelReplies;
 use crate::db::models::chatter::ChatterSearchResult;
@@ -639,7 +640,7 @@ pub async fn force_delete_hooks(
 ) -> Result<Response<axum::body::Body>, RouteError> {
     let handle = tokio::spawn(async move {
         let ids = state.channel_ids.clone();
-        match crate::db::redis::init_stream_states(&mut state.redis_pool.clone(), &ids).await {
+        match crate::db::redis::clear_stream_states(&mut state.redis_pool.clone(), &ids).await {
             Ok(_) => tracing::info!("removed all channel states from redis cache"),
             Err(e) => tracing::error!(error = ?e, "failed to remove channel states from redis"),
         }
@@ -693,6 +694,59 @@ pub async fn force_reset_hooks(
     });
 
     handle.await?
+}
+
+// pub struct SubscriptionItem {
+//     pub id: String,
+//     pub status: String
+//     pub r#type: String,
+// }
+
+#[instrument(skip(state))]
+pub async fn get_active_hooks(
+    State(state): State<Arc<AppState>>,
+) -> JsonResult<Vec<(String, SubscriptionGenericData)>> {
+    let handle = tokio::spawn(async move {
+        let active_raw = Helix::get_active_subscriptions_raw().await?;
+        let active_data: &Value = &active_raw["data"];
+
+        let active: Vec<SubscriptionGenericData> = serde_json::from_value(active_data.clone())
+            .map_err(|e| RouteError::HelixError(HelixErr::SerdeError(e)))?;
+
+        let mut channel_data = Vec::new();
+        let mut tx = state.database_pool.begin().await?;
+
+        for sub in active.into_iter() {
+            let broadcaster_id = &sub.condition.broadcaster_user_id;
+            let login: String = sqlx::query_scalar!(
+                r#"
+            SELECT login FROM chatter
+            WHERE id = $1
+            "#,
+                broadcaster_id,
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            channel_data.push((login, sub));
+        }
+
+        tx.commit().await?;
+        Ok(Json(channel_data))
+    });
+
+    match handle.await {
+        Ok(Ok(data)) => Ok(data),
+        Ok(Err(e)) => {
+            tracing::error!("error inside task: {e}");
+            Err(e)
+        }
+
+        Err(e) => {
+            tracing::error!("task panic: {e}");
+            Err(RouteError::JoinError(e))
+        }
+    }
 }
 
 // #[instrument(skip(state))]

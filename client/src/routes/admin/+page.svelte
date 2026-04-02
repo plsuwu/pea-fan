@@ -14,6 +14,7 @@
 	import * as InputGroup from "$lib/shadcn-components/ui/input-group/index";
 	import {
 		ArrowBigRightDashIcon,
+		ArrowDownToDotIcon,
 		ArrowRightIcon,
 		ListXIcon,
 		RefreshCcwIcon,
@@ -22,6 +23,8 @@
 		UndoIcon,
 	} from "@lucide/svelte";
 	import type { HelixUser } from "$lib/types";
+	import { type Component } from "svelte";
+	import dayjs from "dayjs";
 
 	type ChannelData = {
 		id: string;
@@ -57,6 +60,29 @@
 		}
 	});
 
+	type SubscriptionData = {
+		id: string;
+		status: "enabled" | string;
+		type: string;
+		version: string;
+		cost: number;
+		condition: any;
+		transport: any;
+		created_at: string;
+	};
+
+	let activeHooks = $derived.by(() => {
+		if (form && form.from === "getActiveHooks") {
+			const results = form.results as [string, SubscriptionData][];
+			return results.map(([k, v]) => {
+				const login = k;
+				const subscription = v;
+
+				return { login, subscription };
+			});
+		}
+	});
+
 	let clearByIdInput: string | undefined = $state();
 	let searchResultDb: undefined | { count: number; results: SearchResult[] } =
 		$derived.by(() => {
@@ -84,6 +110,19 @@
 	}
 </script>
 
+{#snippet ActionButton(title: string, Icon: Component, formaction: string)}
+	<Button
+		type="submit"
+		variant="outline"
+		class="flex w-full flex-row justify-between"
+		disabled={waiting}
+		{formaction}
+	>
+		<div>{title}</div>
+		<Icon />
+	</Button>
+{/snippet}
+
 {#snippet SearchResult(title: string, content: string)}
 	<div class="flex flex-row justify-between">
 		<div>{title}</div>
@@ -99,7 +138,7 @@
 			<form
 				method="POST"
 				action="?/refreshChannel"
-				class="mb-18"
+				class="mb-18 max-w-[225px] space-y-2"
 				use:enhance={() => {
 					waiting = true;
 					return async ({ update }) => {
@@ -108,42 +147,42 @@
 					};
 				}}
 			>
-				<Button
-					type="submit"
-					variant="outline"
-					class="flex w-full flex-row justify-between"
-					disabled={waiting}
-				>
-					<div>refresh channel data</div>
-					<RefreshCcwIcon />
-				</Button>
-				<Button
-					type="submit"
-					variant="outline"
-					class="mt-2 flex w-full flex-row justify-between"
-					disabled={waiting}
-					formaction="?/deleteHooks"
-				>
-					<div>delete hooks</div>
-					<TrashIcon />
-				</Button>
-				<Button
-					type="submit"
-					variant="outline"
-					class="mt-2 flex w-full flex-row justify-between"
-					disabled={waiting}
-					formaction="?/resetHooks"
-				>
-					<div>reset hooks</div>
-					<TimerResetIcon />
-				</Button>
+				{@render ActionButton(
+					"refresh channel data",
+					RefreshCcwIcon,
+					"?/refreshChannel"
+				)}
+				{@render ActionButton("delete hooks", TrashIcon, "?/deleteHooks")}
+				{@render ActionButton("reset hooks", TimerResetIcon, "?/resetHooks")}
+				{@render ActionButton(
+					"get active hooks",
+					ArrowDownToDotIcon,
+					"?/getActiveHooks"
+				)}
 			</form>
+			{#if activeHooks}
+				<div
+					class="mb-12 flex max-h-[350px] w-[500px] flex-col overflow-y-scroll"
+				>
+					{#each activeHooks as hook}
+						{@const sub = hook.subscription}
+						<div class="my-2 px-4">
+							{@render SearchResult("channel", hook.login)}
+							{@render SearchResult("eventsub id", sub.id)}
+							{@render SearchResult(
+								"created at",
+								dayjs(sub.created_at).format("HH:MM A MMM DD YYYY")
+							)}
+							{@render SearchResult("event type", sub.type)}
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 		<div class="flex flex-col">
 			<div class="flex w-full flex-col">
 				<Form {waiting} {setWaiting} {formActionResult} />
 			</div>
-
 			{#if formActionResult}
 				{#if formActionResult.success !== true}
 					<div class="m-8 flex w-[350px] items-center justify-center">

@@ -4,6 +4,7 @@ use core::fmt;
 use std::sync::LazyLock;
 
 use async_trait::async_trait;
+use futures::stream::FuturesUnordered;
 use futures::{StreamExt, stream};
 use http::header::{AUTHORIZATION, InvalidHeaderValue};
 use http::{HeaderMap, HeaderValue, StatusCode};
@@ -366,6 +367,31 @@ impl Helix {
 
     #[instrument]
     pub async fn get_active_subscriptions() -> HelixResult<Vec<String>> {
+        let body = Self::get_active_subscriptions_raw().await?;
+
+        if let Some(vec_value) = body["data"].as_array()
+            && let Some(total_active) = body["total"].as_i64()
+            && total_active > 0
+        {
+            let mut result = Vec::new();
+            for element in vec_value {
+                let sub_id = element["id"].as_str().unwrap().to_string();
+                result.push(sub_id);
+            }
+
+            return Ok(result);
+        }
+
+        Ok(Vec::new())
+    }
+
+    #[instrument]
+    /// See:
+    ///     https://dev.twitch.tv/docs/eventsub/manage-subscriptions/#getting-the-list-of-events-you-subscribe-to
+    /// For the JSON structure.
+    ///
+    /// TODO make deserializable struct
+    pub async fn get_active_subscriptions_raw() -> HelixResult<Value> {
         let params = build_query_params(HelixParamType::Status, &["enabled".to_string()]);
         if params.len() != 1 {
             return Err(HelixErr::FetchErr(
@@ -387,20 +413,7 @@ impl Helix {
             }
         };
 
-        if let Some(vec_value) = body["data"].as_array()
-            && let Some(total_active) = body["total"].as_i64()
-            && total_active > 0
-        {
-            let mut result = Vec::new();
-            for element in vec_value {
-                let sub_id = element["id"].as_str().unwrap().to_string();
-                result.push(sub_id);
-            }
-
-            return Ok(result);
-        }
-
-        Ok(Vec::new())
+        Ok(body)
     }
 
     #[instrument]
@@ -452,12 +465,20 @@ impl Helix {
 
     #[instrument(skip(subscription_ids), fields(subscription_count = subscription_ids.len()))]
     pub async fn delete_subscriptions(subscription_ids: &[String]) -> HelixResult<()> {
-        let params = build_query_params(HelixParamType::Id, subscription_ids);
-        for param in params {
-            let uri = format!("{}{}", String::from(HelixUri::WebhookSubscriptions), param);
-            match Self::delete(uri).await {
-                Ok(res) => tracing::info!(response = ?res, "delete subscription ok"),
-                Err(e) => tracing::error!(error = ?e, "delete subscription failure"),
+        let mut futures: FuturesUnordered<_> = subscription_ids
+            .iter()
+            .map(|id| {
+                let param = format!("?{}{}", String::from(HelixParamType::Id), id.to_lowercase());
+                let uri = format!("{}{}", String::from(HelixUri::WebhookSubscriptions), param);
+
+                Self::delete(uri)
+            })
+            .collect();
+
+        while let Some(result) = futures.next().await {
+            match result {
+                Ok(res) => tracing::info!(?res, "HOOK DELETION OK"),
+                Err(e) => tracing::error!(error = ?e, "HOOK DELETION FAIL"),
             }
         }
 
@@ -473,6 +494,7 @@ pub const HELIX_WEBHOOK_SUBS: &str = "eventsub/subscriptions";
 const NUM_WORKER_THREADS: usize = 25;
 
 pub const CALLBACK_ROUTE: &str = "https://api.rat.moe/callback";
+// pub const CALLBACK_ROUTE: &str = "http://api.rat.moe/example-callback";
 
 #[derive(Debug)]
 pub enum HelixUri {

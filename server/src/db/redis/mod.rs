@@ -8,6 +8,21 @@ pub mod migrator;
 pub mod redis_pool;
 
 #[instrument(skip(redis_pool, ids))]
+pub async fn clear_stream_states<R: AsyncCommands + Sync>(
+    redis_pool: &mut R,
+    ids: &[String],
+) -> RedisResult<()> {
+    let mut pipeline = redis::pipe();
+    for id in ids {
+        let key = format!("{}:online", id);
+        pipeline.del(key);
+    }
+
+    () = pipeline.query_async(redis_pool).await?;
+    Ok(())
+}
+
+#[instrument(skip(redis_pool, ids))]
 pub async fn init_stream_states<R: AsyncCommands + Sync>(
     redis_pool: &mut R,
     ids: &[String],
