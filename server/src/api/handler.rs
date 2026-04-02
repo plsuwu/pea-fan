@@ -10,7 +10,8 @@ use serde_json::Value;
 use tracing::instrument;
 
 use crate::api::middleware::verify_internal::SessionToken;
-use crate::api::server::{AppState, JsonResult, RouteError};
+use crate::api::server::{AppState, JsonResult, RouteError, stream_online_hook_handler};
+use crate::db::PgError;
 use crate::db::models::channel::ChannelReplies;
 use crate::db::models::chatter::ChatterSearchResult;
 use crate::db::models::leaderboard::TimeWindow;
@@ -21,7 +22,7 @@ use crate::db::prelude::{ChatterLeaderboardEntry, ChatterRepository, Leaderboard
 use crate::db::redis::migrator::{self, process_alias_migration};
 use crate::db::repositories::leaderboard::ScorePagination;
 use crate::util;
-use crate::util::helix::{Helix, HelixUser};
+use crate::util::helix::{Helix, HelixErr, HelixUser};
 
 #[instrument(skip(state))]
 pub async fn global_channels(
@@ -630,6 +631,68 @@ pub async fn update_channel_config(
 
     channel_repo.update_channel_config(&ChannelId(id)).await?;
     Ok("OK".into_response())
+}
+
+#[instrument(skip(state))]
+pub async fn force_delete_hooks(
+    State(state): State<Arc<AppState>>,
+) -> Result<Response<axum::body::Body>, RouteError> {
+    let handle = tokio::spawn(async move {
+        let ids = state.channel_ids.clone();
+        match crate::db::redis::init_stream_states(&mut state.redis_pool.clone(), &ids).await {
+            Ok(_) => tracing::info!("removed all channel states from redis cache"),
+            Err(e) => tracing::error!(error = ?e, "failed to remove channel states from redis"),
+        }
+
+        let active_hooks = Helix::get_active_subscriptions().await?;
+        tracing::debug!(?active_hooks, "active_hooks");
+
+        if !active_hooks.is_empty() {
+            tracing::debug!("active_hooks populated - deleting...");
+            match Helix::delete_subscriptions(&active_hooks).await {
+                Ok(_) => {
+                    let hooks_count = active_hooks.len();
+                    Ok(format!("deleted {hooks_count} hooks").into_response())
+                }
+                Err(e) => Err(e),
+            }
+        } else {
+            Ok("no hooks to delete".into_response())
+        }
+    });
+
+    match handle.await {
+        Ok(Ok(res)) => Ok(res),
+        Ok(Err(e)) => {
+            tracing::error!("error in task: {e:?}");
+            Err(RouteError::HelixError(e))
+        }
+        Err(e) => {
+            tracing::error!("task panic: {e}");
+            Err(RouteError::JoinError(e))
+        }
+    }
+}
+
+#[instrument(skip(state))]
+pub async fn force_reset_hooks(
+    State(state): State<Arc<AppState>>,
+) -> Result<Response<axum::body::Body>, RouteError> {
+    let handle = tokio::spawn(async move {
+        let ids = state.channel_ids.clone();
+        match stream_online_hook_handler(&ids, state.redis_pool.clone()).await {
+            Ok(_) => {
+                tracing::info!("forced reset ok");
+                Ok("OK".into_response())
+            }
+            Err(e) => {
+                tracing::error!(error = ?e, "forced reset fail");
+                Err(e)
+            }
+        }
+    });
+
+    handle.await?
 }
 
 // #[instrument(skip(state))]

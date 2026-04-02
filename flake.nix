@@ -76,7 +76,7 @@
 
         client = pkgs.buildNpmPackage {
           pname = "piss-fan-client";
-          version = "1.2.1";
+          version = "1.2.3";
           src = ./client;
 
           npmDepsHash = "sha256-4Kdg0c9H3/kOd60FZ7vg3+bD4NJbCt1LCqykBTivIgo=";

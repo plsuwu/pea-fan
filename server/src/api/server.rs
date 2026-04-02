@@ -9,6 +9,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use http::StatusCode;
+use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
 use serde::Serialize;
 use sqlx::{PgPool, Pool, Postgres};
@@ -17,7 +18,7 @@ use tokio::sync::Mutex;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot::{self, Sender};
-use tokio::task::JoinHandle;
+use tokio::task::{JoinError, JoinHandle};
 use tower_http::trace::TraceLayer;
 use tracing::instrument;
 
@@ -42,7 +43,25 @@ pub struct AppState {
     pub redis_pool: ConnectionManager,
     pub irc_connection: IrcHandle,
     pub channels: Vec<String>,
+    pub channel_ids: Vec<String>,
     pub totp_handler: Arc<Mutex<TOTPHandler>>,
+}
+
+pub async fn stream_online_hook_handler<R: AsyncCommands + Sync>(
+    channel_ids: &[String],
+    mut redis_pool: R,
+) -> Result<(), RouteError> {
+    match webhook::dispatch::reset_hooks(&channel_ids).await {
+        Ok(_) => tracing::debug!("webhook subs reset"),
+        Err(e) => tracing::error!(error = ?e, "reset webhook subs failure"),
+    }
+
+    match crate::db::redis::init_stream_states(&mut redis_pool, &channel_ids).await {
+        Ok(_) => tracing::debug!("initial cache entries created"),
+        Err(e) => tracing::error!(error = ?e, "initial cache entry create failure"),
+    }
+
+    Ok(())
 }
 
 #[instrument(skip(tx, database_pool, redis_pool, totp_handler))]
@@ -61,16 +80,6 @@ pub async fn router(
 
     let channel_logins: Vec<String> = channels_updated.keys().cloned().collect();
     let channel_ids: Vec<String> = channels_updated.into_values().map(|ch| ch.id.0).collect();
-    
-    match webhook::dispatch::reset_hooks(&channel_ids).await {
-        Ok(_) => tracing::debug!("webhook subs reset"),
-        Err(e) => tracing::error!(error = ?e, "reset webhook subs failure"),
-    }
-
-    match crate::db::redis::init_stream_states(&mut redis_pool.clone(), &channel_ids).await {
-        Ok(_) => tracing::debug!("initial cache entries created"),
-        Err(e) => tracing::error!(error = ?e, "initial cache entry create failure"),
-    }
 
     let irc_connection = crate::irc::start(channel_logins.clone(), database_pool, 10)
         .await
@@ -79,10 +88,13 @@ pub async fn router(
     let state = Arc::new(AppState {
         database_pool,
         irc_connection,
-        redis_pool,
+        redis_pool: redis_pool.clone(),
         channels: channel_logins,
+        channel_ids: channel_ids.clone(),
         totp_handler,
     });
+
+    let server_state_clone = Arc::clone(&state);
 
     // twitch hook callback
     let external_post_routes = Router::new()
@@ -118,6 +130,8 @@ pub async fn router(
         //
         .route("/helix/by-login/{login}", get(helix_user_by_login))
         .route("/helix/by-id/{id}", get(helix_user_by_id))
+        .route("/helix/delete-hooks", get(force_delete_hooks))
+        .route("/helix/reset-hooks", get(force_reset_hooks))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             verify_session_ident,
@@ -169,6 +183,20 @@ pub async fn router(
         .layer(from_fn(log_route_errors))
         .with_state(state);
 
+    let hooks_handle = tokio::spawn(async move {
+        match stream_online_hook_handler(
+            &server_state_clone.channel_ids.clone(),
+            server_state_clone.redis_pool.clone(),
+        )
+        .await
+        {
+            Ok(_) => (),
+            Err(e) => {
+                tracing::error!(error = ?e, "error while initialising stream states");
+            }
+        }
+    });
+
     let port = var!(Var::ServerApiPort)
         .await
         .unwrap()
@@ -177,6 +205,8 @@ pub async fn router(
 
     let socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
     let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
+
+    hooks_handle.await.unwrap();
 
     tx.send(socket_addr).unwrap();
     axum::serve(listener, app).await.unwrap()
@@ -232,6 +262,9 @@ pub async fn start_server(
 #[derive(Debug, Error)]
 pub enum RouteError {
     #[error(transparent)]
+    JoinError(#[from] JoinError),
+
+    #[error(transparent)]
     IrcClientError(#[from] ConnectionClientError),
 
     #[error(transparent)]
@@ -270,6 +303,12 @@ impl IntoResponse for RouteError {
         }
 
         let (status, message, err) = match &self {
+            RouteError::JoinError(error) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                error.to_string(),
+                Some(self),
+            ),
+
             RouteError::IrcClientError(error) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 error.to_string(),

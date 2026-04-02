@@ -233,6 +233,36 @@ export const actions = {
 			results: await res.json(),
 		};
 	},
+
+	deleteHooks: async ({ request, fetch }) => {
+		const res = await fetch("/api/delete-hooks", {
+			method: "GET",
+		});
+
+		if (res.status !== 200) {
+			return { success: false, status: res.status };
+		}
+
+		logger.info({ response: res }, "hooks deleted ok");
+		return {
+			success: true,
+		};
+	},
+
+    resetHooks: async ({ request, fetch }) => {
+		const res = await fetch("/api/reset-hooks", {
+			method: "GET",
+		});
+
+		if (res.status !== 200) {
+			return { success: false, status: res.status };
+		}
+
+		logger.info({ response: res }, "hooks reset ok");
+		return {
+			success: true,
+		};
+    },
 } satisfies Actions;
 
 const UPDATE_API_ROUTE = `${API_BASE}/update`;

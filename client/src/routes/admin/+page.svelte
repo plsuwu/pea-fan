@@ -17,6 +17,8 @@
 		ArrowRightIcon,
 		ListXIcon,
 		RefreshCcwIcon,
+		TimerResetIcon,
+		TrashIcon,
 		UndoIcon,
 	} from "@lucide/svelte";
 	import type { HelixUser } from "$lib/types";
@@ -97,7 +99,6 @@
 			<form
 				method="POST"
 				action="?/refreshChannel"
-
 				class="mb-18"
 				use:enhance={() => {
 					waiting = true;
@@ -110,11 +111,31 @@
 				<Button
 					type="submit"
 					variant="outline"
-					class="flex flex-row"
+					class="flex w-full flex-row justify-between"
 					disabled={waiting}
 				>
 					<div>refresh channel data</div>
 					<RefreshCcwIcon />
+				</Button>
+				<Button
+					type="submit"
+					variant="outline"
+					class="mt-2 flex w-full flex-row justify-between"
+					disabled={waiting}
+					formaction="?/deleteHooks"
+				>
+					<div>delete hooks</div>
+					<TrashIcon />
+				</Button>
+				<Button
+					type="submit"
+					variant="outline"
+					class="mt-2 flex w-full flex-row justify-between"
+					disabled={waiting}
+					formaction="?/resetHooks"
+				>
+					<div>reset hooks</div>
+					<TimerResetIcon />
 				</Button>
 			</form>
 		</div>
