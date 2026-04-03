@@ -1,4 +1,4 @@
-// #![warn(unused_crate_dependencies)]
+#![warn(unused_crate_dependencies)]
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -81,7 +81,7 @@ async fn main() -> Result<()> {
 
 #[inline]
 fn log_startup_init() {
-    tracing::info!("=======================");
-    tracing::info!("      STARTING UP      ");
-    tracing::info!("=======================");
+    tracing::info!("=========================================");
+    tracing::info!("               STARTING UP               ");
+    tracing::info!("=========================================");
 }

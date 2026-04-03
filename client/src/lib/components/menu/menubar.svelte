@@ -108,9 +108,16 @@
 	Icon: Component,
 	title?: string,
 	childProps?: Record<string, unknown>,
-	iconProps?: Record<string, unknown>
+	iconProps?: Record<string, unknown>,
+	ariaLabel: string = "navigation button"
 )}
-	<Button {...childProps} {href} size="sm" variant="outline">
+	<Button
+		{...childProps}
+		{href}
+		size="sm"
+		variant="outline"
+		aria-label={ariaLabel}
+	>
 		{#if title}
 			<div>{title}</div>
 		{/if}
@@ -119,13 +126,29 @@
 {/snippet}
 
 <svelte:window onkeydown={handleKeydown} />
-<div class="flex w-full flex-row items-center space-x-4">
+<div
+	class="flex w-full flex-row items-center space-x-4"
+	aria-label="top navigation bar"
+>
 	<BGrp.Root>
-		{@render NavButton(BASE_HOST_URL, House)}
+		{@render NavButton(
+			BASE_HOST_URL,
+			House,
+			undefined,
+			undefined,
+			undefined,
+			"return to home page"
+		)}
 		<Dropdown.Root>
 			<Dropdown.Trigger>
 				{#snippet child({ props })}
-					<Button {...props} size="sm" variant="outline" class="ps-2!">
+					<Button
+						{...props}
+						size="sm"
+						variant="outline"
+						class="ps-2!"
+						aria-label="open leaderboard menu"
+					>
 						<div>leaderboards</div>
 						<ChevronDown />
 					</Button>
@@ -205,7 +228,13 @@
 	<Dropdown.Root>
 		<Dropdown.Trigger>
 			{#snippet child({ props })}
-				<Button {...props} size="sm" variant="outline" class="ps-2!">
+				<Button
+					{...props}
+					size="sm"
+					variant="outline"
+					class="ps-2!"
+					aria-label="open miscellaneous navigation menu"
+				>
 					<MenuIcon />
 				</Button>
 			{/snippet}

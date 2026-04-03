@@ -1,4 +1,12 @@
 import { logger as serverLogger } from "$lib/observability/server/logger.svelte";
+import dayjs from "dayjs";
+
+const RATE_LIMIT_BUCKETS = {
+	router: "router",
+	admin: "admin",
+};
+
+export type RateLimitBucket = keyof typeof RATE_LIMIT_BUCKETS;
 
 export type Bucket = {
 	tokens: number;
@@ -113,17 +121,17 @@ export class TokenBucket<K> {
 			timestamp: new Date(ts),
 		});
 
-		childLogger.debug("[RATE_LIMITER]: CLIENT_TIMEOUT_CHECK");
+		childLogger.trace("[RATE_LIMITER]: CLIENT_TIMEOUT_CHECK");
 
 		if (!client.timeoutExpiry) {
-			childLogger.debug("[RATE_LIMITER]: CLIENT_NOT_RATE_LIMITED");
+			childLogger.trace("[RATE_LIMITER]: CLIENT_NOT_RATE_LIMITED");
 			return true;
 		}
 
 		if (client.timeoutExpiry && client.timeoutExpiry < ts) {
 			childLogger.warn("[RATE_LIMITER]: REMOVE_CLIENT_TIMEOUT");
-
 			client.timeoutExpiry = undefined;
+
 			return true;
 		} else {
 			childLogger.warn("[RATE_LIMITER]: RATE_LIMITED_CLIENT");
@@ -131,10 +139,10 @@ export class TokenBucket<K> {
 			if (backoff) {
 				const newExpiry =
 					client.timeoutExpiry! +
-					this.config.timeoutLength * this.config.timeoutBackoff;
+					this.timeoutLengthMs * this.config.timeoutBackoff;
 
 				childLogger.setBindings({
-					previousTimeoutExpiry: client.timeoutExpiry,
+					previousTimeoutExpiry: dayjs(client.timeoutExpiry),
 					adjustedTimeoutExpiry: newExpiry,
 				});
 
@@ -157,9 +165,9 @@ export class TokenBucket<K> {
 			childLogger.info("[RATE_LIMITER]: REQUEST_COST_EXCEEDS_CLIENT_TOKENS");
 
 			this.bucket.set(key, {
-				tokens: client.tokens,
-				lastRefill: client.lastRefill,
-				timeoutExpiry: Date.now() + this.config.timeoutLength * 1000,
+				tokens: 0,
+				lastRefill: Date.now(),
+				timeoutExpiry: Date.now() + this.timeoutLengthMs,
 			});
 			return false;
 		}
@@ -185,7 +193,7 @@ export class TokenBucket<K> {
 			key,
 			tokens: client.tokens,
 		});
-		childLogger.info("[RATE_LIMITER] NEW_CLIENT_ADDED");
+		childLogger.trace("[RATE_LIMITER] NEW_CLIENT_ADDED");
 		return client;
 	}
 
@@ -212,6 +220,10 @@ export class TokenBucket<K> {
 		return this.config.max;
 	}
 
+	get timeoutLengthMs(): number {
+		return this.config.timeoutLength * 1000;
+	}
+
 	get refillIntervalMs(): number {
 		return this.config.refillInterval * 1000;
 	}
@@ -231,20 +243,43 @@ const adminRateLimiterConfig: BucketConfig = {
 };
 
 const apiRateLimiterConfig: BucketConfig = {
-	max: 8,
+	max: 10,
 	refillInterval: 30,
 	timeoutLength: FIVE_MINS,
 	timeoutBackoff: 2,
 	_tag: "api",
 };
 
+const routerRateLimiterConfig: BucketConfig = {
+	max: 5,
+	refillInterval: FIVE_MINS * 3,
+	timeoutLength: ONE_HOUR * 6,
+	timeoutBackoff: 2,
+	_tag: "general",
+};
+
 export const apiRateLimiter = new TokenBucket<string>(apiRateLimiterConfig);
 export const adminRateLimiter = new TokenBucket<string>(adminRateLimiterConfig);
+export const routerRateLimiter = new TokenBucket<string>(
+	routerRateLimiterConfig
+);
 
-export function clientIsRateLimited(key: string) {
-	if (adminRateLimiter.isTimedOutClient(key)) {
-		return true;
+export const tryConsumeToken = (
+	key: string,
+	bucket: RateLimitBucket = "router"
+): boolean => {
+	switch (bucket) {
+		case "admin":
+			return adminRateLimiter.consume(key);
+
+		default:
+			return routerRateLimiter.consume(key);
 	}
+};
 
-	return false;
-}
+export const shouldRateLimit = (key: string) => {
+	return (
+		adminRateLimiter.isTimedOutClient(key) ||
+		routerRateLimiter.isTimedOutClient(key)
+	);
+};

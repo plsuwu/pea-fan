@@ -1,6 +1,6 @@
 import type { LayoutLoad } from "./$types";
 import { browser } from "$app/environment";
-import { mode, type SystemModeValue, setMode } from "mode-watcher";
+import { type SystemModeValue, setMode } from "mode-watcher";
 
 export const load: LayoutLoad = async ({ data }) => {
 	if (browser) {

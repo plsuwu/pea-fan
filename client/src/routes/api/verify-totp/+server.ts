@@ -1,15 +1,16 @@
 import { json, type RequestEvent, type RequestHandler } from "@sveltejs/kit";
 import { logger } from "$lib/observability/server/logger.svelte";
 import { Rh } from "$lib/utils/route";
+import { buildHeaders } from "$lib/server/verify";
 
 const TOKEN_ENDPOINT = new URL(`${Rh.apiBase}/auth/totp-session`);
 
-const buildHeaders = (): Headers => {
-	const headers = new Headers();
-	headers.set("content-type", "application/json");
-
-	return headers;
-};
+// const buildHeaders = (): Headers => {
+// 	const headers = new Headers();
+// 	headers.set("content-type", "application/json");
+//
+// 	return headers;
+// };
 
 export const POST: RequestHandler = async (event: RequestEvent) => {
 	const { request } = event;
@@ -22,7 +23,7 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
 
 		let response = await fetch(TOKEN_ENDPOINT, {
 			method: "POST",
-			headers: buildHeaders(),
+			headers: buildHeaders(true, token),
 			body: JSON.stringify({ token }),
 		});
 

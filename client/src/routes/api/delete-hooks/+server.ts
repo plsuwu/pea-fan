@@ -1,12 +1,10 @@
 import { buildHeaders } from "$lib/server/verify";
 import type { RequestHandler } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
-import { PUBLIC_API_BASE_URL } from "$env/static/public";
 import { Rh } from "$lib/utils/route";
 import { json } from "@sveltejs/kit";
 
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
-
 const DELETE_HOOKS_ENDPOINT = `${Rh.apiBase}/helix/delete-hooks`;
 
 export const GET: RequestHandler = async ({ locals, cookies }) => {
@@ -21,7 +19,7 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 		headers,
 	});
 
-	locals.logger.debug({ response: res }, "api validation response");
+	locals.logger.debug({ response: res }, "[API]: hooks deletion res");
 	if (res.status === 200 && res.statusText === "OK") {
 		return json({ success: false });
 	}

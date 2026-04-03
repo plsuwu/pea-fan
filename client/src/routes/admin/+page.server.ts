@@ -6,6 +6,7 @@ import { invalidateCookie } from "$lib/server";
 import { Rh } from "$lib/utils/route";
 import { buildHeaders, verifyToken } from "$lib/server/verify";
 import { adminRateLimiter } from "$lib/server/rate-limit.svelte";
+import { page } from "$app/state";
 
 // TODO:
 // -------------------------------------------------------------------
@@ -44,9 +45,15 @@ export const load: PageServerLoad = async ({
 	cookies,
 	locals,
 	request,
+    url,
 	getClientAddress,
 }) => {
 	let token = await verifyToken(cookies, request, getClientAddress, fetch);
+
+    if (locals.channel) {
+        redirect(302, `${Rh.proto}://${Rh.deriveBase(url.host)}/admin`);
+    }
+
 	if (!token) {
 		invalidateCookie(cookies);
 		redirect(302, "/admin/login");

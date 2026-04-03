@@ -5,7 +5,7 @@ import type { PageServerLoad } from "../$types";
 import { env } from "$env/dynamic/private";
 import {
 	adminRateLimiter,
-	clientIsRateLimited,
+	shouldRateLimit,
 } from "$lib/server/rate-limit.svelte";
 
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
@@ -37,7 +37,7 @@ export const actions = {
 
 		if (
 			locals.rateLimited ||
-			clientIsRateLimited(locals.client.cfconnecting) ||
+			shouldRateLimit(locals.client.cfconnecting) ||
 			!adminRateLimiter.consume(locals.client.cfconnecting)
 		) {
 			childLogger.warn("[ADMIN_LOGIN] FAIL_RATE_LIMITED");

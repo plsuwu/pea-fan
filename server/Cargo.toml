@@ -13,7 +13,6 @@ futures = { version = "0.3.31", features = ["futures-executor"] }
 hex = "0.4.3"
 http = "1.4.0"
 irc = "1.1.0"
-# leaky-bucket = "1.1.2"
 opentelemetry = { version = "0.31.0", default-features = false, features = ["trace", "metrics", "logs"] }
 opentelemetry-appender-tracing = "0.31.1"
 opentelemetry-otlp = { version = "0.31.0", features = ["trace", "metrics", "logs", "grpc-tonic"] }
@@ -34,7 +33,6 @@ tower-http = { version = "0.6.8", features = ["trace", "cors"] }
 tracing = "0.1.43"
 tracing-opentelemetry = "0.32.0"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
-uuid = { version = "1.19.0", features = ["v4"] }
 
 [profile.release]
 lto = true

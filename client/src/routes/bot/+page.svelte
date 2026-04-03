@@ -15,7 +15,9 @@
 		class="mt-10 flex flex-row items-center justify-center lg:w-2/3 xl:w-1/2 xl:max-w-[950px]"
 	>
 		<div class="flex flex-col justify-center">
-			<div class="flex w-full flex-row items-center space-x-8 self-center">
+			<div
+				class="ml-5 flex w-full flex-row items-center space-x-8 self-center lg:ml-0"
+			>
 				<img src={peeLikerImage} alt="pee liker" class="rounded-full" />
 				<div class="flex w-full flex-col">
 					<div class="text-3xl font-extrabold xl:text-5xl">
@@ -27,12 +29,12 @@
 							rel="noopener noreferrer">pee_liker</a
 						>
 					</div>
-					<div class="text-lg text-muted-foreground/85 lg:text-2xl">
-						currently enabled for these broadcasters:
+					<div class="text-base text-muted-foreground/85 lg:text-2xl">
+						piss-related chatbot; currently enabled for these broadcasters:
 					</div>
 				</div>
 			</div>
-			<ul
+			<div
 				class="mt-10 flex min-w-[250px] list-inside flex-col items-start
             justify-center px-4 align-middle text-lg lg:px-4 xl:px-26 xl:text-2xl"
 			>
@@ -41,29 +43,31 @@
 						href={`https://twitch.tv/${channel.login}`}
 						target="_blank"
 						rel="noopener noreferrer"
-						class="min-w-[300px] self-center transition-opacity duration-100
-                        ease-in-out hover:opacity-50 md:self-start"
+						class="flex w-full min-w-[300px] flex-row items-center justify-center
+                        self-center transition-opacity duration-100 ease-in-out hover:opacity-50 md:self-start"
 					>
-						<li
-							class="flex w-full flex-row items-center justify-between space-y-2 space-x-8"
-						>
-							<span
-								style:color={readableColor(channel.color, mode.current, 4.5)}
-								>{channel.name}</span
-							>
+						<div class="flex w-[250px] flex-row space-y-1 space-x-18">
 							<div>
 								<img
 									src={getAltImageSizeUrl(channel.image, "SM")}
 									alt={`${channel.login}`}
-									class="size-8 rounded-full"
+									class="size-[30px] rounded-full"
 								/>
 							</div>
-						</li>
+							<div
+								class="mt-px text-left"
+								style:color={readableColor(channel.color, mode.current, 4.5)}
+							>
+								{channel.name}
+							</div>
+						</div>
 					</a>
 				{/each}
-			</ul>
-			<div class="mt-10 xl:mt-48">
-				<span class="text-3xl font-extrabold xl:text-5xl">how he is used</span>
+			</div>
+			<div class="mt-14 xl:mt-48">
+				<span class="text-[28px] font-extrabold xl:text-5xl"
+					>his usage instructions</span
+				>
 				<div class="mt-8 w-max text-xl xl:ml-2">
 					<Kbd>
 						!pisscount <span class="text-muted-foreground">[?username]</span>
@@ -83,12 +87,12 @@
 					</div>
 				</div>
 			</div>
-			<div class="mt-16">
-				<div class="text-sm text-muted-foreground lg:text-base">
+			<div class="mt-18">
+				<div class="text-sm text-muted-foreground/85 lg:text-base">
 					Responses are queued and sent in one-and-a-half-second intervals, with
 					the queue holding a maximum of 16 messages before it begins dropping
 					queries. The queue is shared across
-					<span class="font-bold italic">all</span> channels above as per 
+					<span class="font-bold italic">all</span> channels above as per
 					<a
 						href="https://dev.twitch.tv/docs/chat#twitch-chat-rate-limits"
 						target="_blank"

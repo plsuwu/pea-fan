@@ -9,20 +9,32 @@
 	let {
 		entries,
 		variant,
+		onlyShowLive = $bindable(false),
 	}: {
 		entries: (UntypedEntry & { isLive: boolean })[];
 		variant: "Chatter" | "Channel";
+		onlyShowLive?: boolean;
 	} = $props();
+
 	let currentMode = $derived(mode.current);
+	let displayable = $derived.by(() => {
+		if (variant !== "Channel" || !onlyShowLive) {
+			return entries;
+		} else if (onlyShowLive) {
+			return entries.filter((entry) => entry.isLive);
+		}
+	});
 </script>
 
 {#snippet Loader()}
 	<div
-		in:fade={{ delay: 0, duration: 150 }}
-		out:fade={{ delay: 0, duration: 150 }}
-		class="absolute z-30 flex h-full min-h-screen w-full items-center justify-center bg-background/75"
+		in:fade={{ delay: 0, duration: 200 }}
+		out:fade={{ delay: 0, duration: 200 }}
+		class="absolute z-30 flex h-full w-full items-center justify-center"
 	>
-		<Spinner />
+		<div class="fixed bg-background/75 z-30">
+			<Spinner class="size-10" />
+		</div>
 	</div>
 {/snippet}
 
@@ -36,7 +48,7 @@
 		in:fade={{ delay: 0, duration: 0 }}
 		out:fade={{ delay: 100, duration: 0 }}
 	>
-		{#each entries as entry}
+		{#each displayable as entry}
 			<RowLayout {entry} {variant} mode={currentMode} showScoreIcons={true} />
 		{/each}
 	</div>

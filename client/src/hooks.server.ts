@@ -1,6 +1,5 @@
 import { sequence } from "@sveltejs/kit/hooks";
 import {
-	error,
 	redirect,
 	type Handle,
 	type HandleServerError,
@@ -9,7 +8,11 @@ import {
 import { logger } from "$lib/observability/server/logger.svelte";
 import { Rh } from "$lib/utils/route";
 import { getBaseURLFromRequest, isIpAddr, isLocalDomain } from "$lib/utils";
-import { clientIsRateLimited } from "$lib/server/rate-limit.svelte";
+import {
+	shouldRateLimit,
+	tryConsumeToken,
+} from "$lib/server/rate-limit.svelte";
+import { should } from "vitest";
 
 export const handleError: HandleServerError = ({ event, error, status }) => {
 	const context = event.tracing?.current
@@ -40,6 +43,7 @@ export const handleError: HandleServerError = ({ event, error, status }) => {
 			break;
 
 		case 404:
+			// tryConsumeToken(event.locals.client.cfconnecting);
 			displayMessage = "the requested page doesn't exist";
 			break;
 
@@ -65,24 +69,9 @@ export const handleError: HandleServerError = ({ event, error, status }) => {
 };
 
 const tenantHook: Handle = async ({ event, resolve }) => {
-	if (event.locals.rateLimited && event.url.pathname.includes("/admin")) {
-		let response = await resolve(event);
-		response = new Response(response.body, {
-			...response,
-			status: 429,
-			headers: response.headers,
-		});
-
-		event.locals.logger.info(
-			{ response },
-			"[TENANCY]: DENY_ADMIN_RATE_LIMITED"
-		);
-		return response;
-	}
-
 	const requestHost = event.request.headers.get("host") || null;
 	if (!requestHost || isIpAddr(requestHost) || isLocalDomain(requestHost)) {
-		event.locals.logger.debug("[TENANCY]: ALLOW_ROUTE_DEFAULT");
+		event.locals.logger.trace("[TENANCY]: ALLOW_ROUTE_DEFAULT");
 		event.locals.channel = null;
 
 		return resolve(event);
@@ -96,16 +85,16 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 		requestHost === Rh.base ||
 		requestHost === Rh.apiBase
 	) {
-		event.locals.logger.debug("[TENANCY]: ALLOW_ROUTE_NO_TENANT");
+		event.locals.logger.trace("[TENANCY]: allowing non-tenant request");
 		event.locals.channel = null;
 
 		return resolve(event);
 	}
 
 	if (await Rh.reroutable(event, requestedTenant)) {
-		event.locals.logger.debug(
+		event.locals.logger.trace(
 			{ tenant: requestedTenant },
-			"[TENANCY]: ALLOW_ROUTE_VALID_TENANT"
+			"[TENANCY]: allowing route to valid tenant"
 		);
 
 		event.locals.channel = requestedTenant;
@@ -117,7 +106,7 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 
 		event.locals.logger.warn(
 			{ tenant: requestedTenant, redirection },
-			"[TENANCY]: DENY_ROUTE_INVALID_TENANT"
+			"[TENANCY]: denying invalid renant route"
 		);
 
 		redirect(302, redirection);
@@ -126,10 +115,6 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 
 const logInitHook: Handle = async ({ event, resolve }) => {
 	event.locals.client = getClientFromHeaders(event);
-	event.locals.rateLimited = clientIsRateLimited(
-		event.locals.client.cfconnecting
-	);
-
 	event.locals.logger = logger.child({
 		client: event.locals.client,
 		route: event.url.href,
@@ -144,7 +129,34 @@ const logInitHook: Handle = async ({ event, resolve }) => {
 			"0",
 	});
 
-	event.locals.logger.debug("[INIT_HOOK]: LOGGER_APPENDED");
+	event.locals.logger.info(
+		{
+			request: {
+				body: event.request.body,
+				method: event.request.method,
+				destination: event.request.destination,
+				headers: Object.fromEntries(event.request.headers),
+			},
+		},
+		"[LOGINIT]: init routine complete"
+	);
+
+	// // TODO:  check if we should rate limit
+	// if (shouldRateLimit(event.locals.client.cfconnecting)) {
+	// 	let response = await resolve(event);
+	// 	response = new Response(response.body, {
+	// 		...response,
+	// 		status: 429,
+	// 		headers: response.headers,
+	// 	});
+	//
+	// 	event.locals.logger.warn(
+	// 		{ response },
+	// 		"[TENANCY]: denying rate limited client"
+	// 	);
+	// 	return response;
+	// }
+
 	return resolve(event);
 };
 

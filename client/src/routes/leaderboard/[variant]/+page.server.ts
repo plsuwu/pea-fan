@@ -15,7 +15,7 @@ export const load: PageServerLoad = async ({
 	fetch,
 	params,
 	route,
-	url
+	url,
 }) => {
 	if (locals.channel) {
 		locals.logger.warn(
@@ -53,21 +53,21 @@ export const load: PageServerLoad = async ({
 		{ limit, page }
 	);
 
-	locals.logger.debug(
+	locals.logger.trace(
 		{
 			pagination_metadata: {
 				curr_page: result.page,
 				total_pages: result.total_pages,
 				page_size: result.page_size,
 				total_items: result.total_items,
-				items_len: result.items.length
-			}
+				items_len: result.items.length,
+			},
 		},
-		"RX_API_RESPONSE"
+		"[API]: leaderboard response"
 	);
 
 	return {
 		leaderboardData: result,
-		leaderboardVariant: params.variant
+		leaderboardVariant: params.variant,
 	};
 };

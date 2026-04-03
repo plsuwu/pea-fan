@@ -6,13 +6,11 @@
 	import type { LayoutData } from "./$types";
 	import { onMount } from "svelte";
 	import { goto } from "$app/navigation";
-	import { navigating, page } from "$app/state";
+	import { page } from "$app/state";
 
 	import { mode, ModeWatcher, setMode } from "mode-watcher";
 	import * as Tt from "$lib/shadcn-components/ui/tooltip/index";
 	import { MoveLeft, X } from "@lucide/svelte";
-
-	// import Noise from "$lib/components/bg/noise.svelte";
 	import {
 		setModeCookie,
 		getModeCookie,
@@ -21,29 +19,25 @@
 	import { Rh } from "$lib/utils/route";
 
 	import Footer from "$lib/components/menu/footer.svelte";
-	import Spinner from "$lib/shadcn-components/ui/spinner/spinner.svelte";
 	import Stats from "$lib/components/tenant/stats/stats.svelte";
 	import ExternalLinks from "$lib/components/tenant/stats/external.svelte";
 	import Menubar from "$lib/components/menu/menubar.svelte";
 	import { slide } from "svelte/transition";
 	import { Button } from "$lib/shadcn-components/ui/button";
-	import { expoInOut, expoOut } from "svelte/easing";
+	import { expoInOut } from "svelte/easing";
 
 	let { data, children } = $props();
 	let { host } = page.url;
 
 	let {
 		channel,
-		liveBroadcasters,
 		scoreWindows,
 		channelData,
 		announcement,
 		announcementClearToken,
 	}: LayoutData = $derived(data);
 
-	let waitForLoad = $derived(navigating.to !== null);
 	let announcementCleared = $state(false);
-
 	onMount(() => {
 		const saved = getModeCookie();
 		if (saved === "dark" || saved === "light" || saved === "system") {
@@ -182,12 +176,6 @@
 			</div>
 		{/if}
 		<Tt.Provider delayDuration={0}>
-			<!-- <div -->
-			<!-- 	class="fixed top-0 left-0 z-10 flex h-full w-full flex-row items-center -->
-			<!--                 justify-center bg-background/50 backdrop-blur-[2px]" -->
-			<!-- > -->
-			<!-- 	<Spinner class="size-5" /> -->
-			<!-- </div> -->
 			<div class="mt-12 flex h-full min-h-[450px] flex-col">
 				<div class="w-[93%] self-center xl:w-[90%]">
 					<div class="flex flex-col lg:flex-row xl:justify-center">

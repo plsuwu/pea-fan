@@ -10,7 +10,7 @@
 
 <div
 	class="flex w-full flex-col items-start justify-center text-lg font-bold
-    sm:flex-row sm:items-center sm:text-2xl"
+    sm:flex-row sm:items-center sm:text-3xl tracking-tight"
 >
 	<div class="flex sm:hidden">
 		{#if name.length > 18}
@@ -32,7 +32,7 @@
 	{#if isLive}
 		<div
 			class="absolute -top-2.5 left-[88px] z-1000 shrink animate-pulse text-xs text-red-600
-            uppercase sm:top-[7px] sm:left-[310px] sm:text-base md:top-[14px] md:left-90 md:text-lg
+            uppercase sm:top-[7px] sm:left-[310px] sm:text-base md:top-[14px] md:left-96 md:text-lg
             lg:top-[17px]"
 		>
 			live

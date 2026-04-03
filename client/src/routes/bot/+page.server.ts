@@ -5,11 +5,8 @@ import { Rh } from "$lib/utils/route";
 const BOT_ENABLED_BROADCASTERS = `${Rh.apiBase}/channel/bot-enabled`;
 
 export const load: PageServerLoad = async ({ fetch }) => {
-	// const broadcasters = await fetchLiveBroadcasters(fetch);
 	const botChannels = await fetchBotEnabledBroadcasters(fetch);
-
 	return {
-		// broadcasters,
 		botChannels,
 	};
 };

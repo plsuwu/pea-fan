@@ -8,6 +8,8 @@
 	import Table from "$lib/components/leaderboard/table.svelte";
 	import Pagination from "$lib/components/leaderboard/filtering/pagination.svelte";
 	import { page } from "$app/state";
+	import { Checkbox } from "$lib/shadcn-components/ui/checkbox";
+	import { Label } from "$lib/shadcn-components/ui/label";
 
 	let { data }: { data: PageData } = $props();
 	let leaderboard = $derived(data.leaderboardData);
@@ -40,7 +42,14 @@
 			itemsPerPage: page_size,
 		};
 	});
+
+	let onlyShowLive = $state(false);
 </script>
+
+<meta
+	name="description"
+	content={`Leaderboard for ${variant}s on the Twitch chat piss counter`}
+/>
 
 <div class="flex w-full flex-col">
 	<div
@@ -69,6 +78,14 @@
 				/>
 			</div>
 		{/if}
-		<Table {entries} {variant} />
+		{#if variant === "Channel"}
+			<div class="mb-4 flex flex-row justify-end space-x-2 px-4">
+				<Label for="only-live" class="-tracking-wider text-muted-foreground/60"
+					>show live channels only</Label
+				>
+				<Checkbox id="only-live" bind:checked={onlyShowLive} />
+			</div>
+		{/if}
+		<Table {entries} {variant} {onlyShowLive} />
 	</div>
 </div>

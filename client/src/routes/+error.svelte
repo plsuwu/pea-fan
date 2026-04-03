@@ -18,7 +18,7 @@
 	<div class="mt-12 mb-2 text-base font-medium text-accent-foreground/55">
 		fuck ohhh fuck fuck fuckl SHIT fuckM
 	</div>
-	<div class="py-4 text-2xl font-bold text-red-400">{errMessage}</div>
+	<div class="py-4 lg:text-2xl font-bold text-red-400 text-base text-center">{errMessage}</div>
 
 	{#if error}
 		<div class="">

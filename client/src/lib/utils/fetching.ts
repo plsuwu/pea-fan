@@ -1,7 +1,4 @@
 import type {
-	ChannelEntry,
-	ChatterEntry,
-	Entry,
 	PaginatedRequest,
 	PaginatedResponse,
 	ScoreWindows,
@@ -15,7 +12,6 @@ import {
 	type UntypedEntry,
 } from ".";
 import { logger } from "$lib/observability/server/logger.svelte";
-import { traced } from "$lib/observability/server/tracing";
 import { Rh } from "$lib/utils/route";
 
 export class FetchUtil {
@@ -25,11 +21,7 @@ export class FetchUtil {
 		pagination: PaginatedRequest
 	): Promise<PaginatedResponse> {
 		let url = new URL(`${Rh.apiBase}/${variant}/leaderboard`);
-
 		logger.info({ pageinfo: { ...pagination } }, "pagination");
-
-		// const scoreLimit;
-		// url.searchParams.append("score_limit", String(scoreLimit));
 
 		const limit = strToNum(pagination.limit) || 15;
 		const page = strToNum(pagination.page) || 0;
@@ -37,18 +29,18 @@ export class FetchUtil {
 		if (limit) url.searchParams.append("limit", String(limit));
 		if (page) url.searchParams.append("page", String(clamp(page - 1, 0)));
 
-		logger.info({ url }, "[API] performing leaderboard fetch");
+		logger.trace({ url }, "[API] performing leaderboard fetch");
 
 		const response = await fetch!(url, { method: "GET" });
 
-		logger.info({ response }, "[API] query response");
+		logger.trace({ response }, "[API] query response");
 
 		if (!response.ok) {
 			logger.error({ response }, "[API] received error response");
 		}
 
 		const body = (await response.json()) as PaginatedResponse;
-		logger.info({ leaderboard: { leaderboard: body, variant } });
+		logger.trace({ leaderboard: { leaderboard: body, variant } });
 
 		if (body.total_pages < Number(pagination.page)) {
 			logger.warn(
@@ -70,23 +62,20 @@ export class FetchUtil {
 		ident: string,
 		pagination: PaginatedRequest
 	): Promise<PaginatedResponse<UntypedEntry>> {
-		const url = new URL(
-			`${Rh.apiBase}/${variant}/by-${identVariant}/${ident}`
-		);
-
-		url.searchParams.set("score_limit", pagination.scoreLimit!);
+		const url = new URL(`${Rh.apiBase}/${variant}/by-${identVariant}/${ident}`);
 
 		const scorePage = strToNum(pagination.scorePage!)!;
+		url.searchParams.set("score_limit", pagination.scoreLimit!);
 		url.searchParams.append("score_page", String(clamp(scorePage - 1, 0)));
 
-		logger.info(
+		logger.trace(
 			{ url: url.href },
 			"[API] built URL for single channel score fetch"
 		);
 
 		const apiResponse = await fetch!(url, { method: "GET" });
 
-		logger.info({ response: apiResponse }, "[API] query response");
+		logger.trace({ response: apiResponse }, "[API] query response");
 		if (!apiResponse.ok) {
 			logger.error({ response: apiResponse }, "[API] received error response");
 		}
@@ -96,7 +85,6 @@ export class FetchUtil {
 		});
 
 		const scoreLimit = strToNum(pagination.scoreLimit!);
-
 		const response: PaginatedResponse<UntypedEntry> = {
 			page: scorePage!,
 			total_items: body.totalScores,
@@ -116,10 +104,11 @@ export class FetchUtil {
 		const url = new URL(`${Rh.apiBase}/${variant}/windowed/${id}`);
 		url.searchParams.set("variant", variant);
 
-		logger.info({ url: url.href }, "querying for windowed scores");
+		logger.trace({ url: url.href }, "querying for windowed scores");
 
 		const apiResponse = await fetch!(url, { method: "GET" });
-		logger.info({ response: apiResponse }, "[API] query response");
+		logger.trace({ response: apiResponse }, "[API] query response");
+
 		if (!apiResponse.ok) {
 			logger.error({ response: apiResponse }, "[API] received error response");
 		}

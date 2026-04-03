@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { ChevronRight, ChevronLeft } from "@lucide/svelte";
 	import PageButton from "./page-button.svelte";
-	import { page } from "$app/state";
 	import { goto } from "$app/navigation";
+	import { navigating } from "$app/state";
+	import { onMount } from "svelte";
 
 	let {
 		pageNumber,
@@ -36,19 +37,26 @@
 
 	let hasPrev = $derived(pageNumber > 1);
 	let hasNext = $derived(pageNumber < totalPages);
+	// let waiting = $state(false);
 
 	function handleKeydown(event: KeyboardEvent) {
-		let newHref = undefined;
-
-		if (event.key === "ArrowRight" && hasNext) {
-			event.preventDefault();
-			newHref = withPage(pageNumber + 1);
-		} else if (event.key === "ArrowLeft" && hasPrev) {
-			event.preventDefault();
-			newHref = withPage(pageNumber - 1);
-		}
-
-		if (newHref != null) goto(newHref, { noScroll: true });
+		// // idk if i even want this anymore!
+		// waiting = true;
+		// if (event.key === "ArrowRight" && hasNext) {
+		// 	event.preventDefault();
+		//
+		// 	let newHref = withPage(pageNumber + 1);
+		// 	waiting = false;
+		// 	goto(newHref, { noScroll: true });
+		// } else if (event.key === "ArrowLeft" && hasPrev) {
+		// 	event.preventDefault();
+		//
+		// 	let newHref = withPage(pageNumber - 1);
+		// 	waiting = false;
+		// 	goto(newHref, { noScroll: true });
+		// } else {
+		// 	waiting = false;
+		// }
 	}
 </script>
 
@@ -67,7 +75,7 @@
 			<div class="text-center text-muted-foreground">
 				<div class="text-sm">page {pageNumber} of {totalPages}</div>
 				<div class="text-xs italic">
-					rank {currentRanks.low} to {currentRanks.high} (of {totalItems} total)
+					{totalItems} total entries
 				</div>
 			</div>
 			<PageButton

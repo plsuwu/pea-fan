@@ -40,8 +40,6 @@ async function fetchLiveBroadcasters(
 	}
 
 	const body = await res.json();
-    console.log("API RESPONSE OK:", body);
-
 	return body;
 }
 
@@ -72,7 +70,7 @@ export const load: LayoutServerLoad = async ({
 
 	const liveBroadcasters = await fetchLiveBroadcasters(fetch, locals.logger);
 
-    locals.logger.info({ liveBroadcasters }, "LIVE BROADCASTERS");
+    locals.logger.trace({ liveBroadcasters }, "LIVE BROADCASTERS");
 
 	if (!locals.channel) {
 		return {

@@ -39,6 +39,15 @@ export async function verifyToken(
 	return token;
 }
 
+export function buildHeadersAuthless(isJSON: boolean) {
+	const headers = new Headers();
+	if (isJSON) {
+		headers.set("content-type", "application/json");
+	}
+
+	return headers;
+}
+
 export function buildHeaders(isJSON: boolean, token: string) {
 	const headers = new Headers();
 	headers.set("authorization", token);

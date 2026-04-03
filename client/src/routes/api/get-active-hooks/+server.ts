@@ -19,7 +19,7 @@ export const GET: RequestHandler = async ({ locals, cookies }) => {
 		headers,
 	});
 
-	locals.logger.debug({ response: res }, "api rx res");
+	locals.logger.debug({ response: res }, "[API]: hooks GET resp");
 	if (res.status !== 200) {
 		locals.logger.error({ response: res }, "failed to get hooks from API");
 		return json({ success: false });
