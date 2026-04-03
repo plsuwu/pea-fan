@@ -493,7 +493,10 @@ pub const HELIX_URN_COLORS: &str = "chat/color";
 pub const HELIX_WEBHOOK_SUBS: &str = "eventsub/subscriptions";
 const NUM_WORKER_THREADS: usize = 25;
 
-pub const CALLBACK_ROUTE: &str = "https://api.rat.moe/callback";
+// TODO pull this from .env instead
+pub const CALLBACK_ROUTE: &str = "https://piss.fan/callback";
+
+// pub const CALLBACK_ROUTE: &str = "https://api.rat.moe/callback";
 // pub const CALLBACK_ROUTE: &str = "http://api.rat.moe/example-callback";
 
 #[derive(Debug)]
