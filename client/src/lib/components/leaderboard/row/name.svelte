@@ -9,7 +9,7 @@
 </script>
 
 <div
-	class="flex w-full flex-col items-start justify-center text-lg font-bold
+	class="flex w-full flex-col items-start justify-center text-lg font-medium
     sm:flex-row sm:items-center sm:text-3xl tracking-tight"
 >
 	<div class="flex sm:hidden">

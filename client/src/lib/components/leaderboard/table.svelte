@@ -30,11 +30,9 @@
 	<div
 		in:fade={{ delay: 0, duration: 200 }}
 		out:fade={{ delay: 0, duration: 200 }}
-		class="absolute z-30 flex h-full w-full items-center justify-center"
+		class="absolute z-30 flex h-full w-full items-center justify-center min-h-screen bg-background/75"
 	>
-		<div class="fixed bg-background/75 z-30">
-			<Spinner class="size-10" />
-		</div>
+		<Spinner class="size-8" />
 	</div>
 {/snippet}
 

@@ -57,10 +57,11 @@
     lg:w-[650px]"
 	>
 		<div
-			class="mx-0 mt-4 flex flex-col items-center justify-center space-x-4 text-[15px] font-semibold
-        -tracking-wider text-foreground uppercase md:text-2xl lg:mx-8 lg:flex-row lg:text-4xl"
+			class="mx-0 mt-4 flex flex-col items-center justify-center space-x-4 text-center
+            text-xl font-bold -tracking-wider text-foreground lowercase md:text-start md:text-2xl
+            lg:mx-8 lg:flex-row lg:text-[40px]"
 		>
-			<div>piss leaderboard - {variant}s</div>
+			<div>piss leaderboard ({variant}s)</div>
 		</div>
 		<div class="w-full border-b border-b-foreground pb-4"></div>
 	</div>
