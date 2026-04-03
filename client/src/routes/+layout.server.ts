@@ -50,16 +50,17 @@ export const load: LayoutServerLoad = async ({
 	url,
 }) => {
 	const modePreference = cookies.get(MODE_COOKIE_NAME) ?? null;
-	const announcementContent = `<div class='text-center>
-    the new piss leaderboard has arrived... 
-    <div class='pt-1'>please <a href='/about#incorrect-scores'
+	const announcementContent = `<div class='text-center'>
+    <div class='pt-1'>new piss leaderboard just dropped - 
+        please <a href='/about#incorrect-scores'
             class='text-blue-500 hover:opacity-50'
         >
             click here
         </a>
         if your count doesnt seem right (or see the 'about' page later).
     </div>
-</div>`;
+            </div>
+`;
 
 	const announcement = {
 		content: announcementContent,
