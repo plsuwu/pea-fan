@@ -55,10 +55,11 @@
 			setModeCookie(current);
 		}
 	});
-
+    
+    const ANNOUNCEMENT_MAX_AGE = 24 * 60 * 60 * 120; // 120 days
 	function handleClearAnnouncement() {
 		announcementCleared = true;
-		document.cookie = `seen-announcement=${announcement?.hash}; domain=${getParentDomain()}; path=/; max-age=forever;`;
+		document.cookie = `seen-announcement=${announcement?.hash}; domain=${getParentDomain()}; path=/; max-age=${ANNOUNCEMENT_MAX_AGE};`;
 	}
 
 	// TODO:

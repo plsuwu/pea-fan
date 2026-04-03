@@ -51,8 +51,8 @@ export const load: LayoutServerLoad = async ({
 }) => {
 	const modePreference = cookies.get(MODE_COOKIE_NAME) ?? null;
 	const announcementContent = `<div class='text-center>
-    <div class='pt-1'>thanks for checking the new version out!!
-        please <a href='/about#incorrect-scores'
+    the new piss leaderboard has arrived... 
+    <div class='pt-1'>please <a href='/about#incorrect-scores'
             class='text-blue-500 hover:opacity-50'
         >
             click here
@@ -70,14 +70,14 @@ export const load: LayoutServerLoad = async ({
 
 	const liveBroadcasters = await fetchLiveBroadcasters(fetch, locals.logger);
 
-    locals.logger.trace({ liveBroadcasters }, "LIVE BROADCASTERS");
+	locals.logger.trace({ liveBroadcasters }, "LIVE BROADCASTERS");
 
 	if (!locals.channel) {
 		return {
 			leaderboard: null,
 			scoreWindows: null,
 			channel: null,
-            liveBroadcasters,
+			liveBroadcasters,
 			modePreference,
 			announcementClearToken,
 			announcement,

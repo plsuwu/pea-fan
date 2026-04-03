@@ -11,9 +11,9 @@ export class Rh {
 		env.PUBLIC_NODE_ENV == null;
 
 	private static readonly _proto = Rh.dev ? env.PUBLIC_USE_PROTO : "https";
-	private static readonly _base = Rh.dev ? "piss.local" : "rat.moe";
+	private static readonly _base = Rh.dev ? "piss.local" : "piss.fan";
 	public static readonly apiBase =
-		env.PUBLIC_API_BASE_URL ?? "https://api.rat.moe";
+		env.PUBLIC_API_BASE_URL ?? "https://api.piss.fan";
 
 	constructor() {
 		console.log(Rh._proto);

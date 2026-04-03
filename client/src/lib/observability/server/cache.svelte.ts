@@ -1,6 +1,6 @@
 import { logger } from "./logger.svelte";
 
-const API_BASE_URL = "https://api.rat.moe";
+const API_BASE_URL = "https://api.piss.fan";
 
 export type RawIrcInfo = {
 	likely_missing: string[];
@@ -24,7 +24,7 @@ export abstract class Cache<T extends string> {
 	}
 
 	public async refresh(method = "GET"): Promise<void> {
-        logger.info("[CACHE] beginning cache update");
+		logger.info("[CACHE] beginning cache update");
 		if (!this.ttlElapsed()) {
 			logger.debug({ cache: this }, "[CACHE] up to date");
 			return;
@@ -112,7 +112,6 @@ class ChannelCache extends Cache<Broadcaster> {
 		return this._data.keys().toArray();
 	}
 }
-
 
 export const channelCache = new ChannelCache(
 	`${API_BASE_URL}/channel/all`,
