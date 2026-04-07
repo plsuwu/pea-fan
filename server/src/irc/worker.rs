@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 
+use std::ops::Add;
 use std::sync::Arc;
 
+use chrono::{Date, DateTime, Days, NaiveDateTime, Utc};
 use irc::proto::Message;
 use irc::proto::message::Tag;
 use sqlx::PgPool;
@@ -20,6 +22,7 @@ use crate::irc::commands::{IncomingMessage, IrcTags, OutgoingCommand};
 use crate::irc::error::{ClientResult, ConnectionClientError};
 use crate::irc::parse::format_username;
 use crate::irc::rate_limit::Bucket;
+use crate::util::channel::update_threshold_elapsed;
 use crate::util::helix::Helix;
 
 const TRAILER_CHAR: char = '\u{180B}';
@@ -265,6 +268,15 @@ pub async fn build_query_response(
     }
 }
 
+async fn update_chatter_data(user_id: &str, chatter_repo: ChatterRepository) -> ClientResult<()> {
+    let mut target_id = vec![user_id.to_owned()];
+    let helix_chatter = Helix::fetch_users_by_id(&mut target_id).await?;
+    let chatter = Chatter::from(helix_chatter[0].clone());
+    chatter_repo.insert(&chatter).await?;
+
+    Ok(())
+}
+
 #[instrument(skip(pool))]
 pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> ClientResult<()> {
     let chatter_repo = ChatterRepository::new(pool);
@@ -274,10 +286,13 @@ pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> Cli
     let exists = chatter.is_some();
 
     if !exists {
-        let mut target_id = vec![tags.user_id.clone()];
-        let helix_chatter = Helix::fetch_users_by_id(&mut target_id).await?;
-        let chatter = Chatter::from(helix_chatter[0].clone());
-        chatter_repo.insert(&chatter).await?;
+        tracing::debug!(?tags.user_id, "updating chatter: not in database");
+        update_chatter_data(&tags.user_id, chatter_repo).await?;
+    } else if let Some(db_data) = chatter
+        && update_threshold_elapsed(&db_data)
+    {
+        tracing::debug!(?tags.user_id, "updating chatter: stale data in database");
+        update_chatter_data(&tags.user_id, chatter_repo).await?;
     }
 
     match score_repo
