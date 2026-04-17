@@ -66,7 +66,7 @@ impl ChannelManager {
 
     #[instrument(skip(self))]
     pub async fn run(mut self) {
-        const MIN_CHECK: Duration = Duration::from_secs(6);
+        const MIN_CHECK: Duration = Duration::from_secs(5);
         const MAX_CHECK: Duration = Duration::from_secs(480);
 
         let mut check_interval = Duration::from_secs(0); // start joining channels immediately

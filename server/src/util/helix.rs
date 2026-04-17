@@ -742,6 +742,25 @@ pub enum HelixErr {
     SerdeError(#[from] serde_json::Error),
 }
 
+impl HelixErr {
+    pub fn status_code(&self) -> StatusCode {
+        match self {
+            Self::InvalidUsername | Self::EmptyDataField => StatusCode::BAD_REQUEST,
+            Self::FetchErrWithBody { .. } => StatusCode::BAD_GATEWAY,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    pub fn client_message(&self) -> String {
+        match self {
+            Self::InvalidUsername => "invalid username".into(),
+            Self::EmptyDataField => "user not found".into(),
+            Self::FetchErrWithBody { body } => format!("upstream error: {body}"),
+            _ => "twitch API error".into(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::util::telemetry;

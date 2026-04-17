@@ -50,6 +50,16 @@ pub fn constant_time_cmp(a: &str, b: &str) -> bool {
     res == 0
 }
 
+/// Returns true if a `&str` meets the criteria for a Twitch user id, otherwise returns false
+#[instrument]
+pub fn is_user_id(str: &str) -> bool {
+    if (str.len() == 9 || str.len() == 10) && str.chars().all(|c| c.is_numeric()) {
+        return true;
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

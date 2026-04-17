@@ -364,7 +364,7 @@ impl LeaderboardRepository {
                 ) as "total_scores!",
                 created_at as "created_at!",
                 updated_at as "updated_at!"
-            FROM chatter_leaderboard
+            FROM ranked_scores_view_chatters
             ORDER BY ranking ASC
             LIMIT $1 OFFSET $2
             "#,

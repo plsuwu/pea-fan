@@ -2,6 +2,7 @@ use sqlx::{Pool, Postgres, Result as SqlxResult};
 use tracing::instrument;
 
 use super::sql_fragment;
+use crate::db::PgError;
 use crate::db::models::channel::{Channel, ChannelId, ChannelReplies};
 use crate::db::prelude::Tx;
 use crate::db::repositories::Repository;
@@ -117,6 +118,40 @@ impl Repository for ChannelRepository {
 }
 
 impl ChannelRepository {
+    #[instrument(skip(self))]
+    pub async fn get_all_channel_ids(&self) -> SqlxResult<Vec<String>> {
+        match sqlx::query_scalar!(
+            r#"
+            SELECT id FROM channel
+            "#,
+        )
+        .fetch_all(self.pool)
+        .await
+        {
+            Ok(channel_ids) => Ok(channel_ids),
+            Err(e) => {
+                tracing::error!(error = ?e, "failed to retrieve channels");
+                Err(e)
+            }
+        }
+    }
+
+    #[instrument(skip(self))]
+    pub async fn new_channel_config(&self, channel: &ChannelId) -> SqlxResult<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO reply (id)
+            SELECT channel.id FROM channel
+            WHERE channel.id = $1
+            "#,
+            &channel.0,
+        )
+        .execute(self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     #[instrument(skip(self))]
     pub async fn update_channel_config(&self, channel: &ChannelId) -> SqlxResult<()> {
         match sqlx::query!(

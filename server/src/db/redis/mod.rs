@@ -52,14 +52,22 @@ pub async fn init_stream_states<R: AsyncCommands + Sync>(
 #[instrument(skip(redis_pool))]
 pub async fn get_all_live<R: AsyncCommands + Sync>(
     redis_pool: &mut R,
-) -> RedisResult<Vec<String>> {
-    let keys: Vec<String> = redis_pool.keys("*:online").await?;
+) -> RedisResult<Option<Vec<String>>> {
+    let keys: Vec<String> = redis_pool.keys("*:online").await.unwrap_or_default();
+
+    // avoid allocating up to like three or four Vecs by optioning and having the caller handle the
+    // empty/None case; though I imagine extra allocations are optimized away by the compiler, this
+    // seems more explicit and reliable.
+    if keys.is_empty() {
+        return Ok(None);
+    }
+
     let result: Vec<String> = keys
         .into_iter()
         .filter_map(|item| item.split(':').nth(0).map(str::to_owned))
         .collect();
 
-    Ok(result)
+    Ok(Some(result))
 }
 
 #[instrument(skip(redis_pool))]

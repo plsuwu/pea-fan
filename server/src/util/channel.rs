@@ -2,11 +2,12 @@ use std::collections::HashMap;
 
 use chrono::{Days, Utc};
 use thiserror::Error;
-use tracing::instrument; //{debug, error, info, instrument, warn};
+use tracing::instrument;
 
 use crate::db::prelude::*;
-use crate::util::helix::{Helix, HelixErr, HelixUser};
+use crate::util::helix::{Helix, HelixErr};
 
+/*
 #[instrument]
 pub async fn fetch_channel_list(from_url: Option<&str>) -> ChannelResult<Vec<(String, ChatterId)>> {
     let channel_list = reqwest::get(from_url.unwrap_or(CHANNELS_LIST_URL))
@@ -39,7 +40,6 @@ pub async fn update_channels(from_url: Option<&str>) -> ChannelResult<HashMap<St
     update_stored_channels(&ids, false).await
 }
 
-#[allow(dead_code)]
 #[instrument]
 pub async fn update_channels_by_name(
     channels: &[String],
@@ -49,16 +49,7 @@ pub async fn update_channels_by_name(
 
     update_stored_channels(&ids, false).await
 }
-
-// #[instrument]
-// pub async fn update_channels_by_id(
-//     channels: &mut [String],
-// ) -> ChannelResult<HashMap<String, Chatter>> {
-//     let helix_users: Vec<HelixUser> = Helix::fetch_users_by_id(channels).await?;
-//
-//     let ids: Vec<ChatterId> = helix_users.into_iter().map(|u| u.id.into()).collect();
-//     update_stored_channels(&ids, false).await
-// }
+*/
 
 #[instrument(skip(chatter), fields(chatter_id = chatter.id.0))]
 pub fn update_threshold_elapsed(chatter: &Chatter) -> bool {
@@ -82,7 +73,10 @@ pub fn update_threshold_elapsed(chatter: &Chatter) -> bool {
 }
 
 #[instrument(skip(ids), fields(chatter_id_count = ids.len()))]
-pub async fn update_stored_channels(ids: &[ChatterId], force: bool) -> ChannelResult<HashMap<String, Chatter>> {
+pub async fn update_stored_channels(
+    ids: &[ChatterId],
+    force: bool,
+) -> ChannelResult<HashMap<String, Chatter>> {
     tracing::debug!("performing stored channel checks");
     let mut requires_update: Vec<String> = Vec::new();
 
@@ -190,23 +184,5 @@ pub enum ChannelError {
     SqlxError(#[from] sqlx::error::Error),
 }
 
-const CHANNELS_LIST_URL: &str =
-    "https://raw.githubusercontent.com/plsuwu/pea-fan/refs/heads/static/channels";
-
-#[cfg(test)]
-mod test {
-    use crate::util::telemetry;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_channel_fetch() {
-        let provider = telemetry::Telemetry::new().await.unwrap().register();
-        let test_chans =
-            Some("https://storage.googleapis.com/scope-shaky-majority/test-channels-20252325.txt");
-
-        assert!(update_channels(test_chans).await.is_ok());
-
-        provider.shutdown();
-    }
-}
+// const CHANNELS_LIST_URL: &str =
+//     "https://raw.githubusercontent.com/plsuwu/pea-fan/refs/heads/static/channels";

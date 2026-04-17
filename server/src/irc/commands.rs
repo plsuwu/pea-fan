@@ -11,6 +11,7 @@ pub struct IrcTags {
     pub color: String,
     pub channel_name: String,
     pub channel_id: String,
+    pub source_channel_id: String,
     pub msg_id: String,
 }
 
@@ -79,6 +80,7 @@ pub enum OutgoingCommand {
 
 pub enum IrcQuery {
     GetJoinedChannels { reply: oneshot::Sender<Vec<String>> },
+    InsertNewChannel { channel: String, reply: oneshot::Sender<String> },
 }
 
 #[derive(Debug)]

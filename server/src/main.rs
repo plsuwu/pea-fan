@@ -81,7 +81,7 @@ async fn main() -> Result<()> {
 
 #[inline]
 fn log_startup_init() {
-    tracing::info!("=========================================");
-    tracing::info!("               STARTING UP               ");
-    tracing::info!("=========================================");
+    tracing::info!("==========================================");
+    tracing::info!("              STARTING UP                 ");
+    tracing::info!("==========================================");
 }

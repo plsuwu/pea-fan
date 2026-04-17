@@ -25,7 +25,19 @@ impl IrcHandle {
 
         Ok(rx.await?)
     }
-    
+
+    pub async fn insert_channel(&self, channel: String) -> ClientResult<String> {
+        let (tx, rx) = oneshot::channel();
+        self.query_tx
+            .send(IrcQuery::InsertNewChannel {
+                channel: channel,
+                reply: tx,
+            })
+            .await?;
+
+        Ok(rx.await?)
+    }
+
     #[allow(dead_code)]
     #[instrument]
     pub async fn force_reconnect(&mut self) {

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub mod dispatch;
 
 use std::sync::Arc;
@@ -233,6 +231,11 @@ pub struct Transport {
     pub method: String,
     pub callback: String,
     pub secret: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct HelixDataGeneric<T> {
+    pub data: Vec<T>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

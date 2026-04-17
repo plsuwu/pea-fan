@@ -105,28 +105,26 @@ pub fn parse_incoming(msg: &irc::proto::Message) -> Option<IncomingMessage> {
             }
         },
 
-        // NOTE first item in `content` vector is always (?) channel_name
-        Command::Raw(command, content) => {
-            match command.to_lowercase().as_str() {
-                "usernotice" => {
-                    let (notice_type, message) = parse_usernotice_tags(msg, content);
-                    tracing::info!(channel = content[0], ?notice_type, ?message, "USERNOTICE:");
+        // NOTE first item in `content` vector is always channel_name (source: made it the fuck up)
+        Command::Raw(command, content) => match command.to_lowercase().as_str() {
+            "usernotice" => {
+                let (notice_type, message) = parse_usernotice_tags(msg, content);
+                tracing::info!(channel = content[0], ?notice_type, ?message, "USERNOTICE:");
 
-                    None
-                }
-
-                _ => {
-                    tracing::debug!(
-                        command = ?msg.command,
-                        tags = ?msg.tags,
-                        prefix = ?msg.prefix,
-                        "unknown_raw_command"
-                    );
-
-                    None
-                }
+                None
             }
-        }
+
+            _ => {
+                tracing::debug!(
+                    command = ?msg.command,
+                    tags = ?msg.tags,
+                    prefix = ?msg.prefix,
+                    "unknown_raw_command"
+                );
+
+                None
+            }
+        },
 
         _ => {
             tracing::info!(
@@ -149,14 +147,21 @@ pub fn parse_tags(msg: &irc::proto::Message, channel: &str) -> IrcTags {
     for tag in msg.tags.clone().unwrap_or_default() {
         match (tag.0.as_str(), tag.1) {
             ("room-id", Some(room_id)) => result.channel_id = room_id,
-            ("source-room-id", Some(room_id)) => result.channel_id = room_id,
-            ("display-name", Some(name)) => result.user_login = name.to_lowercase(),
+            ("source-room-id", Some(source_room_id)) => result.source_channel_id = source_room_id,
+            ("display-name", Some(name)) => {
+                result.user_login = name.to_lowercase();
+                result.display_name = name;
+            }
             ("user-id", Some(user_id)) => result.user_id = user_id,
             ("color", Some(color)) => result.color = color,
             ("id", Some(msg_id)) => result.msg_id = msg_id,
             _ => (),
         }
     }
+
+    // if result.source_channel_id != String::default() {
+    //     result.channel_id = result.source_channel_id.clone();
+    // }
 
     result
 }
@@ -235,9 +240,9 @@ mod test {
         }
     }
 
-    /// Tags from the [Twitch IRC Reference] page
+    /// Tags from the [Twitch IRC Tag Reference] page
     ///
-    /// [Twitch IRC Reference]: https://dev.twitch.tv/docs/chat/irc/
+    /// [Twitch IRC Tag Reference]: https://dev.twitch.tv/docs/chat/irc/#irc-tag-reference
     fn standard_tags() -> Vec<Tag> {
         vec![
             Tag("badges".into(), Some("broadcaster/1".into())),

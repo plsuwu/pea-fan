@@ -190,6 +190,13 @@ impl ConnectionSupervisor {
                                 tracing::error!(data = ?e, "api_query_response_fail");
                             }
                         }
+
+                        IrcQuery::InsertNewChannel { channel, reply } => {
+                            tracing::info!("api_insert_new_channel");
+                            if let Err(e) = reply.send(client.insert_channel(&channel).await?) {
+                                tracing::error!(data = ?e, "failed while inserting and joining new channel");
+                            }
+                        }
                     }
                 }
 
@@ -260,6 +267,16 @@ impl ConnectionClient {
             joined: Vec::new(),
             inner: connection,
         })
+    }
+
+    pub async fn insert_channel(&mut self, channel: &str) -> ClientResult<String> {
+        let channel = format!("#{channel}");
+        self.channels.push(channel.clone());
+
+        tracing::info!(channel, "joining new channel");
+        self.join_channel(&channel).await?;
+
+        Ok(channel)
     }
 
     #[instrument(skip(self))]
