@@ -1,9 +1,5 @@
-#![allow(dead_code)]
-
-use std::ops::Add;
 use std::sync::Arc;
 
-use chrono::{Date, DateTime, Days, NaiveDateTime, Utc};
 use irc::proto::Message;
 use irc::proto::message::Tag;
 use sqlx::PgPool;
@@ -26,49 +22,32 @@ use crate::util::channel::update_threshold_elapsed;
 use crate::util::helix::Helix;
 
 const TRAILER_CHAR: char = '\u{180B}';
+const KEYWORD: &str = "piss";
 pub const COUNTER_USER: &str = "pee_liker";
 
-/// Names of "response-enabled" broadcasters; bot will only respond to command in these
-/// chatrooms to avoid saturating the rate limit and polluting the chat of unsuspecting
-/// streamers.
-///
-/// # Note for the future
-///
-/// The intention here is to ultimately move whitelist state to the database (or perhaps
-/// Redis) so we can dynamically update whitelisted channels via the API
-const CHANNEL_WHITELIST: [&str; 7] = [
-    "plss",
-    "chikogaki",
-    "lcolonq",
-    "madmad01",
-    "aaallycat",
-    "gibbbons",
-    "sleepiebug",
-];
-
 const ID_BLACKLIST: [&str; 1] = [
-    // allowing bots because its kind of funny
-    //
+    // i am allowing the bots because its kind of funny
     // "19264788",   // Nightbot
     // "100135110",  // StreamElements
-    //
-    "1152307157", // us
+    "1152307157",
 ];
 
-const COMMAND: &str = "!pisscount";
-const KEYWORD: &str = "piss";
+// const COMMAND: &str = "!pisscount";
 
 #[derive(Debug, Default)]
 pub struct LastMessage {
     pub channel: String,
     pub message: String,
     pub tagged_chatter: String,
+    #[allow(dead_code)]
     pub has_invisible_char: bool,
 }
 
 #[derive(Debug)]
 pub struct WorkerPool {
+    #[allow(dead_code)]
     workers: Vec<JoinHandle<()>>,
+    #[allow(dead_code)]
     pub last_message: Arc<Mutex<LastMessage>>,
 }
 
@@ -116,7 +95,6 @@ async fn is_whitelisted_channel(
     channel_id: &str,
 ) -> Result<bool, ConnectionClientError> {
     let repo = ChannelRepository::new(pool);
-
     let row = repo.get_reply_config(channel_id).await?;
 
     Ok(row.enabled)
@@ -136,6 +114,22 @@ async fn handle_message(
             let channel = format!("{}.#{}", &tags.channel_id, &tags.channel_name);
             let chatter = format!("{}.{}", &tags.user_id, &tags.user_login);
 
+            if tags.source_channel_id != String::default()
+                && tags.channel_id != tags.source_channel_id.clone()
+                && !cfg!(debug_assertions)
+            {
+                // TODO i still want to increment if the source is not a tracked channel
+                //  but i cant be bothered rn lowkey
+                tracing::debug!(
+                    tags.channel_id,
+                    tags.source_channel_id,
+                    text,
+                    "potential duplicate (source_id != channel_id)"
+                );
+
+                return Ok(());
+            }
+
             tracing::info!(
                 // msg_id = tags.msg_id,
                 channel,
@@ -148,12 +142,12 @@ async fn handle_message(
             if text.starts_with("!pisscount")
                 && is_whitelisted_channel(pool, &tags.channel_id).await?
             {
-                tracing::debug!("`pisscount` command recv");
+                tracing::debug!("handling counter command");
                 let repo = ChatterRepository::new(pool);
                 let mut reply = build_query_response(&repo, &text, &tags).await?;
 
-                // we use a mutex here as we want to do a single read and a single write in order
-                // to atomically compare every response to its predecessor
+                // we use a mutex here as we do one read/one write; we're atomically comparing every
+                // outgoing response to its predecessor, appending to the message if they are the same.
                 let mut guard = last_message.lock().await;
                 tracing::trace!(
                     prev_msg_content = ?guard.message,
@@ -168,7 +162,8 @@ async fn handle_message(
                     && &guard.message == &reply
                     && &guard.tagged_chatter == &tags.user_login
                 {
-                    // circumvent duplicate message filter if content matches
+                    // circumvent "duplicate message" filter if current content matches previous
+                    // message content
                     reply.push(TRAILER_CHAR);
                 }
 
@@ -190,8 +185,11 @@ async fn handle_message(
 
                 tracing::debug!(message = ?response, "final `irc::proto::Message` for output");
 
-                // ensure we adhere to rate limits - build response, then wait until a permit is
-                // available before pushing out to connection
+                // ensure we adhere to rate limits to avoid being silently killed - note that we
+                // build the message first and then await the permit.
+                //
+                // we perhaps want to log any errors (which would indicate a dropped message), but
+                // this is a future pls problem for now...
                 rate_limiter.acquire_one().await?;
                 tracing::debug!(reply_for = tags.msg_id, "reply permit acquired");
                 cmd_tx
@@ -202,15 +200,16 @@ async fn handle_message(
             } else if text.to_lowercase().contains(KEYWORD)
                 && !ID_BLACKLIST.contains(&tags.user_id.as_str())
             {
-                // TODO !!
-                //
-                // let mut conn = redis_pool().await?.clone();
-                // let is_online =
-                //     get_stream_state(&mut conn, &ChannelId(tags.channel_id.clone())).await;
+                // ensure we are only incrementing if channel is currently live
+                let mut conn = redis_pool().await?.clone();
+                let online = get_stream_state(&mut conn, &ChannelId(tags.channel_id.clone())).await;
 
-                // only increment if streaming
-                tracing::info!(tags.user_login, tags.channel_name, "incrementing score");
-                increment_score(pool, &tags).await?;
+                tracing::trace!(online, "stream state for increment");
+
+                if online {
+                    tracing::info!(tags.user_login, tags.channel_name, "incrementing score");
+                    increment_score(pool, &tags).await?;
+                }
             }
 
             Ok(())
@@ -249,31 +248,41 @@ pub async fn build_query_response(
     };
 
     let requested_user = format_username(parts);
-    match target {
-        Ok(ch) => Ok(format!(
-            "{0} of {requested_user} messages mentioned {KEYWORD}",
-            ch.total
-        )),
+    let count = match target {
+        Ok(ch) => {
+            if ch.total == 0 {
+                "none"
+            } else {
+                &ch.total.to_string()
+            }
+        }
         Err(ConnectionClientError::SqlxError(err)) => {
             tracing::warn!(error = ?err, "IRC-based query failed due to non-existant user");
-            Ok(format!(
-                "0 of {requested_user} messages mentioned {KEYWORD}"
-            ))
+
+            "none"
         }
         Err(err) => {
+            // we "handle" this by logging the error and returning an empty string; Twitch
+            // filters this empty message so we don't actually send anything.
             tracing::error!(error = ?err, "IRC-based query failed in an unexpected way");
-            // twitch should filter the empty message here
-            Ok(String::default())
+
+            return Ok(String::default());
         }
-    }
+    };
+
+    Ok(format!(
+        "{count} of {requested_user} messages have mentioned {KEYWORD}",
+    ))
 }
 
+#[instrument(skip(user_id, chatter_repo))]
 async fn update_chatter_data(user_id: &str, chatter_repo: ChatterRepository) -> ClientResult<()> {
     let mut target_id = vec![user_id.to_owned()];
+
     let helix_chatter = Helix::fetch_users_by_id(&mut target_id).await?;
     let chatter = Chatter::from(helix_chatter[0].clone());
-    chatter_repo.insert(&chatter).await?;
 
+    chatter_repo.insert(&chatter).await?;
     Ok(())
 }
 
@@ -323,57 +332,3 @@ pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> Cli
         }
     }
 }
-
-// #[instrument(skip(pool))]
-// pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> ClientResult<()> {
-//     let chatter_repo = ChatterRepository::new(pool);
-//
-//     let chatter = chatter_repo.get_by_id(&tags.user_id.clone().into()).await?;
-//     let exists = chatter.is_some();
-//     if !exists {
-//         let mut target_id = vec![tags.user_id.clone()];
-//         let helix_chatter = Helix::fetch_users_by_id(&mut target_id).await?;
-//
-//         let chatter = Chatter::from(helix_chatter[0].clone());
-//         chatter_repo.insert(&chatter).await?;
-//     }
-//
-//     // custom transaction handler to auto-commit on an Ok result
-//     match Tx::with_tx(pool, |mut tx| async move {
-//         let chatter_id = tags.user_id.clone().into();
-//         let channel_id = tags.channel_id.clone().into();
-//
-//         let result = async {
-//             tx.increment_score_by(&chatter_id, &channel_id, 1).await?;
-//             tx.recalculate_channel_total(&channel_id).await?;
-//             tx.recalculate_chatter_total(&chatter_id).await?;
-//
-//             Ok(())
-//         }
-//         .await;
-//
-//         (tx, result)
-//     })
-//     .await
-//     {
-//         Err(e) => {
-//             tracing::error!(
-//                 error = ?e,
-//                 channel = tags.channel_id,
-//                 chatter = tags.user_id,
-//                 "score increment via transaction failure"
-//             );
-//
-//             return Err(ConnectionClientError::SqlxError(e));
-//         }
-//         _ => tracing::trace!(
-//             channel = tags.channel_id,
-//             chatter = tags.user_id,
-//             channel_name = tags.channel_name,
-//             login = tags.user_login,
-//             "increment ok"
-//         ),
-//     };
-//
-//     Ok(())
-// }

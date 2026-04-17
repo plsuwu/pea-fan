@@ -3,15 +3,9 @@ import { json, type RequestEvent, type RequestHandler } from "@sveltejs/kit";
 import { type TelemetryPayload } from "$lib/observability";
 import { logger } from "$lib/observability/server/logger.svelte";
 
-// import type { DecoratedSpanAttributes } from "$lib/observability/server/tracing";
-
 function isValidLogPayload(payload: TelemetryPayload): boolean {
 	return payload.logs != null && Array.isArray(payload.logs);
 }
-
-// const buildAttributes = (attrs: DecoratedSpanAttributes) => {
-//
-// }
 
 export const POST: RequestHandler = async (event: RequestEvent) => {
 	return tracer.withAsyncSpan("process-client-logs", async (span) => {
