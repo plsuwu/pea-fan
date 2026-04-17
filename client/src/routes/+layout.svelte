@@ -1,7 +1,7 @@
 <script lang="ts">
 	import "./layout.css";
 	import "$lib/assets/iosevka.css";
-	import favicon from "$lib/assets/favicon.svg";
+	// import favicon from "$lib/assets/favicon.svg";
 
 	import type { LayoutData } from "./$types";
 	import { onMount } from "svelte";
@@ -29,13 +29,8 @@
 	let { data, children } = $props();
 	let { host } = page.url;
 
-	let {
-		channel,
-		scoreWindows,
-		channelData,
-		announcement,
-		announcementClearToken,
-	}: LayoutData = $derived(data);
+	let { channel, scoreWindows, channelData, announcement }: LayoutData =
+		$derived(data);
 
 	let announcementCleared = $state(false);
 	onMount(() => {
@@ -44,7 +39,7 @@
 			setMode(saved);
 		}
 
-		if (announcementClearToken) {
+		if (announcement.content == null || announcement.seen) {
 			announcementCleared = true;
 		}
 	});
@@ -55,8 +50,8 @@
 			setModeCookie(current);
 		}
 	});
-    
-    const ANNOUNCEMENT_MAX_AGE = 24 * 60 * 60 * 120; // 120 days
+
+	const ANNOUNCEMENT_MAX_AGE = 24 * 60 * 60 * 120; // 120 days
 	function handleClearAnnouncement() {
 		announcementCleared = true;
 		document.cookie = `seen-announcement=${announcement?.hash}; domain=${getParentDomain()}; path=/; max-age=${ANNOUNCEMENT_MAX_AGE};`;
@@ -126,12 +121,12 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<!-- <link rel="icon" href={favicon} /> -->
 	<title>{pageTitle}</title>
 </svelte:head>
 
 <svelte:window onkeydown={handleShortcut} />
-<ModeWatcher />
+<ModeWatcher disableTransitions={false} />
 
 <div class="flex h-[110vh] w-full flex-col font-iosevka">
 	<header
@@ -141,7 +136,7 @@
 	</header>
 
 	<div class="border-t-2"></div>
-	{#if announcement && !announcementCleared && !announcementClearToken}
+	{#if announcement.content && !announcementCleared}
 		<div
 			transition:slide={{ duration: 250, axis: "y", easing: expoInOut }}
 			class="flex max-h-[105px] w-full flex-row items-center justify-between bg-amber-200
@@ -199,7 +194,7 @@
 		</Tt.Provider>
 	</main>
 
-	<footer class="mb-4 border-t-2">
+	<footer class="z-10 border-t-2 bg-background pb-4">
 		<div
 			class="mx-8 flex h-[150px] max-h-[150px] min-h-[150px] flex-row items-center"
 		>

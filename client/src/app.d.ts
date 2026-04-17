@@ -29,12 +29,17 @@ declare global {
 				xforwardedList: string[];
 			};
 
-            rateLimited: bool;
+			rateLimited: bool;
 
 			// telemetry
 			traceId?: string;
 			spanId?: string;
 			logger: Logger;
+		}
+
+		interface ApiJsonShape {
+			status: string | number;
+			data: undefined | null | any | any[];
 		}
 		// interface PageData {}
 		// interface PageState {}

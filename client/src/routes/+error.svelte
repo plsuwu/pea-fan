@@ -14,7 +14,7 @@
 	});
 </script>
 
-<div class="mt-12 flex flex-col items-center">
+<div class="mt-12 flex flex-col items-center w-full">
 	<div class="mt-12 mb-2 text-base font-medium text-accent-foreground/55">
 		fuck ohhh fuck fuck fuckl SHIT fuckM
 	</div>

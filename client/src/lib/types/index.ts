@@ -8,6 +8,18 @@ export type HelixUser = {
 	private: boolean;
 };
 
+export type Chatter = {
+	id: string;
+	name: string;
+	login: string;
+	color: string;
+	image: string;
+	total: number;
+	private: boolean;
+	created_at: string;
+	updated_at: string;
+};
+
 export type ChannelEntry = {
 	id: string;
 	name: string;

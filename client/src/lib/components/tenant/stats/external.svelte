@@ -22,6 +22,7 @@
 			color: "currentColor",
 			size: DEFAULT_ICON_SIZE - 2,
 		},
+		instagram: { icon: "fa7-brands:instagram", color: "currentColor" },
 		github: { icon: "fa7-brands:github", color: "currentColor" },
 	} as const;
 

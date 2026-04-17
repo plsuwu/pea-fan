@@ -1,5 +1,5 @@
 import { fail, redirect, type Actions } from "@sveltejs/kit";
-import { logger } from "$lib/observability/server/logger.svelte";
+// import { logger } from "$lib/observability/server/logger.svelte";
 import { invalidateCookie, setCookie } from "$lib/server";
 import type { PageServerLoad } from "../$types";
 import { env } from "$env/dynamic/private";
@@ -7,6 +7,7 @@ import {
 	adminRateLimiter,
 	shouldRateLimit,
 } from "$lib/server/rate-limit.svelte";
+import { buildHeadersAuthless } from "$lib/server/verify";
 
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
@@ -29,52 +30,41 @@ export const load: PageServerLoad = async ({ cookies, locals, url }) => {
 
 export const actions = {
 	default: async ({ cookies, request, fetch, locals }) => {
-		const childLogger = logger.child({
-			client: locals.client,
-			isRateLimited: locals.rateLimited,
-			request,
-		});
+		const logger = locals.logger;
 
-		if (
-			locals.rateLimited ||
-			shouldRateLimit(locals.client.cfconnecting) ||
-			!adminRateLimiter.consume(locals.client.cfconnecting)
-		) {
-			childLogger.warn("[ADMIN_LOGIN] FAIL_RATE_LIMITED");
-			fail(429, { reason: "rate_limit" });
-		}
+		// if (
+		// 	locals.rateLimited ||
+		// 	shouldRateLimit(locals.client.cfconnecting) ||
+		// 	!adminRateLimiter.consume(locals.client.cfconnecting)
+		// ) {
+		// 	logger.warn("disallowing rate limited client");
+		// 	fail(429, { reason: "rate limit exceeded" });
+		// }
 
 		const data = await request.formData();
 		const token = data.get("token");
 
-		if (!token) {
-			childLogger.error("[ADMIN_LOGIN] FAIL_MISSING_TOKEN");
-			fail(400, { reason: "invalid" });
+		if (token == null) {
+			logger.error("token missing from request");
+			fail(400, { reason: "invalid token" });
 		}
 
-		const res = await fetch("/api/verify-totp", {
+		const res = await fetch("/api/login", {
 			method: "POST",
-			headers: { "content-type": "application/json" },
+			headers: buildHeadersAuthless(true),
 			body: JSON.stringify({ token }),
 		});
 
-		const body = await res.json();
-
-		if (!body.valid) {
-			childLogger.error(
-				{ valid: body.valid, session: body.session },
-				"[ADMIN_LOGIN] FAIL_INVALID_TOKEN"
-			);
+		if (!res.ok) {
+			logger.error({ response: res }, "login failure");
 			invalidateCookie(cookies);
-			fail(400, { reason: "invalid" });
+			fail(400, { reason: "invalid token" });
 		}
 
-		childLogger.info(
-			{ valid: body.valid, session: body.session },
-			"[ADMIN_LOGIN] PASS_TOKEN_OK"
-		);
+		const body: App.ApiJsonShape = await res.json();
 
-		setCookie(cookies, body.session);
-		return { ...body };
+		logger.info({ body: body.data }, "new session created");
+		setCookie(cookies, body.data.session);
+		return { ...body.data };
 	},
 } satisfies Actions;

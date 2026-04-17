@@ -84,6 +84,7 @@
 </script>
 
 <div
+    id={entry.ranking.toString()}
 	class={cn(
 		`relative flex items-center justify-between space-x-4 overflow-x-hidden
         rounded-[1px] border-2 border-foreground bg-background py-4 pl-4 transition-all

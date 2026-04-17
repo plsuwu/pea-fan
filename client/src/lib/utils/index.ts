@@ -120,7 +120,7 @@ export function strToNum(str: string): number | undefined {
 		return undefined;
 	}
 
-	return Number(str);
+	return Math.abs(Number(str));
 }
 
 export function clamp(num: number, min = 0, max = num): number {

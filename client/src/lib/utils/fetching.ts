@@ -20,7 +20,7 @@ export class FetchUtil {
 		variant: "channel" | "chatter",
 		pagination: PaginatedRequest
 	): Promise<PaginatedResponse> {
-		let url = new URL(`${Rh.apiBase}/${variant}/leaderboard`);
+		let url = new URL(`${Rh.apiv1}/${variant}/leaderboard`);
 		logger.info({ pageinfo: { ...pagination } }, "pagination");
 
 		const limit = strToNum(pagination.limit) || 15;
@@ -39,13 +39,15 @@ export class FetchUtil {
 			logger.error({ response }, "[API] received error response");
 		}
 
-		const body = (await response.json()) as PaginatedResponse;
-		logger.trace({ leaderboard: { leaderboard: body, variant } });
+		const body = await response.json();
+		const leaderboard = body.data as PaginatedResponse;
 
-		if (body.total_pages < Number(pagination.page)) {
+		logger.trace({ leaderboard: { leaderboard, variant } });
+
+		if (leaderboard.total_pages < Number(pagination.page)) {
 			logger.warn(
 				{ requestPage: pagination.page, totalPages: body.total_pages },
-				"[API] requested non-existent page, using fallback of 'totalPages - 1'"
+				"requested non-existent page, using fallback of 'totalPages - 1'"
 			);
 
 			pagination.page = String(body.total_pages);
@@ -62,7 +64,7 @@ export class FetchUtil {
 		ident: string,
 		pagination: PaginatedRequest
 	): Promise<PaginatedResponse<UntypedEntry>> {
-		const url = new URL(`${Rh.apiBase}/${variant}/by-${identVariant}/${ident}`);
+		const url = new URL(`${Rh.apiv1}/${variant}/by-${identVariant}/${ident}`);
 
 		const scorePage = strToNum(pagination.scorePage!)!;
 		url.searchParams.set("score_limit", pagination.scoreLimit!);
@@ -101,7 +103,7 @@ export class FetchUtil {
 		variant: "channel" | "chatter",
 		id: string
 	): Promise<ScoreWindows> {
-		const url = new URL(`${Rh.apiBase}/${variant}/windowed/${id}`);
+		const url = new URL(`${Rh.apiv1}/${variant}/windowed/${id}`);
 		url.searchParams.set("variant", variant);
 
 		logger.trace({ url: url.href }, "querying for windowed scores");

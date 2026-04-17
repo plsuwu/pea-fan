@@ -18,12 +18,12 @@
 		rel="noopener noreferrer"
 		target="_blank"
 	>
-		<div class="text-lg">{name}</div>
-		<WebComponentIcon {icon} color="currentColor" size={28} />
+		<div class="text-base">{name}</div>
+		<WebComponentIcon {icon} color="currentColor" size={22} />
 	</a>
 {/snippet}
 
-<div class="flex w-full flex-col items-end space-y-1 self-center">
+<div class="flex w-full flex-col items-end space-y-1 self-center bg-background z-20">
 	{@render LinkOpt({
 		name: "twitch",
 		icon: "fa7-brands:twitch",
@@ -33,6 +33,11 @@
 		name: "github",
 		icon: "fa7-brands:github",
 		href: "https://github.com/plsuwu/pea-fan",
+	})}
+	{@render LinkOpt({
+		name: "twitter",
+		icon: "fa7-brands:x-twitter",
+		href: "https://x.com/owoplsuwu",
 	})}
 	<div class="text-muted-foreground/85 text-sm pt-3">not good at graphic design</div>
 </div>

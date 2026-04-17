@@ -1,22 +1,18 @@
 import type { LayoutServerLoad } from "./$types";
 import { logger as serverLogger } from "$lib/observability/server/logger.svelte";
-import { fetchUtil } from "$lib/utils/fetching";
 import { MODE_COOKIE_NAME } from "$lib/utils/mode-cookie.svelte";
 import { sha256 } from "@oslojs/crypto/sha2";
 import { encodeHexLowerCase } from "@oslojs/encoding";
-import type {
-	PaginatedRequest,
-	PaginatedResponse,
-	PaginationData,
-} from "$lib/types";
+import type { Chatter } from "$lib/types";
 import { Rh } from "$lib/utils/route";
 import {
+	clamp,
 	intoParentEntry,
-	type UntypedEntry,
+	intoUntypedEntry,
+	strToNum,
 	type UntypedSubEntry,
 } from "$lib/utils";
-
-const LIVE_BROADCASTERS = `${Rh.apiBase}/channel/live`;
+import { announcementCache } from "$lib/observability/server/cache.svelte";
 
 function makeSha256Hash(str: string): string {
 	const bytes = new TextEncoder().encode(str);
@@ -27,20 +23,60 @@ async function fetchLiveBroadcasters(
 	fetch: typeof globalThis.fetch,
 	logger: typeof serverLogger
 ) {
-	const res = await fetch(LIVE_BROADCASTERS, {
-		method: "GET",
+	const uri = `${Rh.apiv1}/channel/live`;
+	const childLogger = logger.child({
+		url: uri,
 	});
 
-	if (res.status != 200) {
-		logger.error(
-			{ response: res, url: LIVE_BROADCASTERS },
-			"[API]: FAIL_STATUS_RECV"
-		);
+	try {
+		const res = await fetch(uri, { method: "GET" });
+		if (!res.ok) {
+			childLogger.error("failed to retrieve live broadcaster list");
+			return null;
+		}
+
+		const body = await res.json();
+		return body.data;
+	} catch (err) {
+		childLogger.error({ error: err }, "failed during live broadcaster fetch");
 		return null;
 	}
+}
 
-	const body = await res.json();
-	return body;
+export type Announcement = {
+	content: string | null;
+	hash: string | null;
+};
+
+async function fetchAnnouncement(
+	_logger: typeof serverLogger,
+	seenAnnounce: string | null
+): Promise<Announcement & { seen: boolean }> {
+	const announcement = {
+		...(await announcementCache.getAnnouncement()),
+		seen: false,
+	};
+
+	if (announcement.hash && announcement.hash === seenAnnounce) {
+		announcement.seen = true;
+	}
+
+	return announcement;
+}
+
+function defaultLayoutData(
+	liveBroadcasters: Chatter[],
+	modePreference: string | null,
+	announcement: Announcement
+) {
+	return {
+		leaderboard: null,
+		scoreWindows: null,
+		channel: null,
+		liveBroadcasters,
+		modePreference,
+		announcement,
+	};
 }
 
 export const load: LayoutServerLoad = async ({
@@ -50,98 +86,188 @@ export const load: LayoutServerLoad = async ({
 	url,
 }) => {
 	const modePreference = cookies.get(MODE_COOKIE_NAME) ?? null;
-	const announcementContent = `<div class='text-center'>
-    <div class='pt-1'>new piss leaderboard just dropped - 
-        please <a href='/about#incorrect-scores'
-            class='text-blue-500 hover:opacity-50'
-        >
-            click here
-        </a>
-        if your count doesnt seem right (or see the 'about' page later).
-    </div>
-            </div>
-`;
-
-	const announcement = {
-		content: announcementContent,
-		hash: makeSha256Hash(announcementContent),
-	};
-	const seenAnnouncement = cookies.get("seen-announcement") || null;
-	const announcementClearToken = seenAnnouncement === announcement.hash;
+	const announcement: Announcement = await fetchAnnouncement(
+		locals.logger,
+		cookies.get("seen-announcement") || null
+	);
 
 	const liveBroadcasters = await fetchLiveBroadcasters(fetch, locals.logger);
-
-	locals.logger.trace({ liveBroadcasters }, "LIVE BROADCASTERS");
+	const baseLayoutData = defaultLayoutData(
+		liveBroadcasters,
+		modePreference,
+		announcement
+	);
 
 	if (!locals.channel) {
+		return baseLayoutData;
+	}
+
+	const { channelData, paginationData } = await getChannelLeaderboard(
+		fetch,
+		url,
+		locals
+	);
+
+	if (channelData == null || paginationData == null || channelData.id == null) {
+		return { ...baseLayoutData, channel: locals.channel };
+	}
+
+	const scoreWindows = await getPeriodicChannelData(
+		fetch,
+		locals,
+		channelData.id
+	);
+
+	if (scoreWindows == null) {
 		return {
-			leaderboard: null,
-			scoreWindows: null,
-			channel: null,
-			liveBroadcasters,
-			modePreference,
-			announcementClearToken,
-			announcement,
+			...baseLayoutData,
+			channel: locals.channel,
+			channelData,
+			paginationData,
 		};
 	}
 
-	const pagination = buildSingleChannelParams({ url });
-	const rawChannelData = await fetchUtil.fetchSingle(
-		{ fetch },
-		"channel",
-		"login",
-		locals.channel,
-		pagination
-	);
-
-	const scoreWindows = await fetchUtil.fetchWindowed(
-		{ fetch },
-		"channel",
-		rawChannelData.items[0].id
-	);
-
 	return {
-		channelData: parseChannelData(rawChannelData),
-		paginationData: parsePaginationData(rawChannelData),
-		liveBroadcasters,
+		...baseLayoutData,
 		channel: locals.channel,
-		modePreference,
+		channelData,
+		paginationData,
 		scoreWindows,
 	};
 };
 
-function parsePaginationData(data: PaginatedResponse<any>): PaginationData {
-	const { page, total_items, total_pages, page_size } = data;
-	return {
-		currentPage: page,
-		totalItems: total_items,
-		itemsPerPage: page_size,
-		totalPages: total_pages,
+async function getPeriodicChannelData(
+	fetch: typeof globalThis.fetch,
+	locals: App.Locals,
+	id: string
+) {
+	const fetchUrl = new URL(`${Rh.apiv1}/channel/windowed/${id}`);
+	fetchUrl.searchParams.set("variant", "channel");
+
+	const logger = locals.logger.child({
+		url: fetchUrl,
+	});
+
+	try {
+		const res = await fetch(fetchUrl, {
+			method: "GET",
+		});
+
+		if (!res.ok) {
+			const body = await res.json();
+			logger.error(
+				{ status: res.status, error: body.error },
+				"failed to fetch periodic data"
+			);
+
+			return null;
+		}
+
+		const body = await res.json();
+		return body.data;
+	} catch (err) {
+		logger.error(
+			{ error: err },
+			"internal error during single channel leaderboard fetch"
+		);
+
+		return null;
+	}
+}
+
+async function getChannelLeaderboard(
+	fetch: typeof globalThis.fetch,
+	url: URL,
+	locals: App.Locals
+) {
+	const { scoreLimit, scorePage } = buildSingleChannelParams(url);
+	const pagination = {
+		scoreLimit: String(scoreLimit),
+		scorePage: String(clamp(scorePage - 1, 0)),
 	};
+	const fetchUrl = new URL(`${Rh.apiv1}/channel/by-login/${locals.channel}`);
+
+	// fetchUrl.searchParams.set("page", "0");
+	// fetchUrl.searchParams.append("limit", "0");
+
+	fetchUrl.searchParams.set("score_limit", pagination.scoreLimit!);
+	fetchUrl.searchParams.set("score_page", pagination.scorePage!);
+
+	const logger = locals.logger.child({
+		url: fetchUrl,
+	});
+
+	try {
+		logger.info("fetching chatter leaderboard for channel");
+		const res = await fetch(fetchUrl, {
+			method: "GET",
+		});
+
+		if (!res.ok) {
+			const body = await res.json();
+			logger.error(
+				{ status: res.status, error: body.error },
+				"failed to fetch single channel leaderboard"
+			);
+
+			// return null on non-ok response
+			return {
+				channelData: null,
+				paginationData: null,
+			};
+		}
+
+		const body = await res.json();
+		const entryBody = intoUntypedEntry({
+			_tag: "Channel",
+			data: body.data,
+		});
+
+		const scores = entryBody.scores.map((entry: UntypedSubEntry) =>
+			intoParentEntry(entry)
+		);
+
+		const channelData = { ...entryBody, scores };
+		const paginationData = {
+			currentPage: scorePage,
+			totalItems: entryBody.totalScores,
+			totalPages: Math.ceil(entryBody.totalScores / scoreLimit),
+			itemsPerPage: scores.length,
+		};
+
+		logger.info("retrieved single score data");
+
+		// return channel data on success
+		return {
+			channelData,
+			paginationData,
+		};
+	} catch (err) {
+		logger.error(
+			{ error: err },
+			"internal error during single channel leaderboard fetch"
+		);
+
+		// return null on error throw
+		return {
+			channelData: null,
+			paginationData: null,
+		};
+	}
 }
 
-function parseChannelData(
-	data: PaginatedResponse<UntypedEntry>
-): UntypedEntry<UntypedEntry> {
-	const [channelItems] = data.items;
-	const scores = channelItems.scores.map((entry: UntypedSubEntry) =>
-		intoParentEntry(entry)
-	);
-
-	return { ...channelItems, scores };
-}
-
-function buildSingleChannelParams({ url }: { url: URL }) {
+function buildSingleChannelParams(url: URL) {
 	let { score_limit, score_page } = Object.fromEntries(url.searchParams);
 
-	if (!score_limit) score_limit = "25";
+	if (!score_limit) score_limit = "10";
 	if (!score_page) score_page = "1";
 
-	const pagination: PaginatedRequest = {
-		scoreLimit: score_limit,
-		scorePage: score_page,
-		limit: "0",
-		page: "0",
+	const sanitizedLimit = strToNum(score_limit) || 10;
+	const sanitizedPage = strToNum(score_page) || 1;
+
+	const pagination = {
+		scoreLimit: sanitizedLimit,
+		scorePage: sanitizedPage,
 	};
 
 	return pagination;

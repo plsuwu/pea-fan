@@ -7,7 +7,7 @@
 
 	let { data }: PageProps = $props();
 
-	let { botChannels } = $derived(data);
+	let { botStatus } = $derived(data);
 </script>
 
 <div class="flex w-full flex-row justify-center">
@@ -38,7 +38,7 @@
 				class="mt-10 flex min-w-[250px] list-inside flex-col items-start
             justify-center px-4 align-middle text-lg lg:px-4 xl:px-26 xl:text-2xl"
 			>
-				{#each botChannels as channel}
+				{#each botStatus as channel}
 					<a
 						href={`https://twitch.tv/${channel.login}`}
 						target="_blank"
@@ -92,14 +92,19 @@
 					Responses are queued and sent in one-and-a-half-second intervals, with
 					the queue holding a maximum of 16 messages before it begins dropping
 					queries. The queue is shared across
-					<span class="font-bold italic">all</span> channels above as per
+					<span class="font-bold italic">all</span> channels, as per
 					<a
 						href="https://dev.twitch.tv/docs/chat#twitch-chat-rate-limits"
 						target="_blank"
 						rel="noopener noreferrer"
 						class="text-blue-600/75 transition-opacity duration-200 ease-in-out hover:opacity-50"
-						>Twitch IRC rate limits</a
+						>Twitch's IRC rate limits</a
 					>.
+				</div>
+				<div class="mt-6 text-sm text-muted-foreground/85 lg:text-base">
+					Also, he is not enabled everywhere because I fear this he is mostly just
+					bullshit that creates unwanted noise more than anything (in addition
+					to the chat rate limit stuff mentioned above).
 				</div>
 			</div>
 		</div>

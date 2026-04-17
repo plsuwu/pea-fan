@@ -4,6 +4,9 @@ import type { RequestEvent } from "@sveltejs/kit";
 import { isIpAddr } from ".";
 import { logger } from "$lib/observability/server/logger.svelte";
 
+// Should be 'static' enough that we can load this before `Rh` is constructed, right??
+export const API_BASE_HOST = env.PUBLIC_API_BASE_URL ?? "https://api.piss.fan";
+
 export class Rh {
 	private static readonly dev =
 		env.PUBLIC_NODE_ENV === "development" ||
@@ -12,8 +15,15 @@ export class Rh {
 
 	private static readonly _proto = Rh.dev ? env.PUBLIC_USE_PROTO : "https";
 	private static readonly _base = Rh.dev ? "piss.local" : "piss.fan";
-	public static readonly apiBase =
-		env.PUBLIC_API_BASE_URL ?? "https://api.piss.fan";
+
+	public static readonly apiv1 = `${API_BASE_HOST}/api/v1`;
+
+	public static readonly apiPubChannel = `${Rh.apiv1}/channel`;
+	public static readonly apiPubChatter = `${Rh.apiv1}/chatter`;
+	public static readonly apiAdmin = `${Rh.apiv1}/_admin`;
+
+	public static readonly apiHealth = `${Rh.apiv1}/checkhealth`;
+	public static readonly apiSearch = `${Rh.apiv1}/search`;
 
 	constructor() {
 		console.log(Rh._proto);
@@ -45,14 +55,6 @@ export class Rh {
 	static get proto(): string {
 		return this._proto;
 	}
-
-	// static get api(): string {
-	// 	return this._api;
-	// }
-	//
-	// static get apiProto(): string {
-	// 	return this._apiProto;
-	// }
 
 	static get base(): string {
 		return this._base;

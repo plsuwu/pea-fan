@@ -32,6 +32,9 @@
 	function withPage(page: number): string {
 		const url = new URL(currentUrl);
 		url.searchParams.set(pageParam, String(page));
+		if (url.hash) {
+			return url.href.split("#")[0];
+		}
 		return url.href;
 	}
 

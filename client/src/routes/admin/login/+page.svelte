@@ -11,17 +11,12 @@
 
 	let failed: string | undefined = $state();
 	let waiting = $state(false);
-	let successful = $derived(form && form.valid === true);
+	let successful = $derived(form && form.is_valid === true);
 
 	$effect(() => {
 		if (successful && !waiting) {
-			waiting = true;
-			failed = undefined;
-
-			setTimeout(() => {
-				waiting = false;
-				goto("/admin");
-			}, 1500);
+            waiting = false;
+			goto("/admin");
 		}
 
 		if (successful === false && !waiting) {

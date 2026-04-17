@@ -31,7 +31,7 @@ export function debounce<
 }
 
 export class SearchHandler {
-	readonly apiUrl = new URL(`${Rh.apiBase}/search/by-login`);
+	readonly apiUrl = new URL(`${Rh.apiv1}/search/by-login`);
 
 	loading = $state(false);
 	results = $state<SearchResult[]>([]);

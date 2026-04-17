@@ -1,29 +1,44 @@
-import { logger } from "$lib/observability/server/logger.svelte";
 import type { PageServerLoad } from "./$types";
 import { Rh } from "$lib/utils/route";
+import type { Logger } from "pino";
 
-const BOT_ENABLED_BROADCASTERS = `${Rh.apiBase}/channel/bot-enabled`;
+export const load: PageServerLoad = async ({ fetch, locals }) => {
+	const logger = locals.logger;
+	const botStatus = await fetchBotEnabledBroadcasters(fetch, logger);
 
-export const load: PageServerLoad = async ({ fetch }) => {
-	const botChannels = await fetchBotEnabledBroadcasters(fetch);
-	return {
-		botChannels,
-	};
+	return { botStatus };
 };
 
-async function fetchBotEnabledBroadcasters(fetch: typeof globalThis.fetch) {
-	const res = await fetch(BOT_ENABLED_BROADCASTERS, {
-		method: "GET",
-	});
+type ChannelBotStatus = {
+	id: string;
+	enabled: boolean;
+	login: string;
+	name: string;
+	color: string;
+	image: string;
+};
 
-	if (res.status != 200) {
-		logger.error(
-			{ response: res, url: BOT_ENABLED_BROADCASTERS },
-			"failed to get bot enabled list"
-		);
-		return null;
+async function fetchBotEnabledBroadcasters(
+	fetch: typeof globalThis.fetch,
+	logger: Logger
+): Promise<ChannelBotStatus[]> {
+	const uri = `${Rh.apiv1}/channel/bot-state`;
+	const childLogger = logger.child({ url: uri });
+
+	try {
+		const res = await fetch(uri, {
+			method: "GET",
+		});
+
+		if (!res.ok) {
+			childLogger.error({ status: res.status }, "failed to fetch bot state");
+			return new Array();
+		}
+
+		const body = await res.json();
+		return body.data;
+	} catch (err) {
+		childLogger.error({ error: err }, "error while fetching bot state");
+		return new Array();
 	}
-
-	const body = await res.json();
-	return body;
 }

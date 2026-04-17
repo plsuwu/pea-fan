@@ -8,11 +8,6 @@ import {
 import { logger } from "$lib/observability/server/logger.svelte";
 import { Rh } from "$lib/utils/route";
 import { getBaseURLFromRequest, isIpAddr, isLocalDomain } from "$lib/utils";
-import {
-	shouldRateLimit,
-	tryConsumeToken,
-} from "$lib/server/rate-limit.svelte";
-import { should } from "vitest";
 
 export const handleError: HandleServerError = ({ event, error, status }) => {
 	const context = event.tracing?.current
@@ -43,7 +38,6 @@ export const handleError: HandleServerError = ({ event, error, status }) => {
 			break;
 
 		case 404:
-			// tryConsumeToken(event.locals.client.cfconnecting);
 			displayMessage = "the requested page doesn't exist";
 			break;
 
@@ -69,45 +63,46 @@ export const handleError: HandleServerError = ({ event, error, status }) => {
 };
 
 const tenantHook: Handle = async ({ event, resolve }) => {
-	const requestHost = event.request.headers.get("host") || null;
+	const requestHost =
+		event.request.headers.get("host") ??
+		event.request.headers.get("x-host") ??
+		null;
 	if (!requestHost || isIpAddr(requestHost) || isLocalDomain(requestHost)) {
-		event.locals.logger.trace("[TENANCY]: ALLOW_ROUTE_DEFAULT");
+		// event.locals.logger.trace("allowing by default");
 		event.locals.channel = null;
 
 		return resolve(event);
 	}
 
 	const requestedTenant = requestHost?.split(".")[0];
-
 	if (
 		!requestedTenant ||
 		requestedTenant === Rh.base ||
 		requestHost === Rh.base ||
-		requestHost === Rh.apiBase
+		requestHost === Rh.apiv1
 	) {
-		event.locals.logger.trace("[TENANCY]: allowing non-tenant request");
+		// event.locals.logger.trace("allowing base request");
 		event.locals.channel = null;
 
 		return resolve(event);
 	}
 
 	if (await Rh.reroutable(event, requestedTenant)) {
-		event.locals.logger.trace(
-			{ tenant: requestedTenant },
-			"[TENANCY]: allowing route to valid tenant"
-		);
+		// event.locals.logger.trace(
+		// 	{ tenant: requestedTenant },
+		// 	"allowing route to valid tenant"
+		// );
 
 		event.locals.channel = requestedTenant;
 		return resolve(event);
 	} else {
+		event.locals.logger.warn(
+			{ tenant: requestedTenant },
+			"denying route to invalid tenant"
+		);
 		event.locals.channel = null;
 		const baseFromRequest = getBaseURLFromRequest(requestHost);
 		const redirection = `${Rh.proto}://${baseFromRequest}`;
-
-		event.locals.logger.warn(
-			{ tenant: requestedTenant, redirection },
-			"[TENANCY]: denying invalid renant route"
-		);
 
 		redirect(302, redirection);
 	}
@@ -138,7 +133,7 @@ const logInitHook: Handle = async ({ event, resolve }) => {
 				headers: Object.fromEntries(event.request.headers),
 			},
 		},
-		"[LOGINIT]: init routine complete"
+		"logger init"
 	);
 
 	// // TODO:  check if we should rate limit

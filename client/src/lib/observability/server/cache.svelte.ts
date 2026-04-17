@@ -1,6 +1,7 @@
 import { logger } from "./logger.svelte";
+import { PUBLIC_API_BASE_URL } from "$env/static/public";
 
-const API_BASE_URL = "https://api.piss.fan";
+const API_BASE_URL = `${PUBLIC_API_BASE_URL}/api/v1`;
 
 export type RawIrcInfo = {
 	likely_missing: string[];
@@ -8,9 +9,11 @@ export type RawIrcInfo = {
 	current_joins: string[];
 };
 
-export abstract class Cache<T extends string> {
+export abstract class Cache<T> {
 	readonly url: string;
 	readonly name: string;
+
+	protected logger: typeof logger;
 
 	protected _data: Set<T> = new Set();
 	protected _lastRefresh: number | null = null;
@@ -20,30 +23,39 @@ export abstract class Cache<T extends string> {
 		this.url = url;
 		this.name = cacheName;
 		this._ttlMs = ttl;
-		this._ttlMs = 1000;
+
+		this.logger = logger.child({
+			cacheFor: this.url,
+			cacheName: this.name,
+			ttlMs: this._ttlMs,
+		});
 	}
 
 	public async refresh(method = "GET"): Promise<void> {
-		logger.info("[CACHE] beginning cache update");
+		// this.logger.debug("running cache update check");
 		if (!this.ttlElapsed()) {
-			logger.debug({ cache: this }, "[CACHE] up to date");
+			// this.logger.debug("up to date");
 			return;
 		}
 
-		logger.info({ cache: this }, "[CACHE] running refresh");
-		const response = await fetch(this.url, { method });
-		if (!response.ok) {
-			logger.error({ response }, "[CACHE] error during update");
-			return;
-		}
-
+		// this.logger.info("beginning cache refresh");
 		try {
-			this.data = await response.json();
+			const res = await fetch(this.url, { method });
+			if (!res.ok) {
+				this.logger.error({ response: res }, "error during cache refresh");
+				this.data = new Array();
+				return;
+			}
+
 			this._lastRefresh = Date.now();
 
-			logger.info({ cache: this }, "[CACHE] retrieved channel data");
+			const body = await res.json();
+			this.data = body.data;
+
+			// this.logger.info({ cache: this }, "refreshed cache data");
 		} catch (err) {
-			logger.error({ error: err }, "[CACHE] channel cache update failed");
+			this.logger.error({ error: err }, "failed to update cache");
+			this.data = new Array();
 		}
 
 		return;
@@ -59,7 +71,7 @@ export abstract class Cache<T extends string> {
 			this._lastRefresh == null || this._lastRefresh + this._ttlMs < Date.now();
 
 		if (stale) {
-			logger.warn("[CACHE] stale data: attempting refresh");
+			this.logger.warn("stale data in cache, attempting refresh");
 		}
 
 		return stale;
@@ -68,6 +80,7 @@ export abstract class Cache<T extends string> {
 	// setters
 
 	set data(names: Iterable<T>) {
+		this._data.clear();
 		this._data = new Set(names);
 	}
 
@@ -116,4 +129,75 @@ class ChannelCache extends Cache<Broadcaster> {
 export const channelCache = new ChannelCache(
 	`${API_BASE_URL}/channel/all`,
 	"channels"
+);
+
+class AnnouncementCache {
+	public logger: typeof logger;
+
+	public url: string;
+	public name: string;
+	public key: string = "_";
+
+	public data: Map<string, { content: string | null; hash: string | null }> =
+		new Map();
+	public lastRefresh: number | null = null;
+	public ttlMs: number = 300_000; // = 300 secs = 5 mins
+
+	constructor(url: string, name: string) {
+		this.url = url;
+		this.name = name;
+
+		this.data.set(this.key, {
+			content: null,
+			hash: null,
+		});
+
+		this.logger = logger.child({
+			cacheName: this.name,
+			cacheUrl: this.url,
+			mapKey: this.key,
+		});
+	}
+
+	public async getAnnouncement(): Promise<{
+		content: string | null;
+		hash: string | null;
+	}> {
+		await this.refresh();
+		return this.data.get(this.key) ?? { content: null, hash: null };
+	}
+
+	public async refresh(): Promise<void> {
+		if (this.ttlElapsed()) {
+			await this.fetchFromApi();
+		}
+
+		return;
+	}
+
+	public async fetchFromApi() {
+		// updated this regardless of if fetch was successful; if this fails here i assume
+		// it PROBABLY won't help to call it again on the next page load
+		this.lastRefresh = Date.now();
+
+		// will set this up to fetch from postgres but i'll do this later...
+
+		const data = { content: null, hash: null };
+		this.data.set(this.key, { content: data.content, hash: data.hash });
+	}
+
+	protected ttlElapsed(): boolean {
+		const stale =
+			this.lastRefresh == null || this.lastRefresh + this.ttlMs < Date.now();
+		if (stale) {
+			this.logger.warn("stale data in cache, attempting refresh");
+		}
+
+		return stale;
+	}
+}
+
+export const announcementCache = new AnnouncementCache(
+	`${API_BASE_URL}/announcements`,
+	"announcements"
 );

@@ -10,6 +10,11 @@
 		ChevronDown,
 		CircleQuestionMarkIcon,
 		RouterIcon,
+		NotebookIcon,
+		StickyNoteIcon,
+		EllipsisVerticalIcon,
+		ToggleLeft,
+		ToggleRight,
 	} from "@lucide/svelte";
 	import { Rh } from "$lib/utils/route";
 	import * as Dropdown from "$lib/shadcn-components/ui/dropdown-menu";
@@ -25,7 +30,7 @@
 	import { setModeCookie } from "$lib/utils/mode-cookie.svelte";
 
 	const BASE_HOST_URL = `${Rh.proto}://${Rh.deriveBase(page.url.host)}`;
-	const BASE_API_URL = `${Rh.apiBase}`;
+	const BASE_API_URL = `${Rh.apiv1}`;
 
 	const searchDebounceCallback = debounce(handleSearch, 350);
 
@@ -42,16 +47,24 @@
 
 		try {
 			const queryUrl = () => {
-				const url = new URL(`${BASE_API_URL}/search/by-login`);
-				url.searchParams.set("login", login);
-
+				const url = new URL(`${BASE_API_URL}/search/${login}`);
 				return url;
 			};
 
 			const res = await fetch(queryUrl().href, { signal });
 			if (!signal.aborted) {
 				const body = await res.json();
-				results = body[0];
+				console.log(body.data);
+
+				results = body.data[0].map((result: any) => {
+					return {
+						...result,
+						page: Math.ceil(result.ranking / 15),
+					};
+				});
+				// for (const result of results) {
+				// 	getPageFromRank(result.ranking, body.data[0]);
+				// }
 			}
 		} finally {
 			previous = current;
@@ -127,7 +140,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 <div
-	class="flex w-full flex-row items-center space-x-4"
+	class="flex w-full flex-row items-center justify-between space-x-4"
 	aria-label="top navigation bar"
 >
 	<BGrp.Root>
@@ -183,7 +196,7 @@
 		</Dropdown.Root>
 	</BGrp.Root>
 
-	<BGrp.Root class="hidden flex-row items-center justify-center md:flex">
+	<BGrp.Root class="hidden flex-row items-center justify-center md:flex ">
 		{#if inputVisible}
 			<div
 				in:slide={{ delay: 100, duration: 250, axis: "x", easing: expoOut }}
@@ -222,9 +235,6 @@
 			</div>
 		{/if}
 	</BGrp.Root>
-</div>
-
-<BGrp.Root>
 	<Dropdown.Root>
 		<Dropdown.Trigger>
 			{#snippet child({ props })}
@@ -232,21 +242,24 @@
 					{...props}
 					size="sm"
 					variant="outline"
-					class="ps-2!"
-					aria-label="open miscellaneous navigation menu"
+					aria-label="miscellaneous navigation pages"
 				>
-					<MenuIcon />
+					<EllipsisVerticalIcon />
 				</Button>
 			{/snippet}
 		</Dropdown.Trigger>
 		<Dropdown.Content align="end" class="mt-2 w-56 font-iosevka">
 			<Dropdown.Group>
+				<Dropdown.Label class="font-bold text-muted-foreground/75"
+					>:3</Dropdown.Label
+				>
+				<Dropdown.Separator class="mb-1" />
 				<Dropdown.Item class="w-full">
 					<a
 						href={routeUrl("bot").href}
 						class="flex w-full flex-row items-center justify-between px-2"
 					>
-						<div>pee_liker</div>
+						<div>chat commands</div>
 						<RouterIcon />
 					</a>
 				</Dropdown.Item>
@@ -262,16 +275,23 @@
 				<Dropdown.Separator class="mb-1" />
 				<Dropdown.Item class="w-full">
 					<button
-						class="flex w-full flex-row items-center justify-center px-2"
+						class="flex w-full flex-row items-center justify-between px-2"
 						onclick={toggleModeCookie}
 					>
-						<div></div>
-						<div>
-							<ModeChanger />
+						<div class="flex flex-row justify-between">
+							{#if mode.current === "dark"}
+								<ToggleRight />
+							{:else}
+								<ToggleLeft />
+							{/if}
 						</div>
+						<div>dark mode</div>
+						<!-- <div> -->
+						<!-- 	<ModeChanger /> -->
+						<!-- </div> -->
 					</button>
 				</Dropdown.Item>
 			</Dropdown.Group>
 		</Dropdown.Content>
 	</Dropdown.Root>
-</BGrp.Root>
+</div>

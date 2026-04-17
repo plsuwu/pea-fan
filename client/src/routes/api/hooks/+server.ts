@@ -3,13 +3,45 @@ import type { RequestHandler } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
 import { Rh } from "$lib/utils/route";
 import { json } from "@sveltejs/kit";
+import { randomUUID } from "node:crypto";
 
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 const HOOKS_ENDPOINT = `${Rh.apiAdmin}/helix/hooks`;
 
+type HookInfo = {
+	id: string;
+	type: "stream.online" | "stream.offline";
+	status: "enabled" | string;
+	version: "1";
+	cost: number | string;
+	condition: {
+		broadcaster_user_id: string;
+	};
+	created_at: string;
+};
+
+const generateDummyHook = (
+	hookType: "stream.online" | "stream.offline"
+): HookInfo => {
+	const id = randomUUID().toString();
+	return {
+		id,
+		type: hookType,
+		version: "1",
+		status: "enabled",
+		cost: 0,
+		condition: {
+			broadcaster_user_id: "123456789",
+		},
+		created_at: new Date(Date.now()).toISOString(),
+	};
+	// const status = "enabled";
+	// const type = "stream.online";
+};
+
 // Hook retrieval handler
 export const GET: RequestHandler = async ({ locals, cookies, request }) => {
-	const logger = locals.logger.childLogger({
+	const logger = locals.logger.child({
 		method: request.method,
 	});
 	logger.debug("starting helix hooks action");
@@ -43,7 +75,7 @@ export const GET: RequestHandler = async ({ locals, cookies, request }) => {
 
 // Hook deletion handler
 export const DELETE: RequestHandler = async ({ locals, cookies, request }) => {
-	const logger = locals.logger.childLogger({
+	const logger = locals.logger.child({
 		method: request.method,
 	});
 	logger.debug("starting helix hooks action");
@@ -78,7 +110,7 @@ export const DELETE: RequestHandler = async ({ locals, cookies, request }) => {
 
 // Hook reset handler
 export const PUT: RequestHandler = async ({ locals, cookies, request }) => {
-	const logger = locals.logger.childLogger({
+	const logger = locals.logger.child({
 		method: request.method,
 	});
 	logger.debug("starting helix hooks action");

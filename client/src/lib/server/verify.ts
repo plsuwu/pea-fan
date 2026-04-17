@@ -1,41 +1,35 @@
 import type { Cookies } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
-import { logger } from "$lib/observability/server/logger.svelte";
 
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 export async function verifyToken(
 	cookies: Cookies,
-	request: Request,
-	getClientAddress: () => string,
+	locals: App.Locals,
 	fetch: typeof globalThis.fetch
 ): Promise<string | null> {
 	const token = cookies.get(ADMIN_SESSION_TOKEN);
-	if (!token) {
-		logger.warn(
-			{ ...getClientInfo(request, getClientAddress) },
-			"unauthorized (no session cookie)"
-		);
+	const logger = locals.logger;
+
+	if (token == null) {
+		logger.warn("unauthorized: missing token");
 		return null;
 	}
 
-	const res = await fetch("/api/verify-session", {
-		method: "POST",
+	const res = await fetch("/api/session", {
+		method: "GET",
 		headers: buildHeaders(true, token),
-		body: JSON.stringify({ token }),
 	});
 
-	const { valid } = await res.json();
-	logger.info({ valid }, "initial session validation response");
+	const body = await res.json();
+	const { status, data } = body;
 
-	if (token && valid !== true) {
-		logger.warn(
-			{ ...getClientInfo(request, getClientAddress) },
-			"unauthorized"
-		);
+	if (token && status !== 200 && data !== "ok") {
+		logger.warn("unauthorized: invalid token");
 
 		return null;
 	}
 
+	// logger.info("validation passed for client");
 	return token;
 }
 
@@ -59,16 +53,14 @@ export function buildHeaders(isJSON: boolean, token: string) {
 	return headers;
 }
 
-export function getClientInfo(
-	request: Request,
-	getClientAddress: () => string
-) {
+export function getClientInfo(request: Request, locals: App.Locals) {
+	const client = locals.client.cfconnecting;
 	const userAgent = request.headers.get("user-agent") ?? "[NO_USER_AGENT]";
 	const host = request.headers.get("host") ?? "[NO_HOST]";
 	const cookie = request.headers.get("cookie") ?? "[NO_COOKIE]";
 	return {
 		client: {
-			addr: getClientAddress(),
+			cfconnecting: client,
 			url: request.url,
 			headers: {
 				user_agent: userAgent,

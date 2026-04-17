@@ -259,6 +259,6 @@ class PinoLogger {
 }
 
 const loggerStore = new PinoLogger(pinoLogger);
-loggerStore.logger!.level = "debug";
+loggerStore.logger!.level = "trace";
 
 export const logger = loggerStore.logger!;

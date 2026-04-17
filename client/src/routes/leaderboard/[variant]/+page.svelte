@@ -46,10 +46,12 @@
 	let onlyShowLive = $state(false);
 </script>
 
-<meta
-	name="description"
-	content={`Leaderboard for ${variant}s on the Twitch chat piss counter`}
-/>
+<svelte:head>
+	<meta
+		name="description"
+		content={`leaderboard of the top ${variant}s ranked by total number of piss-related Twitch chat messages.`}
+	/>
+</svelte:head>
 
 <div class="flex w-full flex-col">
 	<div

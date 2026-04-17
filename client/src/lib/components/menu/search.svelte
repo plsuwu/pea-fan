@@ -7,10 +7,13 @@
 	import Button from "$lib/shadcn-components/ui/button/button.svelte";
 	import Spinner from "$lib/shadcn-components/ui/spinner/spinner.svelte";
 
-	import { DeleteIcon } from "@lucide/svelte";
+	import { DeleteIcon, CircleArrowRightIcon } from "@lucide/svelte";
 	import { mode } from "mode-watcher";
 
 	import { readableColor } from "$lib/utils";
+	import { Rh } from "$lib/utils/route";
+	import { page } from "$app/state";
+	import { goto } from "$app/navigation";
 
 	let {
 		ref = $bindable(),
@@ -22,6 +25,12 @@
 	} = $props();
 
 	// const BASE_URL = new URL(`${Rh.proto}://${Rh.api}/search/by-login`);
+	function navigateTo(result: (typeof results)[0]) {
+		const href = `${Rh.proto}://${Rh.deriveBase(page.url.host)}/leaderboard/chatter?page=${result.page}#${result.ranking}`;
+		clearSearch();
+
+		goto(href);
+	}
 </script>
 
 <InputGroup.Input
@@ -29,7 +38,7 @@
 	bind:value
 	type="text"
 	class="w-full placeholder:px-2 placeholder:text-muted-foreground/55"
-	placeholder="search..."
+	placeholder="chatter search..."
 />
 <InputGroup.Addon align="inline-end">
 	{#if loading}
@@ -71,7 +80,7 @@
 </InputGroup.Addon>
 
 {#if current !== "" && !loading}
-	<div class="absolute top-11 z-10 w-full">
+	<div class="absolute top-11 z-20 w-full">
 		<div
 			class="flex h-full w-full flex-col rounded-sm border border-border bg-background text-sm"
 		>
@@ -89,8 +98,11 @@
 							>
 							<th
 								class="border-b border-b-border px-2 py-0.5 text-end text-base"
-								>total mentions</th
+								>total</th
 							>
+							<th
+								class="border-b border-b-border px-2 py-0.5 text-end text-base"
+							></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -98,11 +110,20 @@
 							{@const colorMode = mode.current === "dark" ? "light" : "dark"}
 							<tr
 								class="rounded-xl"
-								style={`background-color: ${readableColor(result.color, colorMode, 20)};`}
+								style={`background-color: ${readableColor(result.color, colorMode, 15)};`}
 							>
 								<td class="px-2 py-px text-start">{result.ranking}</td>
 								<td class="px-2 py-px text-start font-bold">{result.name}</td>
 								<td class="px-2 py-px text-end">{result.total}</td>
+								<td class="w-max px-2 py-px text-end">
+									<button
+										onclick={() => navigateTo(result)}
+										class="flex w-full flex-row justify-end self-end transition-all duration-200 hover:brightness-50"
+										aria-label="jump to leaderboard entry"
+									>
+										<CircleArrowRightIcon size={12} />
+									</button>
+								</td>
 							</tr>
 						{/each}
 					</tbody>
