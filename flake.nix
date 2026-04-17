@@ -62,7 +62,7 @@
               export SQLX_OFFLINE_DIR="./server/.sqlx" 
             '';
 
-            doCheck = false;
+            # doCheck = false;
 
             installPhaseCommand = ''
               mkdir -p $out/bin
@@ -76,7 +76,7 @@
 
         client = pkgs.buildNpmPackage {
           pname = "piss-fan-client";
-          version = "1.2.4";
+          version = "1.3.2";
           src = ./client;
 
           npmDepsHash = "sha256-4Kdg0c9H3/kOd60FZ7vg3+bD4NJbCt1LCqykBTivIgo=";
