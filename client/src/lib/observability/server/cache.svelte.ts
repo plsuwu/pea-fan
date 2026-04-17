@@ -1,6 +1,7 @@
 import { logger } from "./logger.svelte";
-import { PUBLIC_API_BASE_URL } from "$env/static/public";
+import { env} from "$env/dynamic/public";
 
+const PUBLIC_API_BASE_URL = env.PUBLIC_API_BASE_URL;
 const API_BASE_URL = `${PUBLIC_API_BASE_URL}/api/v1`;
 
 export type RawIrcInfo = {

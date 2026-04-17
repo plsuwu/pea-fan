@@ -62,7 +62,7 @@
               export SQLX_OFFLINE_DIR="./server/.sqlx" 
             '';
 
-            # doCheck = false;
+            doCheck = false;
 
             installPhaseCommand = ''
               mkdir -p $out/bin

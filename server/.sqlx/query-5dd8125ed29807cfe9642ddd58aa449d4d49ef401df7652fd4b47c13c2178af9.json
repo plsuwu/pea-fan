@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id FROM channel;\n            ",
+  "query": "\n            SELECT id FROM channel\n            ",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "7ed4c0a73237da6098dbde1be9ed4037c95fcea894c2b63c9124be256551893d"
+  "hash": "5dd8125ed29807cfe9642ddd58aa449d4d49ef401df7652fd4b47c13c2178af9"
 }

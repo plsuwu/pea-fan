@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO reply (id)\n            SELECT channel.id FROM channel\n            WHERE channel.id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4ff83210761fa4234eb8560111cddf860452b3d4753d3778685ae1b03addc24a"
+}

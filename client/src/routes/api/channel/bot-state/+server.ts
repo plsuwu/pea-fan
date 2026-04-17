@@ -1,9 +1,10 @@
-import { ADMIN_SESSION_TOKEN } from "$env/static/private";
+import { env } from "$env/dynamic/private";
 import { buildHeaders } from "$lib/server/verify";
 import { Rh } from "$lib/utils/route";
 import { json, type RequestHandler } from "@sveltejs/kit";
 
 const CONFIG_ENDPOINT = `${Rh.apiAdmin}/update/bot-config`;
+const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
 export const PUT: RequestHandler = async ({
 	cookies,
@@ -24,7 +25,7 @@ export const PUT: RequestHandler = async ({
 		}
 
 		const { id } = await request.json();
-        logger.info({ id }, "");
+		logger.info({ id }, "");
 		const headers = buildHeaders(true, token);
 
 		const res = await fetch(CONFIG_ENDPOINT, {
