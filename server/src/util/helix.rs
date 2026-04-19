@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// #![allow(dead_code)]
 
 use core::fmt;
 use std::sync::LazyLock;
@@ -422,8 +422,10 @@ impl Helix {
         notif_type: StreamGenericRequestType,
     ) -> HelixResult<SubscriptionGenericData> {
         let callback_url = var!(Var::CallbackUrl).await?;
-        let key = verify_external::get_hmac_key().await?;
 
+        tracing::info!(callback_url, "using callback uri");
+
+        let key = verify_external::get_hmac_key().await?;
         let body = StreamGenericRequest::new(&id.to_string(), &callback_url, &key, notif_type);
 
         let uri = String::from(HelixUri::WebhookSubscriptions);
@@ -496,7 +498,7 @@ pub const HELIX_WEBHOOK_SUBS: &str = "eventsub/subscriptions";
 const NUM_WORKER_THREADS: usize = 25;
 
 // TODO pull this from .env instead
-pub const CALLBACK_ROUTE: &str = "https://api.piss.fan/callback";
+// pub const CALLBACK_ROUTE: &str = "https://api.piss.fan/callback";
 
 // pub const CALLBACK_ROUTE: &str = "https://api.rat.moe/callback";
 // pub const CALLBACK_ROUTE: &str = "http://api.rat.moe/example-callback";

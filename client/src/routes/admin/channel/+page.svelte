@@ -36,23 +36,32 @@
 
 		// const sortedHooks = (data.hooks as [string, any][]).sort(
 		//         ([ak, _a], [bk, _b]) => ak.localeCompare(bk)
-		// );
+		// );'
 
-		return sortedConfigs.map((cfg) => {
-			const hookInfo = (data.hooks as [string, HookInfo[]][]).find(
-				(hook) => cfg.login === hook[0]
-			)?.[1];
-			const isLive =
-				data.liveBroadcasters.find((br) => br.id === cfg.id) != null
-					? true
-					: false;
+		const merged = sortedConfigs
+			.map((cfg) => {
+				const hookInfo = (data.hooks as [string, HookInfo][])
+					.map((hook) => {
+						if (hook[0] === cfg.login) {
+							return hook[1];
+						}
+					})
+					.filter(Boolean);
 
-			return {
-				...cfg,
-				live: isLive,
-				hook: hookInfo,
-			};
-		});
+				const isLive =
+					data.liveBroadcasters.find((br) => br.id === cfg.id) != null
+						? true
+						: false;
+
+				return {
+					...cfg,
+					live: isLive,
+					hook: hookInfo,
+				};
+			})
+			.filter((cfg) => cfg.hook.length > 0);
+
+		return merged;
 	});
 
 	let createResult: { success: boolean; result?: string } | undefined =
@@ -172,38 +181,43 @@
 	{#each cfgs as cfg, idx (cfg.id)}
 		<div
 			class={cn(
-				`grid grid-cols-2 items-center space-x-5 px-8 py-1.5 transition-all
-            duration-300 ease-in-out md:grid-cols-5`,
+				`grid grid-cols-3 items-center space-x-5 px-8 py-1.5 transition-all
+            duration-300 ease-in-out md:grid-cols-6`,
 				idx % 2 === 0 ? "bg-accent/25" : ""
 			)}
 		>
 			<div
-				class="flex w-max flex-row items-center self-center text-start font-bold
-                    transition-transform duration-300 ease-in-out"
+				class={cn(
+					"flex w-max flex-row items-center self-center text-start font-bold transition-transform duration-300 ease-in-out",
+					cfg.live ? "text-red-500" : "text-foreground"
+				)}
 			>
 				{cfg.login}
 			</div>
+
 			<div
 				class="hidden w-max text-start transition-transform duration-300 ease-in-out md:block"
 			>
 				{cfg.id}
 			</div>
-			<div
-				class="mx-2 hidden w-1/2 justify-start rounded-md px-4 font-bold
+
+			<div class="mx-2 hidden w-full flex-row md:flex">
+				<div class="ml-4 h-[20px] w-[20px] border-l-2"></div>
+				<div
+					class="mx-2 hidden w-full justify-start rounded-md px-4 font-bold
                     transition-transform duration-300 ease-in-out md:flex"
-				style={`color: ${readableColor(cfg.color, mode.current === "dark" ? "light" : "dark", 12)};
+					style={`color: ${readableColor(cfg.color, mode.current === "dark" ? "light" : "dark", 12)};
                     background-color: ${readableColor(cfg.color, mode.current, 11)};`}
-			>
-				{cfg.color}
+				>
+					{cfg.color}
+				</div>
 			</div>
 
 			<div
 				class="col-span-2 flex w-full flex-row items-center justify-between justify-self-start"
 			>
-				<!-- {#if configuringState.isOpenPanel(cfg.id)} -->
+				<div class="ml-4 h-[20px] w-[20px] border-l-2"></div>
 				<div
-					in:fly={{ delay: 150, duration: 200, y: -30, easing: expoOut }}
-					out:fly={{ delay: 0, duration: 100, y: -20, easing: expoOut }}
 					class="flex w-full flex-col items-center justify-center rounded-md px-4 md:flex-row"
 				>
 					<div class="flex w-[350px] flex-col space-y-1 text-start text-xs">
@@ -211,13 +225,13 @@
 							<div class="flex w-full flex-row items-center">
 								<div class="w-full self-start">
 									{cfg.hook
-										? dayjs(cfg.hook?.[idx].created_at).format(
+										? dayjs(cfg.hook?.[idx]?.created_at).format(
 												"HH:mm A, YY-MM-DD"
 											)
 										: ""}
 								</div>
 								<div class="w-full self-start">
-									{cfg.hook?.[idx].type ?? ""}
+									{cfg.hook?.[idx]?.type ?? ""}
 								</div>
 								<div
 									class={cn(
@@ -225,88 +239,74 @@
 										cfg.hook != null ? "text-foreground" : "text-accent"
 									)}
 								>
-									[{cfg.hook?.[idx].status ?? "disabled"}]
+									[{cfg.hook?.[idx]?.status ?? "disabled"}]
 								</div>
 							</div>
-							<!-- <div> -->
-							<!-- 	{cfg.hook?.[idx].id ?? "00000000-0000-0000-0000-000000000000"} -->
-							<!-- </div> -->
 						{/each}
 					</div>
-					<div class="ml-4 h-[20px] w-[20px] border-l-2"></div>
-					<form
-						method="POST"
-						action="?/bot"
-						class="flex flex-col items-center space-y-2"
-						use:enhance={() => {
-							waiting = true;
-
-							return async ({ update }) => {
-								await update();
-								waiting = false;
-							};
-						}}
-					>
-						<div
-							class="flex w-full max-w-[250px] flex-row
-                                justify-end self-start md:justify-between"
-						>
-							<Label for="bot-id" class="mr-4 pl-8 text-xs md:text-sm"
-								>replies</Label
-							>
-							<div class="flex flex-row items-center">
-								<input type="hidden" name="channel-id" value={cfg.id} />
-								<Checkbox
-									value={cfg.id}
-									checked={cfg.enabled}
-									type="submit"
-									formaction="?/bot"
-								/>
-							</div>
-						</div>
-					</form>
-					<div class="ml-4 h-[20px] w-[20px] border-l-2"></div>
-					<form
-						method="POST"
-						action="?/sync"
-						class="flex flex-col items-center space-y-2"
-						use:enhance={() => {
-							waiting = true;
-							return async ({ update }) => {
-								await update({ reset: false });
-								waiting = false;
-							};
-						}}
-					>
-						<div
-							class="flex w-full max-w-[250px] flex-row justify-end self-start
-                                md:justify-between"
-						>
-							<Label for="sync" class="mr-4 pl-8 text-xs md:text-sm">sync</Label
-							>
-							<div class="flex flex-row items-center">
-								<button
-									value={cfg.id}
-									name="channel-id"
-									type="submit"
-									class="items-center"
-								>
-									<CloudSyncIcon size={18} />
-								</button>
-							</div>
-						</div>
-					</form>
 				</div>
-				{#if cfg.live}
-					<div class="w-min bg-red-300/20 font-bold text-red-500">
-						<div class="animate-pulse">&nbsp;&nbsp;[*]</div>
+			</div>
+
+			<div class="col-span-1 flex w-full flex-row items-center">
+				<div class="ml-4 h-[20px] w-[20px] border-l-2"></div>
+				<form
+					method="POST"
+					action="?/bot"
+					class="flex flex-col items-center space-y-2"
+					use:enhance={() => {
+						waiting = true;
+
+						return async ({ update }) => {
+							await update();
+							waiting = false;
+						};
+					}}
+				>
+					<div class="flex w-full flex-row">
+						<Label for="bot-id" class="mr-4 pl-8 text-xs md:text-sm"
+							>replies</Label
+						>
+						<div class="flex flex-row items-center">
+							<input type="hidden" name="channel-id" value={cfg.id} />
+							<Checkbox
+								value={cfg.id}
+								checked={cfg.enabled}
+								type="submit"
+								formaction="?/bot"
+							/>
+						</div>
 					</div>
-				{:else}
-					<div class="invisible w-min font-bold">
-						<div class="animate-pulse">&nbsp;&nbsp;[*]</div>
+				</form>
+				<div class="ml-4 h-[20px] w-[20px] border-l-2"></div>
+				<form
+					method="POST"
+					action="?/sync"
+					class="flex flex-col items-center space-y-2"
+					use:enhance={() => {
+						waiting = true;
+						return async ({ update }) => {
+							await update({ reset: false });
+							waiting = false;
+						};
+					}}
+				>
+					<div
+						class="flex w-full flex-row justify-end justify-self-end
+                                md:justify-between"
+					>
+						<Label for="sync" class="mr-4 pl-8 text-xs md:text-sm">sync</Label>
+						<div class="flex flex-row items-center">
+							<button
+								value={cfg.id}
+								name="channel-id"
+								type="submit"
+								class="items-center transition-all duration-150 hover:brightness-50"
+							>
+								<CloudSyncIcon size={18} />
+							</button>
+						</div>
 					</div>
-				{/if}
-				<!-- {/if} -->
+				</form>
 			</div>
 		</div>
 	{/each}

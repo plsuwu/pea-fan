@@ -128,7 +128,7 @@
 <svelte:window onkeydown={handleShortcut} />
 <ModeWatcher disableTransitions={false} />
 
-<div class="flex h-[110vh] w-full flex-col font-iosevka">
+<div class="flex h-[115vh] w-full flex-col font-iosevka">
 	<header
 		class="mt-4 mb-2 flex flex-row items-center justify-between px-8 py-4"
 	>
@@ -194,9 +194,9 @@
 		</Tt.Provider>
 	</main>
 
-	<footer class="z-10 border-t-2 bg-background pb-4">
+	<footer class="z-10 border-t-2 bg-background py-2">
 		<div
-			class="mx-8 flex h-[150px] max-h-[150px] min-h-[150px] flex-row items-center"
+			class="px-12 flex h-[200px] max-h-[200px] min-h-[200px] flex-row items-center"
 		>
 			<Footer />
 		</div>
