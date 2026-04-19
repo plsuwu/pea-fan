@@ -196,7 +196,7 @@
 		</Dropdown.Root>
 	</BGrp.Root>
 
-	<BGrp.Root class="hidden flex-row items-center justify-center md:flex ">
+	<BGrp.Root class="hidden flex-row items-center justify-center md:flex -ml-32">
 		{#if inputVisible}
 			<div
 				in:slide={{ delay: 100, duration: 250, axis: "x", easing: expoOut }}

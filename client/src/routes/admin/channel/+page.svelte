@@ -12,6 +12,7 @@
 	import { cn } from "tailwind-variants";
 	import { mode } from "mode-watcher";
 	import dayjs from "dayjs";
+	import Loading from "$lib/components/loading/loading.svelte";
 
 	type HookInfo = {
 		id: string;
@@ -68,6 +69,8 @@
 	});
 </script>
 
+<Loading {waiting} />
+
 <div class="flex flex-col space-x-4 px-8 md:flex-row md:items-center">
 	<form
 		action="?/create"
@@ -115,6 +118,14 @@
 		class="flex flex-row items-center space-x-2"
 		method="POST"
 		action="?/sync"
+		use:enhance={() => {
+			waiting = true;
+
+			return async ({ update }) => {
+				await update();
+				waiting = false;
+			};
+		}}
 	>
 		<Label for="sync-all">sync all</Label>
 		<Button
@@ -227,6 +238,14 @@
 						method="POST"
 						action="?/bot"
 						class="flex flex-col items-center space-y-2"
+						use:enhance={() => {
+							waiting = true;
+
+							return async ({ update }) => {
+								await update();
+								waiting = false;
+							};
+						}}
 					>
 						<div
 							class="flex w-full max-w-[250px] flex-row

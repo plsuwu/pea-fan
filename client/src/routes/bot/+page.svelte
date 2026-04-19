@@ -10,6 +10,13 @@
 	let { botStatus } = $derived(data);
 </script>
 
+<svelte:head>
+	<meta
+		name="description"
+		content="information about pee_liker and how to use his commands."
+	/>
+</svelte:head>
+
 <div class="flex w-full flex-row justify-center">
 	<div
 		class="mt-10 flex flex-row items-center justify-center lg:w-2/3 xl:w-1/2 xl:max-w-[950px]"
@@ -38,6 +45,11 @@
 				class="mt-10 flex min-w-[250px] list-inside flex-col items-start
             justify-center px-4 align-middle text-lg lg:px-4 xl:px-26 xl:text-2xl"
 			>
+				{#if botStatus.length === 0}
+					<div class="mt-8 self-center font-bold text-muted-foreground/50">
+						disabled everywhere for now :(
+					</div>
+				{/if}
 				{#each botStatus as channel}
 					<a
 						href={`https://twitch.tv/${channel.login}`}
@@ -102,9 +114,9 @@
 					>.
 				</div>
 				<div class="mt-6 text-sm text-muted-foreground/85 lg:text-base">
-					Also, he is not enabled everywhere because I fear this he is mostly just
-					bullshit that creates unwanted noise more than anything (in addition
-					to the chat rate limit stuff mentioned above).
+					Also, he is not enabled everywhere because I fear this he is mostly
+					just bullshit that creates unwanted noise more than anything (in
+					addition to the chat rate limit stuff mentioned above).
 				</div>
 			</div>
 		</div>

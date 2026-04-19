@@ -1,32 +1,52 @@
-import type { Action } from "svelte/action";
+import { buildHeadersAuthless } from "$lib/server/verify";
+import { type Actions, fail } from "@sveltejs/kit";
+
+function cleanInput(input: string | null) {
+	if (!input || input == "") {
+		return null;
+	}
+    
+    return input.replaceAll(/[*_]/g, "");
+}
 
 export const actions = {
-	default: async ({ request, fetch, locals }) => {
-		const formData = await request.formData();
-
-		const current = formData.get("current") as string;
-		const previous = formData.get("previous") as string;
-		const score = formData.get("score") as string;
-		const comment = formData.get("comment") as string;
-		const requestingClient = locals.client.cfconnecting;
-
-		const body = JSON.stringify({
-			current,
-			previous,
-			score,
-			comment,
-			requestingClient,
-		});
-		console.log(body);
-
-		const res = await fetch("/api/score-update-request", {
-			method: "POST",
-			body,
-			headers: {
-				"content-type": "application/json",
-			},
+	contact: async ({ request, fetch, locals }) => {
+		const logger = locals.logger.child({
+			action: "contact",
 		});
 
-		console.log(res);
+		try {
+			const formData = await request.formData();
+
+			const contentRaw = formData.get("content") as string;
+			const emailRaw = formData.get("email") as string;
+			const headers = buildHeadersAuthless(true);
+
+			const res = await fetch("/api/contact", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					_client: locals.client.cfconnecting,
+					data: {
+						email: cleanInput(emailRaw),
+						content: cleanInput(contentRaw),
+					},
+				}),
+			});
+
+			if (!res.ok) {
+				logger.warn("failed to run action");
+				return fail(res.status, {
+					error: res.statusText,
+				});
+			}
+
+			return { success: true, data: "ok" };
+		} catch (err) {
+			logger.error({ error: err }, "failure while running action");
+			return fail(500, {
+				error: err,
+			});
+		}
 	},
-} satisfies Action;
+} satisfies Actions;

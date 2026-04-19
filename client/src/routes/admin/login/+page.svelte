@@ -26,7 +26,7 @@
 </script>
 
 <div class="flex flex-col items-center justify-center px-10">
-	<div class="mb-8 self-start text-start text-xl">login</div>
+	<div class="mb-14 self-center text-start text-2xl">login</div>
 	<form
 		method="POST"
 		use:enhance={() => {

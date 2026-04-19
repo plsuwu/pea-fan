@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from "$app/forms";
+	import Loading from "$lib/components/loading/loading.svelte";
 	import * as InputGroup from "$lib/shadcn-components/ui/input-group/index";
 	import { readableColor } from "$lib/utils";
 	import { SearchIcon } from "@lucide/svelte";
@@ -17,6 +18,8 @@
 		<div>{content}</div>
 	</div>
 {/snippet}
+
+<Loading {waiting} />
 
 <div class="mx-10 mt-12"></div>
 <div class="flex flex-col">
