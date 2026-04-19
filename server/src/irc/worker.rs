@@ -114,29 +114,20 @@ async fn handle_message(
             let channel = format!("{}.#{}", &tags.channel_id, &tags.channel_name);
             let chatter = format!("{}.{}", &tags.user_id, &tags.user_login);
 
-            if tags.source_channel_id != String::default()
-                && tags.channel_id != tags.source_channel_id.clone()
-                && !cfg!(debug_assertions)
-            {
+            if &tags.source_channel_id != "" && &tags.channel_id != &tags.source_channel_id {
                 // TODO i still want to increment if the source is not a tracked channel
                 //  but i cant be bothered rn lowkey
                 tracing::debug!(
                     tags.channel_id,
                     tags.source_channel_id,
                     text,
-                    "potential duplicate (source_id != channel_id)"
+                    "discarding shared msg: source_id != channel_id"
                 );
 
                 return Ok(());
             }
 
-            tracing::info!(
-                // msg_id = tags.msg_id,
-                channel,
-                chatter,
-                content = text,
-                "PRIVMSG"
-            );
+            tracing::info!(channel, chatter, content = text, "PRIVMSG");
 
             // check for command invocation
             if text.starts_with("!pisscount")
@@ -189,7 +180,7 @@ async fn handle_message(
                 // build the message first and then await the permit.
                 //
                 // we perhaps want to log any errors (which would indicate a dropped message), but
-                // this is a future pls problem for now...
+                // this is a future pls problem for now.
                 rate_limiter.acquire_one().await?;
                 tracing::debug!(reply_for = tags.msg_id, "reply permit acquired");
                 cmd_tx

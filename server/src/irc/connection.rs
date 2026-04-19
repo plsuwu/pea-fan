@@ -315,13 +315,6 @@ impl ConnectionClient {
             tracing::error!(error = ?e, join_string, "JOIN failure");
         }
 
-        // for ch in channels.into_iter() {
-        //     tokio::time::sleep(Duration::from_secs(1)).await;
-        //     tracing::info!(channel = ch, "attempting JOIN");
-        //
-        //     self.join_channel(&ch).await?;
-        // }
-
         Ok(())
     }
 

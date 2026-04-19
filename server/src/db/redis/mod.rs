@@ -7,18 +7,24 @@ use crate::{db::prelude::ChannelId, util::helix::Helix};
 pub mod migrator;
 pub mod redis_pool;
 
-#[instrument(skip(redis_pool, ids))]
-pub async fn clear_stream_states<R: AsyncCommands + Sync>(
-    redis_pool: &mut R,
-    ids: &[String],
-) -> RedisResult<()> {
-    let mut pipeline = redis::pipe();
-    for id in ids {
-        let key = format!("{}:online", id);
-        pipeline.del(key);
+#[instrument(skip(redis_pool))]
+pub async fn clear_stream_states<R: AsyncCommands + Sync>(redis_pool: &mut R) -> RedisResult<()> {
+    let cached_live = get_all_live(redis_pool).await?.unwrap_or_default();
+
+    tracing::debug!(?cached_live, "retrieved from live broadcaster cache");
+
+    if !cached_live.is_empty() {
+        let mut pipeline = redis::pipe();
+        for id in cached_live {
+            let key = format!("{id}:online");
+            tracing::debug!(key, "clearing broadcaster state");
+
+            pipeline.del(key);
+        }
+
+        () = pipeline.query_async(redis_pool).await?;
     }
 
-    () = pipeline.query_async(redis_pool).await?;
     Ok(())
 }
 
@@ -27,6 +33,8 @@ pub async fn init_stream_states<R: AsyncCommands + Sync>(
     redis_pool: &mut R,
     ids: &[String],
 ) -> RedisResult<()> {
+    clear_stream_states(redis_pool).await?;
+
     let mut pipeline = redis::pipe();
     let live = Helix::get_streams(ids).await?;
     tracing::debug!(live_broadcasters = ?live, "retrieved stream states");
@@ -38,10 +46,7 @@ pub async fn init_stream_states<R: AsyncCommands + Sync>(
                 tracing::debug!(id, "caching stream.online");
                 pipeline.set(key, 1);
             }
-            false => {
-                tracing::debug!(id, "removing cached broadcast");
-                pipeline.del(key);
-            }
+            _ => (),
         };
     }
 

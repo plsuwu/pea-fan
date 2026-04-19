@@ -31,8 +31,7 @@ pub async fn user_by_id(Path(id): Path<String>) -> ApiResult<Vec<HelixUser>> {
 #[instrument(skip(state))]
 pub async fn delete_hooks(State(state): State<Arc<AppState>>) -> ApiResult<usize> {
     let result = spawn_protected(async move {
-        let ids = state.channel_ids.read().await.clone();
-        crate::db::redis::clear_stream_states(&mut state.redis_pool.clone(), &ids)
+        crate::db::redis::clear_stream_states(&mut state.redis_pool.clone())
             .await
             .map_err(RouteError::from)?;
 

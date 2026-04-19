@@ -29,15 +29,7 @@ pub fn parse_incoming(msg: &irc::proto::Message) -> Option<IncomingMessage> {
             })
         }
 
-        Command::PING(_s1, _) => {
-            // tracing::info!(s1, "PING recv");
-            None
-        }
-
-        Command::PONG(_s1, _) => {
-            // tracing::info!(s1, "PONG recv");
-            None
-        }
+        Command::PING(_s1, _) | Command::PONG(_s1, _) => None,
 
         Command::JOIN(channel, _, _) => {
             if let Some(prefix) = msg.prefix.clone() {

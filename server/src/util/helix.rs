@@ -421,8 +421,10 @@ impl Helix {
         id: ChannelId,
         notif_type: StreamGenericRequestType,
     ) -> HelixResult<SubscriptionGenericData> {
+        let callback_url = var!(Var::CallbackUrl).await?;
         let key = verify_external::get_hmac_key().await?;
-        let body = StreamGenericRequest::new(&id.to_string(), CALLBACK_ROUTE, &key, notif_type);
+
+        let body = StreamGenericRequest::new(&id.to_string(), &callback_url, &key, notif_type);
 
         let uri = String::from(HelixUri::WebhookSubscriptions);
         let response = Self::post(uri, &body).await?;

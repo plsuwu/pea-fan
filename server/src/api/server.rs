@@ -302,24 +302,27 @@ pub async fn router(
     let socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
     let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
 
-    if !cfg!(debug_assertions) {
-        tokio::spawn(async move {
-            let _guard = server_state_clone.channel_ids.read().await;
-            let channel_ids = _guard.clone();
-
-            drop(_guard);
-            match stream_online_hook_handler(&channel_ids, server_state_clone.redis_pool.clone())
-                .await
-            {
-                Ok(_) => (),
-                Err(e) => {
-                    tracing::error!(error = ?e, "error while initialising stream states");
-                }
-            }
-        })
-        .await
-        .unwrap();
-    }
+    // I think we want to trigger these manually whenever we need them instead of
+    // automatically run them like this?
+    //
+    // if !cfg!(debug_assertions) {
+    //     tokio::spawn(async move {
+    //         let _guard = server_state_clone.channel_ids.read().await;
+    //         let channel_ids = _guard.clone();
+    //
+    //         drop(_guard);
+    //         match stream_online_hook_handler(&channel_ids, server_state_clone.redis_pool.clone())
+    //             .await
+    //         {
+    //             Ok(_) => (),
+    //             Err(e) => {
+    //                 tracing::error!(error = ?e, "error while initialising stream states");
+    //             }
+    //         }
+    //     })
+    //     .await
+    //     .unwrap();
+    // }
 
     tx.send(socket_addr).unwrap();
     axum::serve(listener, app).await.unwrap()

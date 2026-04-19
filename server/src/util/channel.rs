@@ -7,50 +7,6 @@ use tracing::instrument;
 use crate::db::prelude::*;
 use crate::util::helix::{Helix, HelixErr};
 
-/*
-#[instrument]
-pub async fn fetch_channel_list(from_url: Option<&str>) -> ChannelResult<Vec<(String, ChatterId)>> {
-    let channel_list = reqwest::get(from_url.unwrap_or(CHANNELS_LIST_URL))
-        .await?
-        .text()
-        .await?;
-
-    tracing::debug!(list_url = from_url, "fetching channel list");
-    let name_id: Vec<(String, ChatterId)> = channel_list
-        .lines()
-        .map(|line| line.split(':').collect::<Vec<_>>())
-        .filter_map(|parts| {
-            parts
-                .get(0)
-                .map(|s| s.to_string())
-                .zip(parts.get(1).map(|s| s.to_string().into()))
-        })
-        .collect();
-
-    tracing::debug!(list_url = from_url, ?name_id, "fetch complete");
-
-    Ok(name_id)
-}
-
-#[instrument]
-pub async fn update_channels(from_url: Option<&str>) -> ChannelResult<HashMap<String, Chatter>> {
-    let name_to_id = fetch_channel_list(from_url).await?;
-    let ids: Vec<ChatterId> = name_to_id.into_iter().map(|(_, id)| id).collect();
-
-    update_stored_channels(&ids, false).await
-}
-
-#[instrument]
-pub async fn update_channels_by_name(
-    channels: &[String],
-) -> ChannelResult<HashMap<String, Chatter>> {
-    let helix_users: Vec<HelixUser> = Helix::fetch_users_by_login(channels.to_owned()).await?;
-    let ids: Vec<ChatterId> = helix_users.into_iter().map(|u| u.id.into()).collect();
-
-    update_stored_channels(&ids, false).await
-}
-*/
-
 #[instrument(skip(chatter), fields(chatter_id = chatter.id.0))]
 pub fn update_threshold_elapsed(chatter: &Chatter) -> bool {
     let current_ts = Utc::now().naive_utc();
@@ -88,13 +44,15 @@ pub async fn update_stored_channels(
     //
     //  i assume we are potentially iterating over `existing_chatters` and
     //  checking values twice here, right?
+    //
+    //  -> for ~100 channels (at most) this seems pretty unimportant i imagine
     for id in ids {
-        // ... iter 1
+        // ... iter 1 ...
         if !existing_chatters.iter().any(|e_br| &e_br.id == id) {
             tracing::warn!(channel = id.0, "uncached channel");
             requires_update.push(id.to_string());
 
-        // ... iter 2
+        // ... iter 2 (?)
         } else if let Some(e_br) = existing_chatters
             .iter()
             .find(|e_br| e_br.id == ChatterId(id.to_string()))
@@ -183,6 +141,3 @@ pub enum ChannelError {
     #[error(transparent)]
     SqlxError(#[from] sqlx::error::Error),
 }
-
-// const CHANNELS_LIST_URL: &str =
-//     "https://raw.githubusercontent.com/plsuwu/pea-fan/refs/heads/static/channels";
