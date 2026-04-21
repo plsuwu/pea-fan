@@ -8,7 +8,9 @@ use crate::irc::{
     commands::{IncomingMessage, IrcTags},
 };
 
-#[instrument(skip(msg))]
+/// This recieves the message before `parse_incoming`; we want this information to ensure
+/// we haven't timed out in the connection handler.
+#[instrument(skip_all, level = "trace")]
 pub fn is_pong(msg: &irc::proto::Message) -> bool {
     match &msg.command {
         Command::PONG(_, _) => true,
@@ -16,7 +18,7 @@ pub fn is_pong(msg: &irc::proto::Message) -> bool {
     }
 }
 
-#[instrument(skip(msg))]
+#[instrument(skip_all, level = "trace")]
 pub fn parse_incoming(msg: &irc::proto::Message) -> Option<IncomingMessage> {
     match &msg.command {
         Command::PRIVMSG(channel, content) => {
@@ -87,12 +89,12 @@ pub fn parse_incoming(msg: &irc::proto::Message) -> Option<IncomingMessage> {
                 let user = content[0].clone();
                 let msg = content[1].clone();
 
-                tracing::info!(?command, user, msg, "RPL_[INIT CMD]");
+                tracing::info!(?command, user, msg, "RPL initial command");
                 None
             }
 
             _ => {
-                tracing::debug!(?command, "unknown IRC response command recv");
+                tracing::debug!(?command, "unknown_response_command");
                 None
             }
         },
@@ -129,7 +131,7 @@ pub fn parse_incoming(msg: &irc::proto::Message) -> Option<IncomingMessage> {
         }
     }
 }
-#[instrument]
+#[instrument(level = "trace")]
 pub fn parse_tags(msg: &irc::proto::Message, channel: &str) -> IrcTags {
     let mut result = IrcTags {
         channel_name: channel.rsplit('#').next().unwrap_or("UNKNOWN").to_string(),
@@ -158,7 +160,7 @@ pub fn parse_tags(msg: &irc::proto::Message, channel: &str) -> IrcTags {
     result
 }
 
-#[instrument]
+#[instrument(level = "trace")]
 pub fn parse_usernotice_tags(
     msg: &irc::proto::Message,
     content: &Vec<String>,
@@ -196,7 +198,7 @@ pub fn parse_usernotice_tags(
     (notice_type, message)
 }
 
-#[instrument(skip(msg_parts))]
+#[instrument(skip_all, level = "trace")]
 pub fn format_username(msg_parts: Vec<&str>) -> String {
     if msg_parts.len() != 1 {
         return format!("{}'s", msg_parts[1]);
@@ -205,7 +207,7 @@ pub fn format_username(msg_parts: Vec<&str>) -> String {
     "your".to_string()
 }
 
-#[instrument(skip(msg, counter_user))]
+#[instrument(skip_all, level = "trace")]
 pub fn is_counter_user(msg: &irc::proto::Message, counter_user: &str) -> bool {
     matches!(
         &msg.prefix,

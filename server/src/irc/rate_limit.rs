@@ -11,7 +11,6 @@ pub struct Bucket {
 }
 
 impl Bucket {
-    #[instrument(skip(duration, capacity))]
     pub fn new(duration: Duration, capacity: usize) -> Self {
         let sem = Arc::new(Semaphore::new(capacity));
         let handle = tokio::spawn({
@@ -29,10 +28,10 @@ impl Bucket {
                     if sem.available_permits() < capacity {
                         inner_interval.reset();
                         inner_interval.tick().await;
-                        tracing::info!(
+                        tracing::trace!(
                             current_bucket = sem.available_permits(),
                             capacity,
-                            "adding token back to bucket",
+                            "performing refill",
                         );
 
                         sem.add_permits(1);
@@ -44,7 +43,7 @@ impl Bucket {
         Self { sem, handle }
     }
 
-    #[instrument]
+    #[instrument(skip_all)]
     pub async fn acquire_one(&self) -> Result<bool, AcquireError> {
         let permit = self.sem.clone().acquire_owned().await?;
         permit.forget();
@@ -52,14 +51,13 @@ impl Bucket {
         Ok(true)
     }
 
-    #[allow(dead_code)]
-    #[instrument]
-    pub fn try_acquire_one(&self) -> bool {
-        match self.sem.try_acquire() {
-            Ok(_) => true,
-            Err(_) => false,
-        }
-    }
+    // #[instrument]
+    // pub fn try_acquire_one(&self) -> bool {
+    //     match self.sem.try_acquire() {
+    //         Ok(_) => true,
+    //         Err(_) => false,
+    //     }
+    // }
 }
 
 impl Drop for Bucket {
@@ -80,9 +78,9 @@ mod test {
         assert!(acq);
     }
 
-    #[tokio::test(start_paused = true)]
-    async fn acquire_succeeds_when_permit() {
-        let limiter = Bucket::new(Duration::from_millis(1500), 5);
-        assert!(limiter.try_acquire_one());
-    }
+    // #[tokio::test(start_paused = true)]
+    // async fn acquire_succeeds_when_permit() {
+    //     let limiter = Bucket::new(Duration::from_millis(1500), 5);
+    //     assert!(limiter.try_acquire_one());
+    // }
 }

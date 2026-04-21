@@ -4,8 +4,10 @@ use tracing::instrument;
 use super::redis::redis_pool::RedisResult;
 use crate::{db::prelude::ChannelId, util::helix::Helix};
 
-pub mod migrator;
 pub mod redis_pool;
+
+#[cfg(feature = "migration-util")]
+pub mod migrator;
 
 #[instrument(skip(redis_pool))]
 pub async fn clear_stream_states<R: AsyncCommands + Sync>(redis_pool: &mut R) -> RedisResult<()> {

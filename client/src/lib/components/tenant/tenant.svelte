@@ -1,15 +1,13 @@
 <script lang="ts">
 	import RowLayout from "$lib/components/leaderboard/row/layout.svelte";
 	import { mode } from "mode-watcher";
-	import { readableColor, type UntypedEntry } from "$lib/utils";
-	import Stats from "./stats/stats.svelte";
+	import { type UntypedEntry } from "$lib/utils";
 	import Pagination from "../leaderboard/filtering/pagination.svelte";
 	import { navigating, page } from "$app/state";
 	import Spinner from "$lib/shadcn-components/ui/spinner/spinner.svelte";
 	import { fade } from "svelte/transition";
 
 	let {
-		channelLogin,
 		channelData,
 		paginationData,
 	}: {
@@ -23,11 +21,12 @@
 		};
 	} = $props();
 
-	let { currentPage, totalItems, totalPages, itemsPerPage } =
-		$derived(paginationData);
+	let { totalItems, totalPages, itemsPerPage } = $derived(paginationData);
 
 	let displayName = $derived(channelData.name);
-	let scoreEntries = $derived(channelData.scores);
+	let scoreEntries: (UntypedEntry & { isLive: false })[] = $derived(
+		channelData.scores as unknown as (UntypedEntry & { isLive: false })[]
+	);
 
 	let currentUrl = $derived.by(() => {
 		const currentUrlBase = page.url;
@@ -49,11 +48,11 @@
 	class="w-full self-center lg:max-w-[610px] lg:min-w-[610px] lg:self-start xl:min-w-[350px]"
 >
 	{#if scoreEntries && scoreEntries.length > 0}
-		<div class="-mt-10 mb-22 text-center text-2xl">
+		<div class="-mt-10 mb-14 text-center text-2xl">
 			<span class="font-bold">{displayName}</span>'s top pissers
 		</div>
 		<div
-			class="flex shrink-0 flex-col space-y-2 lg:max-w-[850px] lg:min-w-[500px]"
+			class="flex shrink-0 flex-col lg:max-w-[850px] lg:min-w-[500px]"
 		>
 			<Pagination
 				pageNumber={paginationData.currentPage}
@@ -63,7 +62,7 @@
 				{totalPages}
 				pageParam={"score_page"}
 			/>
-			<div class="my-8"></div>
+			<div class="my-4"></div>
 
 			<div class="relative h-full w-full">
 				{#if navigating.to}
@@ -80,7 +79,9 @@
 			{/each}
 		</div>
 	{:else}
-		<div class="relative flex min-h-[70vh] items-start mt-8 lg:mt-0 lg:items-center justify-center">
+		<div
+			class="relative mt-8 flex min-h-[70vh] items-start justify-center lg:mt-0 lg:items-center"
+		>
 			piss has never been mentioned here
 		</div>
 	{/if}

@@ -84,7 +84,7 @@ pub async fn active_hooks(
 
         for sub in active_data.data.into_iter() {
             let broadcaster_id = &sub.condition.broadcaster_user_id;
-            let login: String = sqlx::query_scalar!(
+            let query = sqlx::query_scalar!(
                 r#"
                 SELECT login FROM chatter
                 WHERE id = $1
@@ -92,7 +92,20 @@ pub async fn active_hooks(
                 broadcaster_id,
             )
             .fetch_one(&mut *tx)
-            .await?;
+            .await;
+
+            let login = match query {
+                Ok(val) => val,
+                Err(e) => {
+                    tracing::error!(
+                        error = ?e,
+                        broadcaster_id,
+                        "failed to lookup broadcaster as chatter"
+                    );
+
+                    continue;
+                },
+            };
 
             channel_data.push((login, sub));
         }

@@ -67,7 +67,6 @@ impl ConnectionSupervisor {
     }
 
     /// Main event loop, where each iteration reflects one full connection lifecycle.
-    #[instrument(skip(self, msg_tx, cmd_rx, query_rx))]
     pub async fn run(
         &mut self,
         msg_tx: async_channel::Sender<IncomingMessage>,
@@ -83,19 +82,28 @@ impl ConnectionSupervisor {
                 .await
             {
                 Ok(reason) => {
-                    tracing::warn!(?reason, gen = self.generation, "connection ended");
+                    tracing::warn!(
+                        source = "irc::run",
+                        ?reason,
+                        gen = self.generation,
+                        "connection ended"
+                    );
                 }
                 Err(e) => {
-                    tracing::error!(error = ?e, gen = self.generation, "connection error");
+                    tracing::error!(
+                        source = "irc::run",
+                        error = ?e,
+                        gen = self.generation,
+                        "connection error"
+                    );
                 }
             }
 
             // momentary wait prior to attempting reconnection
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(3)).await;
         }
     }
 
-    #[instrument(skip(self, msg_tx, cmd_rx, query_rx))]
     async fn run_single_connection(
         &mut self,
         msg_tx: &async_channel::Sender<IncomingMessage>,
@@ -238,7 +246,7 @@ impl ConnectionSupervisor {
 #[derive(Debug)]
 pub struct ConnectionClient {
     pub inner: irc::client::Client,
-    #[allow(dead_code)]
+    // #[allow(dead_code)]
     pub channels: Vec<String>,
     pub joined: Vec<String>,
 }
@@ -269,17 +277,19 @@ impl ConnectionClient {
         })
     }
 
+    #[instrument(skip(self))]
     pub async fn insert_channel(&mut self, channel: &str) -> ClientResult<String> {
         let channel = format!("#{channel}");
         self.channels.push(channel.clone());
 
-        tracing::info!(channel, "joining new channel");
+        tracing::info!("attempting to join new channel");
+
         self.join_channel(&channel).await?;
 
         Ok(channel)
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     pub async fn connect(&mut self) -> ClientResult<()> {
         tracing::debug!("connecting to IRC: authorizing + requesting capabilities");
 
@@ -294,13 +304,13 @@ impl ConnectionClient {
         Ok(())
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all, fields(channel_room = ch))]
     pub async fn join_channel(&mut self, ch: &str) -> ClientResult<bool> {
         if let Err(e) = self.inner.send_join(ch) {
-            tracing::warn!(error = ?e, channel = ch, "JOIN failure");
+            tracing::error!(error = ?e, "JOIN failure");
             Ok(false)
         } else {
-            tracing::info!(channel = ch, "JOIN success");
+            tracing::info!("JOIN success");
             self.joined.push(ch.to_string());
             Ok(true)
         }
@@ -318,7 +328,7 @@ impl ConnectionClient {
         Ok(())
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     pub async fn join_all_channels(&mut self) -> ClientResult<()> {
         let channels = self.channels.clone();
         self.join_channels(channels).await

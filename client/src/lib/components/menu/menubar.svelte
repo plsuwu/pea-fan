@@ -32,7 +32,7 @@
 	const BASE_HOST_URL = `${Rh.proto}://${Rh.deriveBase(page.url.host)}`;
 	const BASE_API_URL = `${Rh.apiv1}`;
 
-	const searchDebounceCallback = debounce(handleSearch, 350);
+	const searchDebounceCallback = debounce(handleSearch, 500);
 
 	async function handleSearch(signal: AbortSignal, query: string) {
 		const login = query.trim();
@@ -162,7 +162,7 @@
 						class="ps-2!"
 						aria-label="open leaderboard menu"
 					>
-						<div>leaderboards</div>
+						<div class="pr-1">leaderboards</div>
 						<ChevronDown />
 					</Button>
 				{/snippet}
@@ -196,7 +196,7 @@
 		</Dropdown.Root>
 	</BGrp.Root>
 
-	<BGrp.Root class="hidden flex-row items-center justify-center md:flex -ml-32">
+	<BGrp.Root class="-ml-32 hidden flex-row items-center justify-center md:flex">
 		{#if inputVisible}
 			<div
 				in:slide={{ delay: 100, duration: 250, axis: "x", easing: expoOut }}

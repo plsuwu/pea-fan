@@ -91,10 +91,10 @@ export const load: PageServerLoad = async ({ cookies, locals, fetch }) => {
 		redirect(302, "/admin/login");
 	}
 	const configs = await getChannelConfigs(token, locals, "all");
-	const hooks = await getChannelHooks(token, locals, fetch);
+	const hooks = await getChannelHooks(token, locals, fetch) ?? new Array();
 	return {
 		configs,
-		hooks,
+        hooks,
 	};
 };
 
@@ -222,6 +222,35 @@ export const actions = {
 		try {
 			const res = await fetch("/api/hooks", {
 				method: "PUT",
+			});
+
+			if (!res.ok) {
+				logger.warn({ response: res }, "failed to process action");
+				return fail(res.status, {
+					error: res.statusText,
+				});
+			}
+
+			return {
+				success: true,
+				data: "ok",
+			};
+		} catch (err) {
+			logger.error({ error: err }, "failed while processing action");
+			return { success: false, error: err };
+		}
+	},
+
+	deletehooks: async ({ locals, fetch }) => {
+		const endpoint = `${Rh.apiAdmin}/helix/hooks`;
+		const logger = locals.logger.child({
+			action: "delete-hooks",
+			endpoint,
+		});
+
+		try {
+			const res = await fetch("/api/hooks", {
+				method: "DELETE",
 			});
 
 			if (!res.ok) {

@@ -52,7 +52,6 @@ pub struct WorkerPool {
 }
 
 impl WorkerPool {
-    #[instrument]
     pub fn spawn(
         count: usize,
         msg_rx: async_channel::Receiver<IncomingMessage>,
@@ -61,7 +60,6 @@ impl WorkerPool {
         pool: &'static PgPool,
     ) -> Self {
         let last_message = Arc::new(Mutex::new(LastMessage::default()));
-
         let workers = (0..count)
             .map(|id| {
                 let rx = msg_rx.clone();
@@ -89,7 +87,7 @@ impl WorkerPool {
     }
 }
 
-#[instrument]
+#[instrument(skip(pool), err)]
 async fn is_whitelisted_channel(
     pool: &'static PgPool,
     channel_id: &str,
@@ -100,7 +98,7 @@ async fn is_whitelisted_channel(
     Ok(row.enabled)
 }
 
-#[instrument(skip(msg, cmd_tx, last_message, bucket, pool))]
+#[instrument(skip_all, err)]
 async fn handle_message(
     msg: IncomingMessage,
     cmd_tx: &mpsc::Sender<OutgoingCommand>,
@@ -248,14 +246,14 @@ pub async fn build_query_response(
             }
         }
         Err(ConnectionClientError::SqlxError(err)) => {
-            tracing::warn!(error = ?err, "IRC-based query failed due to non-existant user");
+            tracing::info!(error = ?err, "user not found in local database");
 
             "none"
         }
         Err(err) => {
             // we "handle" this by logging the error and returning an empty string; Twitch
             // filters this empty message so we don't actually send anything.
-            tracing::error!(error = ?err, "IRC-based query failed in an unexpected way");
+            tracing::error!(error = ?err, "unexpected failure");
 
             return Ok(String::default());
         }
@@ -266,7 +264,7 @@ pub async fn build_query_response(
     ))
 }
 
-#[instrument(skip(user_id, chatter_repo))]
+#[instrument(skip_all)]
 async fn update_chatter_data(user_id: &str, chatter_repo: ChatterRepository) -> ClientResult<()> {
     let mut target_id = vec![user_id.to_owned()];
 
@@ -283,15 +281,14 @@ pub async fn increment_score(pool: &'static sqlx::PgPool, tags: &IrcTags) -> Cli
     let score_repo = LeaderboardRepository::new(pool);
 
     let chatter = chatter_repo.get_by_id(&tags.user_id.clone().into()).await?;
-    let exists = chatter.is_some();
 
-    if !exists {
-        tracing::debug!(?tags.user_id, "updating chatter: not in database");
+    if !chatter.is_some() {
+        tracing::debug!(?tags.user_id, "creating chatter (not in database)");
         update_chatter_data(&tags.user_id, chatter_repo).await?;
     } else if let Some(db_data) = chatter
         && update_threshold_elapsed(&db_data)
     {
-        tracing::debug!(?tags.user_id, "updating chatter: stale data in database");
+        tracing::debug!(?tags.user_id, "updating chatter (stale data in database)");
         update_chatter_data(&tags.user_id, chatter_repo).await?;
     }
 

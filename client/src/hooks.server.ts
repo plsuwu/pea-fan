@@ -1,6 +1,7 @@
 import { sequence } from "@sveltejs/kit/hooks";
 import {
 	redirect,
+	error,
 	type Handle,
 	type HandleServerError,
 	type RequestEvent,
@@ -8,30 +9,11 @@ import {
 import { logger } from "$lib/observability/server/logger.svelte";
 import { Rh } from "$lib/utils/route";
 import { getBaseURLFromRequest, isIpAddr, isLocalDomain } from "$lib/utils";
+import { adminBucket, apiBucket } from "$lib/server/rate-limiter/token-bucket";
+import { ADMIN_SESSION_TOKEN } from "$env/static/private";
 
-export const handleError: HandleServerError = ({ event, error, status }) => {
-	const context = event.tracing?.current
-		? event.tracing?.current.spanContext()
-		: event.tracing?.root?.spanContext();
-
-	const { spanId, traceId } = context;
-	const { url, locals } = event;
-
-	logger.error(
-		{
-			error,
-			extra: {
-				url,
-				locals,
-				spanId,
-				traceId,
-			},
-		},
-		"ERROR"
-	);
-
+export const handleError: HandleServerError = ({ status }) => {
 	let displayMessage;
-
 	switch (status) {
 		case 401:
 			displayMessage = "you arent authorized to view this page";
@@ -42,7 +24,7 @@ export const handleError: HandleServerError = ({ event, error, status }) => {
 			break;
 
 		case 429:
-			displayMessage = "too many requests";
+			displayMessage = "rate limit exceeded";
 			break;
 
 		case 500:
@@ -57,8 +39,6 @@ export const handleError: HandleServerError = ({ event, error, status }) => {
 	return {
 		message: displayMessage,
 		code: status,
-		traceId,
-		spanId,
 	};
 };
 
@@ -68,7 +48,6 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 		event.request.headers.get("x-host") ??
 		null;
 	if (!requestHost || isIpAddr(requestHost) || isLocalDomain(requestHost)) {
-		// event.locals.logger.trace("allowing by default");
 		event.locals.channel = null;
 
 		return resolve(event);
@@ -81,18 +60,11 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 		requestHost === Rh.base ||
 		requestHost === Rh.apiv1
 	) {
-		// event.locals.logger.trace("allowing base request");
 		event.locals.channel = null;
-
 		return resolve(event);
 	}
 
 	if (await Rh.reroutable(event, requestedTenant)) {
-		// event.locals.logger.trace(
-		// 	{ tenant: requestedTenant },
-		// 	"allowing route to valid tenant"
-		// );
-
 		event.locals.channel = requestedTenant;
 		return resolve(event);
 	} else {
@@ -136,21 +108,29 @@ const logInitHook: Handle = async ({ event, resolve }) => {
 		"logger init"
 	);
 
-	// // TODO:  check if we should rate limit
-	// if (shouldRateLimit(event.locals.client.cfconnecting)) {
-	// 	let response = await resolve(event);
-	// 	response = new Response(response.body, {
-	// 		...response,
-	// 		status: 429,
-	// 		headers: response.headers,
-	// 	});
-	//
-	// 	event.locals.logger.warn(
-	// 		{ response },
-	// 		"[TENANCY]: denying rate limited client"
-	// 	);
-	// 	return response;
-	// }
+	if (
+		event.route.id === "/admin/login" &&
+		event.cookies.get(ADMIN_SESSION_TOKEN) == null
+	) {
+		event.locals.logger.info({ route: event.route.id }, "checking rate limit");
+		if (!adminBucket.consume(event.locals.client.cfconnecting, 1)) {
+			error(429);
+		}
+	} else if (event.route.id?.startsWith("/api")) {
+		event.locals.logger.info({ route: event.route.id }, "checking rate limit");
+		if (!apiBucket.consume(event.locals.client.cfconnecting, 1)) {
+			return new Response(
+				JSON.stringify({ status: 429, error: "rate limit exceeded" }),
+				{
+					status: 429,
+					headers: {
+						"content-type": "application/json",
+						"retry-after": (apiBucket.timeoutMs / 1000).toString(),
+					},
+				}
+			);
+		}
+	}
 
 	return resolve(event);
 };

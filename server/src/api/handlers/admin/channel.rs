@@ -108,11 +108,21 @@ pub async fn new_channel(
         tracing::info!(?res, "creating stream state context");
 
         let channel_id = ChannelId::from(chatter.id.clone());
+        let live = Helix::get_streams(&vec![channel_id.0.clone()]).await?;
+        tracing::debug!(live_broadcasters = ?live, "retrieved stream states");
+
+        if live.len() > 0 {
+            if let Some(ch) = live.iter().next() {
+                let id = ChannelId(ch.id.to_owned());
+                redis::set_stream_state(&mut state.redis_pool.clone(), &id, true).await?;
+            }
+        }
+
         Helix::create_subscription(channel_id.clone(), StreamGenericRequestType::Online).await?;
         Helix::create_subscription(channel_id, StreamGenericRequestType::Offline).await?;
-        redis::init_stream_states(&mut state.redis_pool.clone(), &vec![chatter.id.0]).await?;
 
         tracing::info!("channel addition pipeline completed");
+
         Ok(ApiResponse::ok(chatter.login))
     })
     .await

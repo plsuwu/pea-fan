@@ -1,5 +1,5 @@
 pub mod channel;
-pub mod chatter;
+
 pub mod helix;
 
 use std::sync::Arc;

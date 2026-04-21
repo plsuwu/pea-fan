@@ -12,11 +12,9 @@
 	});
 
 	const META_IF_BASE =
-		"Leaderboard that ranks Twitch streamers and their chatters based on number of chat messages containing the word piss.";
-	const META_IF_CHANNEL = $derived.by(() =>
-		channelData
-			? `Leaderboard for ${channelData.name}'s top Twitch chatters ranked by the number of chat messages about piss.`
-			: ""
+		"leaderboard ranking a handful of twitch broadcasters by the number of times chatter messages have contained the word piss during a stream";
+	const META_IF_CHANNEL = $derived(
+		`leaderboard ranking chatters in twitch broadcaster ${channelData!.name}'s chat room based on the number of times their messages have contained the word piss`
 	);
 
 	let content = $derived.by(() => {

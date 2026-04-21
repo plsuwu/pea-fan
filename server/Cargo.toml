@@ -39,3 +39,6 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 lto = true
 opt-level = 3
 codegen-units = 1
+
+[features]
+migration-util = []

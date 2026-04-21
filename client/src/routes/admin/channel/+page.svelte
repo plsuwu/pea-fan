@@ -1,18 +1,20 @@
 <script lang="ts">
-	import { enhance } from "$app/forms";
 	import * as InputGroup from "$lib/shadcn-components/ui/input-group/index";
 	import Button from "$lib/shadcn-components/ui/button/button.svelte";
-
-	import { readableColor } from "$lib/utils";
-	import { CloudBackupIcon, CloudSyncIcon, PlusIcon } from "@lucide/svelte";
+	import {
+		CloudAlertIcon,
+		CloudBackupIcon,
+		CloudSyncIcon,
+		PlusIcon,
+	} from "@lucide/svelte";
 	import Label from "$lib/shadcn-components/ui/label/label.svelte";
 	import Checkbox from "$lib/shadcn-components/ui/checkbox/checkbox.svelte";
-	import { fly } from "svelte/transition";
-	import { expoOut } from "svelte/easing";
+	import Loading from "$lib/components/loading/loading.svelte";
+	import { enhance } from "$app/forms";
 	import { cn } from "tailwind-variants";
 	import { mode } from "mode-watcher";
 	import dayjs from "dayjs";
-	import Loading from "$lib/components/loading/loading.svelte";
+	import { readableColor } from "$lib/utils";
 
 	type HookInfo = {
 		id: string;
@@ -27,39 +29,36 @@
 	};
 
 	let { form, data } = $props();
-	// let live = $derived();
+
+	console.log("%cinitial hooks array:", "color: blue, font-weight: bold;");
+	console.log(data.hooks);
+
 	let waiting = $state(false);
 	let configs = $derived.by(() => {
 		const sortedConfigs = data.configs.sort((a, b) =>
 			a.login.localeCompare(b.login)
 		);
 
-		// const sortedHooks = (data.hooks as [string, any][]).sort(
-		//         ([ak, _a], [bk, _b]) => ak.localeCompare(bk)
-		// );'
+		const merged = sortedConfigs.map((cfg) => {
+			const hookInfo = (data.hooks as [string, HookInfo][])
+				.map((hook) => {
+					if (hook[0] === cfg.login) {
+						return hook[1];
+					}
+				})
+				.filter(Boolean);
 
-		const merged = sortedConfigs
-			.map((cfg) => {
-				const hookInfo = (data.hooks as [string, HookInfo][])
-					.map((hook) => {
-						if (hook[0] === cfg.login) {
-							return hook[1];
-						}
-					})
-					.filter(Boolean);
+			const isLive =
+				data.liveBroadcasters.find((br) => br.id === cfg.id) != null
+					? true
+					: false;
 
-				const isLive =
-					data.liveBroadcasters.find((br) => br.id === cfg.id) != null
-						? true
-						: false;
-
-				return {
-					...cfg,
-					live: isLive,
-					hook: hookInfo,
-				};
-			})
-			.filter((cfg) => cfg.hook.length > 0);
+			return {
+				...cfg,
+				live: isLive,
+				hook: hookInfo.length > 0 ? hookInfo : null,
+			};
+		});
 
 		return merged;
 	});
@@ -69,6 +68,7 @@
 
 	let filter = $state("");
 	let cfgs = $derived.by(() => {
+		console.log(configs);
 		const cfgs = configs;
 		if (filter !== "") {
 			return cfgs.filter((el) => el.login.includes(filter));
@@ -175,6 +175,31 @@
 			<CloudBackupIcon class="size-5" />
 		</Button>
 	</form>
+	<form
+		class="flex flex-row items-center space-x-2"
+		action="?/deletehooks"
+		method="POST"
+		use:enhance={() => {
+			waiting = true;
+
+			return async ({ update }) => {
+				await update();
+				waiting = false;
+			};
+		}}
+	>
+		<Label for="clear-hooks">clear hooks</Label>
+		<Button
+			id="clear-hooks"
+			type="submit"
+			class="rounded-full"
+			size="icon-sm"
+			variant="outline"
+			disabled={waiting}
+		>
+			<CloudAlertIcon class="size-5 text-red-800" />
+		</Button>
+	</form>
 </div>
 <div class="mb-16 px-12">
 	<div class="my-4 w-full border-b-2"></div>
@@ -221,25 +246,30 @@
 					class="flex w-full flex-col items-center justify-center rounded-md px-4 md:flex-row"
 				>
 					<div class="flex w-[350px] flex-col space-y-1 text-start text-xs">
-						{#each Array(0, 1) as idx}
+						{#if cfg.hook == null || cfg.hook.length != 2}
+							<div
+								class="flex h-full flex-row items-center self-center text-center text-red-600"
+							>
+								missing hook/s
+							</div>
+						{/if}
+						{#each cfg.hook as hook}
 							<div class="flex w-full flex-row items-center">
 								<div class="w-full self-start">
 									{cfg.hook
-										? dayjs(cfg.hook?.[idx]?.created_at).format(
-												"HH:mm A, YY-MM-DD"
-											)
+										? dayjs(hook?.created_at).format("HH:mm A, YY-MM-DD")
 										: ""}
 								</div>
 								<div class="w-full self-start">
-									{cfg.hook?.[idx]?.type ?? ""}
+									{hook?.type ?? "hook error"}
 								</div>
 								<div
 									class={cn(
 										"w-full self-end",
-										cfg.hook != null ? "text-foreground" : "text-accent"
+										hook != null ? "text-foreground" : "text-accent"
 									)}
 								>
-									[{cfg.hook?.[idx]?.status ?? "disabled"}]
+									[{hook?.status ?? ""}]
 								</div>
 							</div>
 						{/each}

@@ -26,10 +26,17 @@
 
 	// const BASE_URL = new URL(`${Rh.proto}://${Rh.api}/search/by-login`);
 	function navigateTo(result: (typeof results)[0]) {
-		const href = `${Rh.proto}://${Rh.deriveBase(page.url.host)}/leaderboard/chatter?page=${result.page}#${result.ranking}`;
+		const derivedBase = Rh.deriveBase(page.url.host);
+		console.log(page.url.host);
+
+		const href = `${Rh.proto}://${derivedBase}/leaderboard/chatter?page=${result.page}#${result.ranking}`;
 		clearSearch();
 
-		goto(href);
+		if (derivedBase === page.url.host) {
+			goto(href);
+		} else {
+			window.location.href = href;
+		}
 	}
 </script>
 

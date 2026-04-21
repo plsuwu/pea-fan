@@ -49,7 +49,7 @@
 <svelte:head>
 	<meta
 		name="description"
-		content={`leaderboard of the top ${variant}s ranked by total number of Twitch chat messages containing the word 'piss'.`}
+		content="leaderboard ranking a handful of twitch broadcasters by the number of times a chatter's messages have contained the word piss."
 	/>
 </svelte:head>
 

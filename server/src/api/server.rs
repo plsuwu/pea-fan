@@ -21,6 +21,7 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 use tokio::task::{JoinError, JoinHandle};
 use tower_http::trace::TraceLayer;
 use tracing::instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::api::middleware::cors_layer;
 use crate::api::middleware::verify_external::{get_hmac_key, verify_external_ident};
@@ -58,13 +59,6 @@ impl<T: Serialize> ApiResponse<T> {
             data: None,
         })
     }
-
-    // pub fn err() -> Json<ApiResponse<String>> {
-    //     Json(ApiResponse {
-    //         status: 401,
-    //         data: Some("unauthorized".to_string()),
-    //     })
-    // }
 }
 
 impl<T: Serialize> IntoResponse for ApiResponse<T> {
@@ -84,6 +78,7 @@ pub struct AppState {
     pub totp_handler: Arc<Mutex<TOTPHandler>>,
 }
 
+#[instrument(skip_all, fields(num_ids = channel_ids.len()))]
 pub async fn stream_online_hook_handler<R: AsyncCommands + Sync>(
     channel_ids: &[String],
     mut redis_pool: R,
@@ -100,17 +95,6 @@ pub async fn stream_online_hook_handler<R: AsyncCommands + Sync>(
 
     Ok(())
 }
-
-// /// Custom error trace handler for `RouteError`-type responses
-// #[instrument(skip(request, next), fields(uri = request.uri().to_string()))]
-// async fn log_route_errors(request: Request, next: Next) -> Response {
-//     let res = next.run(request).await;
-//     if let Some(err) = res.extensions().get::<Arc<RouteError>>() {
-//         tracing::error!(error = ?err, "error occurred inside route handler");
-//     }
-//
-//     res
-// }
 
 #[instrument(skip(database_pool))]
 pub async fn initialize_channels(
@@ -157,11 +141,6 @@ fn public_chatter_routes() -> Router<Arc<AppState>> {
 
 fn restricted_routes() -> Router<Arc<AppState>> {
     let update_routes = Router::new()
-        .route("/chatter", put(admin::chatter::update_chatter_from_cache))
-        .route(
-            "/chatter-scores",
-            delete(admin::chatter::clear_chatter_scores),
-        )
         .route(
             "/channels",
             post(admin::channel::new_channel).put(admin::channel::update_channel_data),
@@ -191,11 +170,11 @@ fn restricted_routes() -> Router<Arc<AppState>> {
         .nest("/irc", irc_routes)
 }
 
+#[instrument]
 async fn check_health() -> ApiResult<&'static str> {
     Ok(ApiResponse::ok("healthy"))
 }
 
-#[instrument(skip(tx, database_pool, redis_pool, totp_handler))]
 pub async fn router(
     tx: tokio::sync::mpsc::UnboundedSender<SocketAddr>,
     database_pool: &'static Pool<Postgres>,
@@ -265,10 +244,24 @@ pub async fn router(
                         .get::<MatchedPath>()
                         .map(|matched| matched.as_str());
 
+                    let headers = req.headers();
+                    let cfconnecting = headers
+                        .get("cf-connecting-ip")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("MISSING");
+
+                    let country = headers
+                        .get("cf-ipcountry")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("MISSING");
+
                     tracing::info_span!(
                         "http_request",
                         method = %req.method(),
                         path = ?matched_path,
+                        cfconnecting,
+                        country,
+                        user_agent = tracing::field::Empty,
                     )
                 })
                 .on_response(
@@ -279,16 +272,23 @@ pub async fn router(
                                 %status,
                                 latency_ms = latency.as_millis(),
                                 error = ?err,
-                                "request failed",
+                                "processing_failure",
                             );
+                            
                         } else if status.is_server_error() || status.is_client_error() {
-                            tracing::warn!(%status, latency_ms = latency.as_millis(), "error status");
+                            tracing::warn!(%status, latency_ms = latency.as_millis(), "request_result_non2xx");
                         } else {
-                            tracing::info!(%status, latency_ms = latency.as_millis(), "completed");
+                            tracing::info!(%status, latency_ms = latency.as_millis(), "request_result_2xx");
                         }
                     },
-                ).on_request(|req: &Request, _span: &tracing::Span| {
-                    tracing::debug!(request_uri = ?req.uri(), "started processing");
+                ).on_request(|req: &Request, span: &tracing::Span| {
+                    let user_agent = req.headers()
+                        .get(http::header::USER_AGENT)
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("MISSING");
+
+                    span.record("user-agent", user_agent);
+                    tracing::debug!(request_uri = ?req.uri(), "receive_request");
                 }),
         )
         .with_state(state);
@@ -302,33 +302,31 @@ pub async fn router(
     let socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
     let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
 
-    // I think we want to trigger these manually whenever we need them instead of
-    // automatically run them like this?
-    //
-    // if !cfg!(debug_assertions) {
-    //     tokio::spawn(async move {
-    //         let _guard = server_state_clone.channel_ids.read().await;
-    //         let channel_ids = _guard.clone();
-    //
-    //         drop(_guard);
-    //         match stream_online_hook_handler(&channel_ids, server_state_clone.redis_pool.clone())
-    //             .await
-    //         {
-    //             Ok(_) => (),
-    //             Err(e) => {
-    //                 tracing::error!(error = ?e, "error while initialising stream states");
-    //             }
-    //         }
-    //     })
-    //     .await
-    //     .unwrap();
-    // }
+    // we want to trigger these every time we run as each new run uses a unique HMAC secret
+    if !cfg!(debug_assertions) {
+        tokio::spawn(async move {
+            let _guard = server_state_clone.channel_ids.read().await;
+            let channel_ids = _guard.clone();
+
+            drop(_guard);
+            match stream_online_hook_handler(&channel_ids, server_state_clone.redis_pool.clone())
+                .await
+            {
+                Ok(_) => (),
+                Err(e) => {
+                    tracing::error!(error = ?e, "error while initialising stream states");
+                }
+            }
+        })
+        .await
+        .unwrap();
+    }
 
     tx.send(socket_addr).unwrap();
     axum::serve(listener, app).await.unwrap()
 }
 
-#[instrument]
+#[instrument(skip_all, err)]
 pub async fn start_server(
     tx: UnboundedSender<SocketAddr>,
     mut rx: UnboundedReceiver<SocketAddr>,
@@ -336,7 +334,7 @@ pub async fn start_server(
     redis_pool: ConnectionManager,
     totp_handler: Arc<Mutex<TOTPHandler>>,
 ) -> Result<Vec<JoinHandle<()>>, RouteError> {
-    tracing::info!("starting server...");
+    tracing::info!("starting server");
 
     let server_handle = tokio::task::spawn(async move {
         router(tx, database_pool, redis_pool, totp_handler).await;
@@ -452,158 +450,3 @@ impl IntoResponse for RouteError {
         response
     }
 }
-
-// replace the (frankly) disgusting error handling below with the above block once
-// routes are PROPERLY implemented!
-
-// impl IntoResponse for RouteError {
-//     fn into_response(self) -> Response {
-//         #[derive(Serialize)]
-//         struct ErrorResponse {
-//             message: String,
-//         }
-//
-//         let (status, message, err) = match &self {
-//             RouteError::ValidationError(error) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 error.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::SignalError(error) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 error.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::SerdeJsonError(error) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 error.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::RedisError(error) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 error.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::JoinError(error) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 error.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::IrcClientError(error) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 error.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::TryRecvError(error) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 error.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::ChannelSendError(error) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 error.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::ChannelRecvError(error) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 error.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::InvalidUser(ident) => (
-//                 StatusCode::BAD_REQUEST,
-//                 format!("invalid login or id '{ident}'"),
-//                 Some(self),
-//             ),
-//
-//             RouteError::SqlxError(err) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 err.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::QueryError(err) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 err.to_string(),
-//                 Some(self),
-//             ),
-//
-//             RouteError::GenericStatusCode(status) => (
-//                 status.to_owned(),
-//                 String::from("invalid authorization header"),
-//                 Some(self),
-//             ),
-//
-//             RouteError::ChannelFetch(err) => (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 format!("error during channel fetch: {err}"),
-//                 Some(self),
-//             ),
-//
-//             RouteError::HelixError(helix_err) => {
-//                 match helix_err {
-//                     HelixErr::MiddlewareError(error) => (
-//                         StatusCode::INTERNAL_SERVER_ERROR,
-//                         error.to_string(),
-//                         Some(self),
-//                     ),
-//                     HelixErr::SerdeError(error) => (
-//                         StatusCode::INTERNAL_SERVER_ERROR,
-//                         error.to_string(),
-//                         Some(self),
-//                     ),
-//                     HelixErr::ReqwestError(error) => (
-//                         StatusCode::INTERNAL_SERVER_ERROR,
-//                         error.to_string(),
-//                         Some(self),
-//                     ),
-//                     HelixErr::FetchErr(error) => (
-//                         StatusCode::INTERNAL_SERVER_ERROR,
-//                         error.to_string(),
-//                         Some(self),
-//                     ),
-//                     HelixErr::EnvError(error) => (
-//                         StatusCode::INTERNAL_SERVER_ERROR,
-//                         error.to_string(),
-//                         Some(self),
-//                     ),
-//                     HelixErr::HeaderError(_) => (
-//                         StatusCode::INTERNAL_SERVER_ERROR,
-//                         String::from("helix reported a malformed request from our server"),
-//                         Some(self),
-//                     ),
-//                     HelixErr::InvalidUsername => (
-//                         StatusCode::BAD_REQUEST,
-//                         String::from("invalid username queried"),
-//                         None, // not necessarily an error for our server to care about
-//                     ),
-//                     HelixErr::EmptyDataField => (
-//                         StatusCode::BAD_REQUEST,
-//                         String::from("received empty data array from helix api (malformed login?)"),
-//                         // this also probably isnt our concern, but im still not 100%
-//                         // on why this occurs and its probably good to have information about
-//                         Some(self),
-//                     ),
-//                     HelixErr::FetchErrWithBody { body } => {
-//                         (StatusCode::BAD_REQUEST, body.to_string(), Some(self))
-//                     }
-//                 }
-//             }
-//         };
-//
-//         let mut response = (status, Json(ErrorResponse { message })).into_response();
-//         if let Some(err) = err {
-//             response.extensions_mut().insert(Arc::new(err));
-//         }
-//
-//         response
-//     }
-// }

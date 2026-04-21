@@ -24,7 +24,7 @@ export const POST: RequestHandler = async ({ request, locals, url, fetch }) => {
 
 		const body = JSON.stringify({
 			content: JSON.stringify({
-				"cf-client": locals.client.cfconnecting,
+				"cfconnecting": locals.client.cfconnecting,
 				...input,
 			}),
 		});

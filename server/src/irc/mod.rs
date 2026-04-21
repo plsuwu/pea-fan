@@ -21,21 +21,22 @@ use tracing::instrument;
 
 use crate::irc::{connection::ConnectionSupervisor, rate_limit::Bucket, worker::WorkerPool};
 
-#[instrument]
 pub async fn start(
     channels: Vec<String>,
     pool: &'static PgPool,
     worker_count: usize,
 ) -> ClientResult<IrcHandle> {
+    tracing::info!("starting up irc connection");
+
     let (mut supervisor, conn_handle) = ConnectionSupervisor::new(channels);
 
     let (msg_tx, msg_rx) = async_channel::bounded(256);
     let (cmd_tx, cmd_rx) = mpsc::channel(64);
     let (query_tx, query_rx) = mpsc::channel(32);
-    
-    // one permit per bucket, polls for an empty bucket every 1.15 secons and if the bucket is
-    // empty, waits an additional 1.15 seconds before refilling
-    let rate_limiter = Arc::new(Bucket::new(Duration::from_millis(1150), 1));
+
+    // one permit per bucket, polls for an empty bucket every 500ms - if the bucket is empty, waits
+    // an additional 1100s before refilling to ensure irc rate limits are adhered to
+    let rate_limiter = Arc::new(Bucket::new(Duration::from_millis(1100), 1));
     let _workers = WorkerPool::spawn(worker_count, msg_rx, cmd_tx.clone(), rate_limiter, pool);
 
     tokio::spawn(async move {
@@ -63,7 +64,7 @@ pub enum ReplyReason {
 }
 
 impl ReplyReason {
-    #[instrument(skip(self))]
+    #[instrument(skip_all, ret(level = "info"))]
     pub fn get_reply(&self) -> &'static str {
         let reasons = match self {
             ReplyReason::BotCountQueried => Self::BOT_COUNT_QUERY,

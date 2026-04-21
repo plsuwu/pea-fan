@@ -76,7 +76,7 @@
 
         client = pkgs.buildNpmPackage {
           pname = "piss-fan-client";
-          version = "1.3.2";
+          version = "1.4.2";
           src = ./client;
 
           npmDepsHash = "sha256-hZHjcSrdKGYSz1rkKDHCwUZNgpnRjddxy23QipPT0Sc=";
@@ -108,7 +108,9 @@
           buildInputs = with pkgs; [
             pkg-config
             openssl
+
             jq
+            cloudflared
 
             feroxbuster
             seclists

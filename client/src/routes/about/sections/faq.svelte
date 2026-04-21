@@ -26,7 +26,7 @@
                     <li><b>"pi ss"</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  --> no..</li>
                 </ul>
             there is a maximum of one point per chat message, so mentioning piss multiple times
-            in the same message will still be +1.
+            in the same message does not yield additional points.
             `,
 		},
 	];
