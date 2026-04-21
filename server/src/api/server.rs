@@ -21,7 +21,6 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 use tokio::task::{JoinError, JoinHandle};
 use tower_http::trace::TraceLayer;
 use tracing::instrument;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::api::middleware::cors_layer;
 use crate::api::middleware::verify_external::{get_hmac_key, verify_external_ident};
