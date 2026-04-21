@@ -17,20 +17,15 @@
 	} = $props();
 
 	let currentMode = $derived(mode.current);
-	let displayable = $derived.by(() => {
-		if (variant !== "Channel" || !onlyShowLive) {
-			return entries;
-		} else if (onlyShowLive) {
-			return entries.filter((entry) => entry.isLive);
-		}
-	});
+	let filtering = $derived(variant === "Channel" && onlyShowLive);
 </script>
 
 {#snippet Loader()}
 	<div
 		in:fade={{ delay: 0, duration: 200 }}
 		out:fade={{ delay: 0, duration: 200 }}
-		class="absolute z-30 flex h-full w-full items-center justify-center min-h-screen bg-background/75"
+		class="absolute z-30 flex h-full min-h-screen w-full items-center
+        justify-center bg-background/75"
 	>
 		<Spinner class="size-8" />
 	</div>
@@ -46,8 +41,10 @@
 		in:fade={{ delay: 0, duration: 0 }}
 		out:fade={{ delay: 100, duration: 0 }}
 	>
-		{#each displayable as entry}
-			<RowLayout {entry} {variant} mode={currentMode} showScoreIcons={true} />
+		{#each entries as entry}
+			<div class:hidden={filtering && !entry.isLive}>
+				<RowLayout {entry} {variant} mode={currentMode} showScoreIcons={true} />
+			</div>
 		{/each}
 	</div>
 </div>
