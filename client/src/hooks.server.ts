@@ -10,7 +10,9 @@ import { logger } from "$lib/observability/server/logger.svelte";
 import { Rh } from "$lib/utils/route";
 import { getBaseURLFromRequest, isIpAddr, isLocalDomain } from "$lib/utils";
 import { adminBucket, apiBucket } from "$lib/server/rate-limiter/token-bucket";
-import { ADMIN_SESSION_TOKEN } from "$env/static/private";
+import { env } from "$env/dynamic/private";
+
+const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
 export const handleError: HandleServerError = ({ status }) => {
 	let displayMessage;
