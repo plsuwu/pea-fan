@@ -49,7 +49,7 @@
 <svelte:head>
 	<meta
 		name="description"
-		content="leaderboard ranking a handful of twitch broadcasters by the number of times a chatter's messages have contained the word piss."
+        content="Leaderboard ranking a handful of Twitch broadcasters (primarily vtubers) by the number of times a chatter has sent a message about piss to their chat room."
 	/>
 </svelte:head>
 

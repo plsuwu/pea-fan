@@ -110,29 +110,29 @@ const logInitHook: Handle = async ({ event, resolve }) => {
 		"logger init"
 	);
 
-	if (
-		event.route.id === "/admin/login" &&
-		event.cookies.get(ADMIN_SESSION_TOKEN) == null
-	) {
-		event.locals.logger.info({ route: event.route.id }, "checking rate limit");
-		if (!adminBucket.consume(event.locals.client.cfconnecting, 1)) {
-			error(429);
-		}
-	} else if (event.route.id?.startsWith("/api")) {
-		event.locals.logger.info({ route: event.route.id }, "checking rate limit");
-		if (!apiBucket.consume(event.locals.client.cfconnecting, 1)) {
-			return new Response(
-				JSON.stringify({ status: 429, error: "rate limit exceeded" }),
-				{
-					status: 429,
-					headers: {
-						"content-type": "application/json",
-						"retry-after": (apiBucket.timeoutMs / 1000).toString(),
-					},
-				}
-			);
-		}
-	}
+	// if (
+	// 	event.route.id === "/admin/login" &&
+	// 	event.cookies.get(ADMIN_SESSION_TOKEN) == null
+	// ) {
+	// 	event.locals.logger.info({ route: event.route.id }, "checking rate limit");
+	// 	if (!adminBucket.consume(event.locals.client.cfconnecting, 1)) {
+	// 		error(429);
+	// 	}
+	// } else if (event.route.id?.startsWith("/api")) {
+	// 	event.locals.logger.info({ route: event.route.id }, "checking rate limit");
+	// 	if (!apiBucket.consume(event.locals.client.cfconnecting, 1)) {
+	// 		return new Response(
+	// 			JSON.stringify({ status: 429, error: "rate limit exceeded" }),
+	// 			{
+	// 				status: 429,
+	// 				headers: {
+	// 					"content-type": "application/json",
+	// 					"retry-after": (apiBucket.timeoutMs / 1000).toString(),
+	// 				},
+	// 			}
+	// 		);
+	// 	}
+	// }
 
 	return resolve(event);
 };

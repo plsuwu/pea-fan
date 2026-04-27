@@ -196,7 +196,7 @@
 
 	<footer class="z-10 border-t-2 bg-background py-2">
 		<div
-			class="px-12 flex h-[200px] max-h-[200px] min-h-[200px] flex-row items-center"
+			class="flex h-[200px] max-h-[200px] min-h-[200px] flex-row items-center px-12"
 		>
 			<Footer />
 		</div>
