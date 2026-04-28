@@ -16,7 +16,7 @@
 		getModeCookie,
 		getParentDomain,
 	} from "$lib/utils/mode-cookie.svelte";
-	import { Rh } from "$lib/utils/route";
+	import { routeManager } from "$lib/utils/route";
 
 	import Footer from "$lib/components/menu/footer.svelte";
 	import Stats from "$lib/components/tenant/stats/stats.svelte";
@@ -84,7 +84,8 @@
 	});
 
 	function getNextUrlBase(path: string) {
-		const next = new URL(`${Rh.proto}://${Rh.deriveBase(host)}`);
+		// const next = new URL(`${Rh.proto}://${Rh.deriveBase(host)}`);
+		const next = routeManager.getUntenantedURL(host);
 
 		next.pathname = path;
 		next.searchParams.set("page", "1");
@@ -162,7 +163,7 @@
 		{#if channel}
 			<div class="hidden w-[90%] justify-self-center lg:block">
 				<a
-					href={`${Rh.proto}://${Rh.deriveBase(page.url.host)}/leaderboard/channel`}
+					href={`${routeManager.getUntenantedURL(page.url.host).href}leaderboard/channel`}
 					class="flex w-max items-center justify-start px-8 pt-2 text-accent-foreground/15
                         transition-all duration-100 ease-in hover:text-accent-foreground/35"
 				>

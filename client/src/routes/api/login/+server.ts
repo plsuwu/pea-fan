@@ -1,8 +1,9 @@
 import { json, type RequestEvent, type RequestHandler } from "@sveltejs/kit";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 import { buildHeaders } from "$lib/server/verify";
 
-const TOKEN_ENDPOINT = new URL(`${Rh.apiv1}/auth/new-session`);
+// const TOKEN_ENDPOINT = new URL(`${Rh.apiv1}/auth/new-session`);
+const TOKEN_ENDPOINT = routeManager.internApiUrl("_admin", "auth/new-session");
 
 export const POST: RequestHandler = async ({ locals, request, fetch }) => {
 	const logger = locals.logger.child({

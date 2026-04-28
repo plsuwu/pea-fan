@@ -3,7 +3,7 @@ import type { Actions } from "@sveltejs/kit";
 import { fail, redirect } from "@sveltejs/kit";
 import { logger } from "$lib/observability/server/logger.svelte";
 import { invalidateCookie } from "$lib/server";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 import { buildHeaders, verifyToken } from "$lib/server/verify";
 
 // TODO:
@@ -13,7 +13,8 @@ import { buildHeaders, verifyToken } from "$lib/server/verify";
 
 async function getChannelConfigs(token: string, id = "all") {
 	const headers = buildHeaders(true, token);
-	const url = new URL(`${Rh.apiAdmin}/update/bot-config`);
+	// const url = new URL(`${Rh.apiAdmin}/update/bot-config`);
+	const url = new URL(routeManager.internApiUrl("_admin", "update/bot-config"));
 
 	url.searchParams.set("id", id);
 	const res = await fetch(url, {
@@ -32,7 +33,10 @@ async function getChannelConfigs(token: string, id = "all") {
 
 export const load: PageServerLoad = async ({ cookies, url, fetch, locals }) => {
 	if (locals.channel) {
-		redirect(302, `${Rh.proto}://${Rh.deriveBase(url.host)}/admin`);
+		// redirect(302, `${Rh.proto}://${Rh.deriveBase(url.host)}/admin`);
+
+		const adminLogin = `${routeManager.getUntenantedURL(url.host)}/admin`;
+		redirect(302, adminLogin);
 	}
 
 	let token = await verifyToken(cookies, locals, fetch);
@@ -51,7 +55,8 @@ export const load: PageServerLoad = async ({ cookies, url, fetch, locals }) => {
 const isDigits = (str: string) => /^\d+$/.test(str);
 
 function getHelixQueryType(user: string): string {
-	if (isDigits(user) && user.length >= 8 && user.length <= 10) {
+	//i think generall
+	if (isDigits(user) && user.length >= 7 && user.length <= 11) {
 		return "by-id";
 	}
 
@@ -77,14 +82,24 @@ export const actions = {
 			const formData = await request.formData();
 			const user = formData.get("user") as string;
 
-			if (user === "" || user.length < 3) {
+			// NOTE that it is technically possible for users to have 1-3 character names, though
+			// these are usually antiquated or twitch staff.
+			// e.g.:
+			//  - https://www.twitch.tv/x
+			//  - https://www.twitch.tv/fig (among others)
+			//  - ...
+			if (user === "") {
 				logger.warn({ user: user }, "missing or invalid user identifier");
 				return fail(400, {
 					error: "missing or invalid user identifier",
 				});
 			}
 
-			const endpoint = `${Rh.apiAdmin}/helix/${getHelixQueryType(user)}/${user}`;
+			const endpoint = routeManager.internApiUrl(
+				"_admin",
+				`helix/${getHelixQueryType(user)}/${user}`
+			);
+
 			logger.setBindings({
 				endpoint,
 				user,
@@ -121,7 +136,8 @@ export const actions = {
 			const formData = await request.formData();
 			const user = formData.get("user") as string;
 
-			const endpoint = `${Rh.apiv1}/search/${user}`;
+			// const endpoint = `${Rh.apiv1}/search/${user}`;
+			const endpoint = routeManager.internApiUrl("search", user);
 			const res = await fetch(endpoint, {
 				method: "GET",
 			});
@@ -202,7 +218,12 @@ async function runUpdate(
 	headers: Headers,
 	fetch: typeof globalThis.fetch
 ) {
-	const updateEndpoint = `${Rh.apiAdmin}/update/${keytype}`;
+	// const updateEndpoint = `${Rh.apiAdmin}/update/${keytype}`;
+	const updateEndpoint = routeManager.internApiUrl(
+		"_admin",
+		`update/${keytype}`
+	);
+
 	const res = await fetch(updateEndpoint, {
 		method: "PUT",
 		headers,

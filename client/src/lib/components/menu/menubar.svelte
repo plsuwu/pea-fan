@@ -4,19 +4,16 @@
 	import {
 		Tv,
 		House,
-		MenuIcon,
 		SearchIcon,
 		UsersRound,
 		ChevronDown,
 		CircleQuestionMarkIcon,
 		RouterIcon,
-		NotebookIcon,
-		StickyNoteIcon,
 		EllipsisVerticalIcon,
 		ToggleLeft,
 		ToggleRight,
 	} from "@lucide/svelte";
-	import { Rh } from "$lib/utils/route";
+	import { routeManager } from "$lib/utils/route";
 	import * as Dropdown from "$lib/shadcn-components/ui/dropdown-menu";
 	import * as BGrp from "$lib/shadcn-components/ui/button-group";
 	import * as InputGroup from "$lib/shadcn-components/ui/input-group";
@@ -25,12 +22,14 @@
 	import { slide } from "svelte/transition";
 	import { expoOut } from "svelte/easing";
 	import { debounce, type SearchResult } from "./search-handler.svelte";
-	import ModeChanger from "./mode-changer.svelte";
 	import { mode, toggleMode } from "mode-watcher";
 	import { setModeCookie } from "$lib/utils/mode-cookie.svelte";
+	import { logger } from "$lib/observability/server/logger.svelte";
 
-	const BASE_HOST_URL = `${Rh.proto}://${Rh.deriveBase(page.url.host)}`;
-	const BASE_API_URL = `${Rh.apiv1}`;
+	// const BASE_HOST_URL = `${Rh.proto}://${Rh.deriveBase(page.url.host)}`;
+	// const BASE_API_URL = `${Rh.apiv1}`;
+
+	const BASE_HOST_URL = routeManager.getUntenantedURL(page.url.host).href;
 
 	const searchDebounceCallback = debounce(handleSearch, 500);
 
@@ -46,12 +45,12 @@
 		}
 
 		try {
-			const queryUrl = () => {
-				const url = new URL(`${BASE_API_URL}/search/${login}`);
-				return url;
-			};
+			const apiRoute = routeManager.externApiUrl("search", login);
+			logger.debug({ endpoint: apiRoute }, "searching via route");
+			const res = await fetch(apiRoute, {
+				signal,
+			});
 
-			const res = await fetch(queryUrl().href, { signal });
 			if (!signal.aborted) {
 				const body = await res.json();
 				console.log(body.data);
@@ -90,10 +89,10 @@
 	});
 
 	const ROUTE = {
-		channel: "/leaderboard/channel",
-		chatter: "/leaderboard/chatter",
-		about: "/about",
-		bot: "/bot",
+		channel: "leaderboard/channel",
+		chatter: "leaderboard/chatter",
+		about: "about",
+		bot: "bot",
 	} as const;
 
 	type Route = keyof typeof ROUTE;

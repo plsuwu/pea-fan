@@ -1,31 +1,11 @@
 import { buildHeaders } from "$lib/server/verify";
 import type { RequestHandler } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 import { json } from "@sveltejs/kit";
-import { randomUUID } from "node:crypto";
 
+const HOOKS_ENDPOINT = routeManager.internApiUrl("_admin", "helix/hooks");
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
-const HOOKS_ENDPOINT = `${Rh.apiAdmin}/helix/hooks`;
-
-type HookInfo = {
-	condition: {
-		broadcaster_user_id: string;
-	};
-	id: string;
-	type: string;
-	status: "enabled" | "disabled";
-	version: "1";
-	cost: number;
-	transport: {
-		callback: string;
-		method: string;
-		secret: null;
-	};
-	created_at: string;
-};
-
-type BroadcasterHook = { data: [string, HookInfo][] };
 
 // Hook retrieval handler
 export const GET: RequestHandler = async ({ locals, cookies, request }) => {

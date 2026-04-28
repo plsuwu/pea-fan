@@ -1,5 +1,5 @@
 import type { PageServerLoad } from "./$types";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 import type { Logger } from "pino";
 
 export const load: PageServerLoad = async ({ fetch, locals }) => {
@@ -22,7 +22,8 @@ async function fetchBotEnabledBroadcasters(
 	fetch: typeof globalThis.fetch,
 	logger: Logger
 ): Promise<ChannelBotStatus[]> {
-	const uri = `${Rh.apiv1}/channel/bot-state`;
+	// const uri = `${Rh.apiv1}/channel/bot-state`;
+    const uri = routeManager.internApiUrl("channel", "bot-state");
 	const childLogger = logger.child({ url: uri });
 
 	try {

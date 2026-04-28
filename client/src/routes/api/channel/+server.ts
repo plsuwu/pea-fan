@@ -1,10 +1,10 @@
 import { env } from "$env/dynamic/private";
 import { buildHeaders, verifyToken } from "$lib/server/verify";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 import { json, type RequestHandler } from "@sveltejs/kit";
 
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
-const CHANNELS_ENDPOINT = `${Rh.apiAdmin}/update/channels`;
+const CHANNELS_ENDPOINT = routeManager.internApiUrl("_admin", "update/channels");
 
 // export const PUT: RequestHandler = async ({ locals, cookies, request }) => {};
 

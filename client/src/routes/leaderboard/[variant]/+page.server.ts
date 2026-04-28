@@ -1,7 +1,7 @@
 import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad, RouteParams } from "./$types";
 import { clamp, isValidVariant, strToNum } from "$lib/utils";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 
 function getPageParamUrl(route: string) {
 	const url = new URL(route);
@@ -43,8 +43,8 @@ export const load: PageServerLoad = async ({
 		redirect(302, "/");
 	}
 
-	// ensure we are trying to view a valid leaderboard variant 
-    // (i.e. "channel" or "chatter")
+	// ensure we are trying to view a valid leaderboard variant
+	// (i.e. "channel" or "chatter")
 	if (!isValidVariant(params.variant)) {
 		locals.logger.warn(
 			{ variant: params.variant, route: route.id },
@@ -62,7 +62,10 @@ export const load: PageServerLoad = async ({
 		redirect(302, url);
 	}
 
-	const fetchUrl = new URL(`${Rh.apiv1}/${params.variant}/leaderboard`);
+	// const fetchUrl = new URL(`${Rh.apiv1}/${params.variant}/leaderboard`);
+	const fetchUrl = new URL(
+		routeManager.internApiUrl(params.variant, "leaderboard")
+	);
 	fetchUrl.searchParams.set("page", urlSearchParams.page);
 	fetchUrl.searchParams.set("limit", urlSearchParams.limit);
 

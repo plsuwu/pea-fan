@@ -1,8 +1,13 @@
 import { logger } from "./logger.svelte";
 import { env } from "$env/dynamic/public";
 
-const PUBLIC_API_BASE_URL = env.PUBLIC_API_BASE_URL;
-const API_BASE_URL = `${PUBLIC_API_BASE_URL}/api/v1`;
+// we construct these here as well as i believe this module is imported before the `routeManager` has a
+// chance to be constructed
+export const INTERN_API_BASE = env.PUBLIC_INTERNAL_API ?? "http://localhost:8080";
+export const INTERNAL_API = `${INTERN_API_BASE}/api/v1`;
+// export const EXTERN_API_BASE = env.PUBLIC_EXTERNAL_API ?? "https://api.piss.fan";
+
+
 
 export type RawIrcInfo = {
 	likely_missing: string[];
@@ -128,7 +133,7 @@ class ChannelCache extends Cache<Broadcaster> {
 }
 
 export const channelCache = new ChannelCache(
-	`${API_BASE_URL}/channel/all`,
+	`${INTERNAL_API}/channel/all`,
 	"channels"
 );
 
@@ -199,6 +204,6 @@ class AnnouncementCache {
 }
 
 export const announcementCache = new AnnouncementCache(
-	`${API_BASE_URL}/announcements`,
+	`${INTERNAL_API}/announcements`,
 	"announcements"
 );

@@ -4,13 +4,10 @@ import {
 	buildHeadersAuthless,
 	verifyToken,
 } from "$lib/server/verify";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { fail, type Actions } from "@sveltejs/kit";
-import { env } from "$env/dynamic/private";
-
-const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
 type BotConfig = {
 	id: string;
@@ -26,7 +23,7 @@ async function getChannelConfigs(
 	locals: App.Locals,
 	id = "all"
 ): Promise<BotConfig[]> {
-	const url = new URL(`${Rh.apiAdmin}/update/bot-config`);
+	const url = new URL(routeManager.internApiUrl("_admin", "update/bot-config"));
 	const logger = locals.logger.child({
 		endpoint: url,
 		channelId: id,
@@ -91,10 +88,10 @@ export const load: PageServerLoad = async ({ cookies, locals, fetch }) => {
 		redirect(302, "/admin/login");
 	}
 	const configs = await getChannelConfigs(token, locals, "all");
-	const hooks = await getChannelHooks(token, locals, fetch) ?? new Array();
+	const hooks = (await getChannelHooks(token, locals, fetch)) ?? new Array();
 	return {
 		configs,
-        hooks,
+		hooks,
 	};
 };
 
@@ -213,10 +210,8 @@ export const actions = {
 	},
 
 	resethooks: async ({ locals, fetch }) => {
-		const endpoint = `${Rh.apiAdmin}/helix/hooks`;
 		const logger = locals.logger.child({
 			action: "reset-hooks",
-			endpoint,
 		});
 
 		try {
@@ -242,10 +237,8 @@ export const actions = {
 	},
 
 	deletehooks: async ({ locals, fetch }) => {
-		const endpoint = `${Rh.apiAdmin}/helix/hooks`;
 		const logger = locals.logger.child({
 			action: "delete-hooks",
-			endpoint,
 		});
 
 		try {

@@ -4,7 +4,8 @@ import { MODE_COOKIE_NAME } from "$lib/utils/mode-cookie.svelte";
 import { sha256 } from "@oslojs/crypto/sha2";
 import { encodeHexLowerCase } from "@oslojs/encoding";
 import type { Chatter } from "$lib/types";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
+import { error } from "@sveltejs/kit";
 import {
 	clamp,
 	intoParentEntry,
@@ -23,7 +24,8 @@ async function fetchLiveBroadcasters(
 	fetch: typeof globalThis.fetch,
 	logger: typeof serverLogger
 ) {
-	const uri = `${Rh.apiv1}/channel/live`;
+	// const uri = `${Rh.apiv1}/channel/live`;
+	const uri = routeManager.internApiUrl("channel", "live");
 	const childLogger = logger.child({
 		url: uri,
 	});
@@ -46,6 +48,7 @@ async function fetchLiveBroadcasters(
 export type Announcement = {
 	content: string | null;
 	hash: string | null;
+	seen: boolean;
 };
 
 async function fetchAnnouncement(
@@ -86,54 +89,71 @@ export const load: LayoutServerLoad = async ({
 	url,
 }) => {
 	const modePreference = cookies.get(MODE_COOKIE_NAME) ?? null;
-	const announcement: Announcement = await fetchAnnouncement(
-		locals.logger,
-		cookies.get("seen-announcement") || null
-	);
 
-	const liveBroadcasters = await fetchLiveBroadcasters(fetch, locals.logger);
-	const baseLayoutData = defaultLayoutData(
-		liveBroadcasters,
-		modePreference,
-		announcement
-	);
+	try {
+		const announcement: Announcement = await fetchAnnouncement(
+			locals.logger,
+			cookies.get("seen-announcement") || null
+		);
 
-	if (!locals.channel) {
-		return baseLayoutData;
-	}
+		const liveBroadcasters = await fetchLiveBroadcasters(fetch, locals.logger);
+		const baseLayoutData = defaultLayoutData(
+			liveBroadcasters,
+			modePreference,
+			announcement
+		);
 
-	const { channelData, paginationData } = await getChannelLeaderboard(
-		fetch,
-		url,
-		locals
-	);
+		if (!locals.channel) {
+			locals.logger.trace(
+				"no tenant found, using default layout"
+			);
+			return baseLayoutData;
+		}
 
-	if (channelData == null || paginationData == null || channelData.id == null) {
-		return { ...baseLayoutData, channel: locals.channel };
-	}
+		const { channelData, paginationData } = await getChannelLeaderboard(
+			fetch,
+			url,
+			locals
+		);
 
-	const scoreWindows = await getPeriodicChannelData(
-		fetch,
-		locals,
-		channelData.id
-	);
+		if (
+			channelData == null ||
+			paginationData == null ||
+			channelData.id == null
+		) {
+			return { ...baseLayoutData, channel: locals.channel };
+		}
 
-	if (scoreWindows == null) {
+		const scoreWindows = await getPeriodicChannelData(
+			fetch,
+			locals,
+			channelData.id
+		);
+
+		if (scoreWindows == null) {
+			return {
+				...baseLayoutData,
+				channel: locals.channel,
+				channelData,
+				paginationData,
+			};
+		}
+
 		return {
 			...baseLayoutData,
 			channel: locals.channel,
 			channelData,
 			paginationData,
+			scoreWindows,
 		};
-	}
+	} catch (err) {
+		const appError: App.Error = {
+			message: JSON.stringify(err),
+			code: 500,
+		};
 
-	return {
-		...baseLayoutData,
-		channel: locals.channel,
-		channelData,
-		paginationData,
-		scoreWindows,
-	};
+		error(500, appError);
+	}
 };
 
 async function getPeriodicChannelData(
@@ -141,9 +161,12 @@ async function getPeriodicChannelData(
 	locals: App.Locals,
 	id: string
 ) {
-	const fetchUrl = new URL(`${Rh.apiv1}/channel/windowed/${id}`);
-	fetchUrl.searchParams.set("variant", "channel");
+	// const fetchUrl = new URL(`${Rh.apiv1}/channel/windowed/${id}`);
+	const fetchUrl = new URL(
+		routeManager.internApiUrl("channel", `windowed/${id}`)
+	);
 
+	fetchUrl.searchParams.set("variant", "channel");
 	const logger = locals.logger.child({
 		url: fetchUrl,
 	});
@@ -185,7 +208,11 @@ async function getChannelLeaderboard(
 		scoreLimit: String(scoreLimit),
 		scorePage: String(clamp(scorePage - 1, 0)),
 	};
-	const fetchUrl = new URL(`${Rh.apiv1}/channel/by-login/${locals.channel}`);
+
+	// const fetchUrl = new URL(`${Rh.apiv1}/channel/by-login/${locals.channel}`);
+	const fetchUrl = new URL(
+		routeManager.internApiUrl("channel", `by-login/${locals.channel}`)
+	);
 
 	// fetchUrl.searchParams.set("page", "0");
 	// fetchUrl.searchParams.append("limit", "0");

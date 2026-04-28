@@ -11,9 +11,10 @@
 	import { mode } from "mode-watcher";
 
 	import { readableColor } from "$lib/utils";
-	import { Rh } from "$lib/utils/route";
+	import { routeManager } from "$lib/utils/route";
 	import { page } from "$app/state";
 	import { goto } from "$app/navigation";
+	import { logger } from "$lib/observability/server/logger.svelte";
 
 	let {
 		ref = $bindable(),
@@ -24,15 +25,12 @@
 		results,
 	} = $props();
 
-	// const BASE_URL = new URL(`${Rh.proto}://${Rh.api}/search/by-login`);
 	function navigateTo(result: (typeof results)[0]) {
-		const derivedBase = Rh.deriveBase(page.url.host);
-		console.log(page.url.host);
-
-		const href = `${Rh.proto}://${derivedBase}/leaderboard/chatter?page=${result.page}#${result.ranking}`;
+		const href = `${routeManager.getUntenantedURL(page.url.host)}leaderboard/chatter?page=${result.page}#${result.ranking}`;
+		logger.trace({ href }, "using route");
 		clearSearch();
 
-		if (derivedBase === page.url.host) {
+		if (routeManager.deriveBase(page.url.host) === page.url.host) {
 			goto(href);
 		} else {
 			window.location.href = href;
