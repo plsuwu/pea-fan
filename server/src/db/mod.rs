@@ -7,7 +7,6 @@ use crate::util::{env, helix};
 use crate::var;
 
 pub mod models;
-pub mod pg;
 pub mod redis;
 pub mod repositories;
 
