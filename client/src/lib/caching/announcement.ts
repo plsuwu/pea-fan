@@ -30,7 +30,7 @@ export class AnnouncementCache extends Cache<Announcement> {
 	}
 
 	public async read(): Promise<Announcement> {
-		await this.fetchData();
+		await this.refresh();
 		const cached = [...this.data];
 
 		return cached[cached.length - 1];
