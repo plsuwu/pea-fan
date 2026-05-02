@@ -1,9 +1,6 @@
 <script lang="ts">
-	import { page } from "$app/state";
 	import * as Tt from "$lib/shadcn-components/ui/tooltip/index";
 	import { getAltImageSizeUrl } from "$lib/utils";
-	// import { URLS } from "$lib";
-	import { routeManager } from "$lib/utils/route";
 	import SkeletonImage from "./skeleton-image.svelte";
 
 	const PLACEHOLDER_STRING = "placeholder_str";
@@ -49,7 +46,7 @@
 				<SkeletonImage
 					src={getAltImageSizeUrl(imgUrl, "XS")}
 					alt={login}
-					class="z-10 rounded-full bg-background ring-1 ring-offset-1"
+					class="z-10 rounded-full bg-background ring-1 ring-offset-1 h-[20px] my-0.5"
 					skeletonClass="size-6 rounded-full"
 				/>
 			</Tt.Trigger>

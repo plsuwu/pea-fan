@@ -49,7 +49,7 @@
 <svelte:head>
 	<meta
 		name="description"
-        content="Leaderboard ranking a handful of Twitch broadcasters (primarily vtubers) by the number of times a chatter has sent a message about piss to their chat room."
+        content="Piss Fan is a leaderboard ranking a handful of Twitch VTubers based on the number of piss-related messages sent to their chat rooms."
 	/>
 </svelte:head>
 

@@ -11,23 +11,13 @@
 		}
 	});
 
-	const META_IF_BASE =
-		"Leaderboard ranking a handful of Twitch broadcasters (primarily vtubers) by the number of times a chatter has sent a message about piss to their chat room.";
-	const META_IF_CHANNEL = $derived(
-		`Leaderboard of chatters in Twitch broadcaster ${channelData!.name}'s chat room, whereby chatters are ranked based on the number of their chat messages mentioning piss.`
-	);
 
-	let content = $derived.by(() => {
-		if (channel) {
-			return META_IF_CHANNEL;
-		}
-
-		return META_IF_BASE;
-	});
 </script>
 
 <svelte:head>
-	<meta name="description" {content} />
+	<meta name="description"
+    content="Piss Fan is a leaderboard ranking a handful of Twitch VTubers based on the number of piss-related messages sent to their chat rooms."
+    />
 </svelte:head>
 
 {#if channel && channelData && paginationData}
