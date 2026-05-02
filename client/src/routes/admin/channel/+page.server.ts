@@ -18,6 +18,20 @@ type BotConfig = {
 	image: string;
 };
 
+export const load: PageServerLoad = async ({ cookies, locals, fetch }) => {
+	let token = await verifyToken(cookies, locals, fetch);
+	if (token == null) {
+		invalidateCookie(cookies);
+		redirect(302, "/admin/login");
+	}
+	const configs = await getChannelConfigs(token, locals, "all");
+	const hooks = (await getChannelHooks(token, locals, fetch)) ?? new Array();
+	return {
+		configs,
+		hooks,
+	};
+};
+
 async function getChannelConfigs(
 	token: string,
 	locals: App.Locals,
@@ -81,20 +95,6 @@ async function getChannelHooks(
 	}
 }
 
-export const load: PageServerLoad = async ({ cookies, locals, fetch }) => {
-	let token = await verifyToken(cookies, locals, fetch);
-	if (token == null) {
-		invalidateCookie(cookies);
-		redirect(302, "/admin/login");
-	}
-	const configs = await getChannelConfigs(token, locals, "all");
-	const hooks = (await getChannelHooks(token, locals, fetch)) ?? new Array();
-	return {
-		configs,
-		hooks,
-	};
-};
-
 export const actions = {
 	create: async ({ locals, request, fetch }) => {
 		const logger = locals.logger.child({
@@ -106,7 +106,8 @@ export const actions = {
 			const formData = await request.formData();
 			const channel = formData.get("channel") as string;
 
-			if (channel === "" || channel.length < 4) {
+			// twitch usernames CAN be < 4 characters
+			if (channel === "") {
 				return fail(400, {
 					error: "missing or invalid channel name",
 				});
@@ -179,11 +180,10 @@ export const actions = {
 		try {
 			const headers = buildHeadersAuthless(true);
 			const formData = await request.formData();
-			let id = formData.get("channel-id") as string;
+			let id = formData.get("channel-id");
 
-			logger.info({ id });
-
-			if (id === "") {
+			logger.debug({ id }, "syncing channel live state");
+			if (id === "" || id == null) {
 				id = "all";
 			}
 

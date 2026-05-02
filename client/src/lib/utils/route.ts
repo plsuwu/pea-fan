@@ -1,14 +1,11 @@
 import { env } from "$env/dynamic/public";
-import { channelCache } from "$lib/observability/server/cache.svelte";
 import type { RequestEvent } from "@sveltejs/kit";
 import { isIpAddr } from ".";
 import { logger } from "$lib/observability/server/logger.svelte";
 
-// Should be 'static' enough that we can load this before `Rh` is constructed, right??
 export const BASE_HOST = env.PUBLIC_BASE_HOST ?? "https://piss.fan";
 export const INTERN_API = env.PUBLIC_INTERNAL_API ?? "http://localhost:8080";
 export const EXTERN_API = env.PUBLIC_EXTERNAL_API ?? "https://api.piss.fan";
-
 export type ApiRoute = (typeof API_ROUTE)[number];
 export const API_ROUTE = [
 	"checkhealth",
@@ -97,10 +94,10 @@ export class RouteManager implements Route {
 		return res;
 	}
 
-	async reroutable(_: RequestEvent, channel: string) {
+	async reroutable(_: RequestEvent, channel: string, channels: Set<string>) {
 		// logger.trace({ requestHost: _.url.host }, "checking re-routability");
 
-		const isValid = await channelCache.exists(channel);
+		const isValid = channels.has(channel);
 		return isValid;
 	}
 }

@@ -147,6 +147,8 @@
             postgresql
             redis
 
+            valkey
+
             grafana-alloy
           ];
 

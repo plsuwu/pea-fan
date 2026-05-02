@@ -1,8 +1,6 @@
 import type { LayoutServerLoad } from "./$types";
 import { logger as serverLogger } from "$lib/observability/server/logger.svelte";
 import { MODE_COOKIE_NAME } from "$lib/utils/mode-cookie.svelte";
-import { sha256 } from "@oslojs/crypto/sha2";
-import { encodeHexLowerCase } from "@oslojs/encoding";
 import type { Chatter } from "$lib/types";
 import { routeManager } from "$lib/utils/route";
 import { error } from "@sveltejs/kit";
@@ -13,18 +11,13 @@ import {
 	strToNum,
 	type UntypedSubEntry,
 } from "$lib/utils";
-import { announcementCache } from "$lib/observability/server/cache.svelte";
-
-function makeSha256Hash(str: string): string {
-	const bytes = new TextEncoder().encode(str);
-	return encodeHexLowerCase(sha256(bytes));
-}
+import { announcementCache } from "$lib/caching";
+import type { Announcement } from "$lib/caching/announcement";
 
 async function fetchLiveBroadcasters(
 	fetch: typeof globalThis.fetch,
 	logger: typeof serverLogger
 ) {
-	// const uri = `${Rh.apiv1}/channel/live`;
 	const uri = routeManager.internApiUrl("channel", "live");
 	const childLogger = logger.child({
 		url: uri,
@@ -45,18 +38,12 @@ async function fetchLiveBroadcasters(
 	}
 }
 
-export type Announcement = {
-	content: string | null;
-	hash: string | null;
-	seen: boolean;
-};
-
 async function fetchAnnouncement(
 	_logger: typeof serverLogger,
 	seenAnnounce: string | null
 ): Promise<Announcement & { seen: boolean }> {
 	const announcement = {
-		...(await announcementCache.getAnnouncement()),
+		...(await announcementCache.read()),
 		seen: false,
 	};
 
@@ -104,9 +91,7 @@ export const load: LayoutServerLoad = async ({
 		);
 
 		if (!locals.channel) {
-			locals.logger.trace(
-				"no tenant found, using default layout"
-			);
+			locals.logger.trace("no tenant found, using default layout");
 			return baseLayoutData;
 		}
 

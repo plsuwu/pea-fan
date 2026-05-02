@@ -1,4 +1,4 @@
-import { channelCache } from "$lib/observability/server/cache.svelte";
+import { channelCache } from "$lib/caching"; 
 import {
 	TWITCH_IMAGE_SIZE,
 	type ChannelEntry,

@@ -26,7 +26,9 @@ export const PUT: RequestHandler = async ({
 		const headers = buildHeaders(true, token);
 		const { id } = await request.json();
 
+        logger.debug({ id }, "called sync handler");
 		const endpoint = new URL(API_ENDPOINT);
+
 		logger.setBindings({
 			channelId: id,
 			endpoint: endpoint,

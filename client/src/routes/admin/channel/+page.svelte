@@ -28,10 +28,7 @@
 		created_at: string;
 	};
 
-	let { form, data } = $props();
-
-	console.log("%cinitial hooks array:", "color: blue, font-weight: bold;");
-	console.log(data.hooks);
+	let { data } = $props();
 
 	let waiting = $state(false);
 	let configs = $derived.by(() => {
@@ -62,9 +59,6 @@
 
 		return merged;
 	});
-
-	let createResult: { success: boolean; result?: string } | undefined =
-		$state(undefined);
 
 	let filter = $state("");
 	let cfgs = $derived.by(() => {
@@ -143,6 +137,7 @@
 			value="all"
 			name="channel-id"
 			variant="outline"
+			disabled={waiting}
 			size="icon-sm"
 			class="rounded-full"
 			aria-label="sync all"
@@ -303,6 +298,7 @@
 								checked={cfg.enabled}
 								type="submit"
 								formaction="?/bot"
+								disabled={waiting}
 							/>
 						</div>
 					</div>
@@ -314,6 +310,7 @@
 					class="flex flex-col items-center space-y-2"
 					use:enhance={() => {
 						waiting = true;
+
 						return async ({ update }) => {
 							await update({ reset: false });
 							waiting = false;
@@ -328,9 +325,10 @@
 						<div class="flex flex-row items-center">
 							<button
 								value={cfg.id}
+								class="items-center transition-all duration-150 hover:brightness-50"
 								name="channel-id"
 								type="submit"
-								class="items-center transition-all duration-150 hover:brightness-50"
+								disabled={waiting}
 							>
 								<CloudSyncIcon size={18} />
 							</button>

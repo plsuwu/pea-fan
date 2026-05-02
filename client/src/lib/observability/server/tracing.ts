@@ -1,4 +1,3 @@
-import { Result } from "$lib/types";
 import {
 	trace,
 	SpanStatusCode,
@@ -60,71 +59,72 @@ export class TraceHandler {
 		this.globalTracer = trace.getTracer(this.globalTracerName);
 	}
 
-	async withAsyncSpan<T extends unknown>(
-		name: string,
-		fn: (span: Span) => Promise<T>,
-		options?: { attributes?: Record<string, string | number | boolean> }
-	): Promise<T> {
-		return this.tracer.startActiveSpan(name, async (span: Span) => {
-			if (options?.attributes) {
-				span.setAttributes(options.attributes);
-			}
-
-			const ctx = span.spanContext();
-			return (await Result.fromPromise(fn(span))).match({
-				Ok: (val) => {
-					this.success = { span };
-					span.end();
-					logger.debug({ span }, `${ctx.traceId}.${ctx.spanId}: ASYNC OK`);
-
-					return val;
-				},
-				Err: (err) => {
-					this.exception = { span, msg: err };
-					span.end();
-					logger.error(
-						{ error: err },
-						`${ctx.traceId}.${ctx.spanId} ASYNC FAIL`
-					);
-
-					throw err;
-				},
-			});
-		});
-	}
-
-	withSpan<T extends unknown>(
-		name: string,
-		fn: (span: Span) => T,
-		options?: { attributes?: Record<string, string | number | boolean> }
-	): T {
-		return this.tracer.startActiveSpan(name, (span: Span) => {
-			if (options?.attributes) {
-				span.setAttributes(options.attributes);
-			}
-
-			const ctx = span.spanContext();
-			return Result.from(fn, span).match({
-				Ok: (val) => {
-					this.success = { span };
-					span.end();
-					logger.debug({ span }, `${ctx.traceId}.${ctx.spanId}: SYNC OK`);
-
-					return val;
-				},
-				Err: (err) => {
-					this.exception = { span, msg: err };
-					span.end();
-					logger.error(
-						{ error: err },
-						`${ctx.traceId}.${ctx.spanId}: SYNC FAIL`
-					);
-
-					throw err;
-				},
-			});
-		});
-	}
+	// async withAsyncSpan<T extends unknown>(
+	// 	name: string,
+	// 	fn: (span: Span) => Promise<T>,
+	// 	options?: { attributes?: Record<string, string | number | boolean> }
+	// ): Promise<T> {
+	// 	return this.tracer.startActiveSpan(name, async (span: Span) => {
+	// 		if (options?.attributes) {
+	// 			span.setAttributes(options.attributes);
+	// 		}
+	//
+	// 		const ctx = span.spanContext();
+	//
+	// 		return (await Result.fromPromise(fn(span))).match({
+	// 			Ok: (val) => {
+	// 				this.success = { span };
+	// 				span.end();
+	// 				logger.debug({ span }, `${ctx.traceId}.${ctx.spanId}: ASYNC OK`);
+	//
+	// 				return val;
+	// 			},
+	// 			Err: (err) => {
+	// 				this.exception = { span, msg: err };
+	// 				span.end();
+	// 				logger.error(
+	// 					{ error: err },
+	// 					`${ctx.traceId}.${ctx.spanId} ASYNC FAIL`
+	// 				);
+	//
+	// 				throw err;
+	// 			},
+	// 		});
+	// 	});
+	// }
+	//
+	// withSpan<T extends unknown>(
+	// 	name: string,
+	// 	fn: (span: Span) => T,
+	// 	options?: { attributes?: Record<string, string | number | boolean> }
+	// ): T {
+	// 	return this.tracer.startActiveSpan(name, (span: Span) => {
+	// 		if (options?.attributes) {
+	// 			span.setAttributes(options.attributes);
+	// 		}
+	//
+	// 		const ctx = span.spanContext();
+	// 		return Result.from(fn, span).match({
+	// 			Ok: (val) => {
+	// 				this.success = { span };
+	// 				span.end();
+	// 				logger.debug({ span }, `${ctx.traceId}.${ctx.spanId}: SYNC OK`);
+	//
+	// 				return val;
+	// 			},
+	// 			Err: (err) => {
+	// 				this.exception = { span, msg: err };
+	// 				span.end();
+	// 				logger.error(
+	// 					{ error: err },
+	// 					`${ctx.traceId}.${ctx.spanId}: SYNC FAIL`
+	// 				);
+	//
+	// 				throw err;
+	// 			},
+	// 		});
+	// 	});
+	// }
 
 	get activeSpan(): Span {
 		if (!this._activeSpan) {
@@ -177,78 +177,78 @@ export class TraceHandler {
 
 export const traceHandler = new TraceHandler();
 
-export function traced(
-	options: TracedOptions = { captureResult: true, captureArgs: true }
-) {
-	function decorator<T, A extends unknown[], R>(
-		method: (this: T, ...args: A) => Promise<R>,
-		context: ClassMethodDecoratorContext<T, (this: T, ...args: A) => Promise<R>>
-	): (this: T, ...args: A) => Promise<R>;
-
-	function decorator<T, A extends unknown[], R>(
-		method: (this: T, ...args: A) => R,
-		context: ClassMethodDecoratorContext<T, (this: T, ...args: A) => R>
-	): (this: T, ...args: A) => R;
-
-	function decorator<T, A extends unknown[], R>(
-		method: (this: T, ...args: A) => R,
-		context: ClassMethodDecoratorContext<T, (this: T, ...args: A) => R>
-	): (this: T, ...args: A) => R | Promise<R> {
-		const methodName = String(context.name);
-		const spanName = options.name || methodName;
-
-		return function (this: T, ...args: A): R | Promise<R> {
-			const className = (this as object)?.constructor?.name || "unknown";
-
-			const attributes = createSpanAttributes({
-				class: className,
-				method: methodName,
-				options,
-				args,
-			});
-
-			return traceHandler.withSpan(
-				spanName,
-				(span) => {
-					const success = (result: R): R => {
-						if (options.captureResult && result !== undefined) {
-							if (span instanceof Promise) {
-								span
-									.then((s) =>
-										s.setAttribute(
-											"code.function.result",
-											safeSerialize(result)
-										)
-									)
-									.catch(logger.error);
-							}
-						}
-
-						return result;
-					};
-
-					const except = (err: unknown): never => {
-						throw err;
-					};
-
-					// this MIGHT throw, but we want to delegate error handling to the `with[?Async]Span`
-					// method that we're wrapping (which handles span finalization automatically)
-					const result = method.call(this, ...args);
-					if (result instanceof Promise) {
-						return result.then(success).catch(except);
-					}
-
-					return success(result as R);
-				},
-				{
-					attributes,
-				}
-			);
-		};
-	}
-
-	return decorator;
-}
+// export function traced(
+// 	options: TracedOptions = { captureResult: true, captureArgs: true }
+// ) {
+// 	function decorator<T, A extends unknown[], R>(
+// 		method: (this: T, ...args: A) => Promise<R>,
+// 		context: ClassMethodDecoratorContext<T, (this: T, ...args: A) => Promise<R>>
+// 	): (this: T, ...args: A) => Promise<R>;
+//
+// 	function decorator<T, A extends unknown[], R>(
+// 		method: (this: T, ...args: A) => R,
+// 		context: ClassMethodDecoratorContext<T, (this: T, ...args: A) => R>
+// 	): (this: T, ...args: A) => R;
+//
+// 	function decorator<T, A extends unknown[], R>(
+// 		method: (this: T, ...args: A) => R,
+// 		context: ClassMethodDecoratorContext<T, (this: T, ...args: A) => R>
+// 	): (this: T, ...args: A) => R | Promise<R> {
+// 		const methodName = String(context.name);
+// 		const spanName = options.name || methodName;
+//
+// 		return function (this: T, ...args: A): R | Promise<R> {
+// 			const className = (this as object)?.constructor?.name || "unknown";
+//
+// 			const attributes = createSpanAttributes({
+// 				class: className,
+// 				method: methodName,
+// 				options,
+// 				args,
+// 			});
+//
+// 			return traceHandler.withSpan(
+// 				spanName,
+// 				(span) => {
+// 					const success = (result: R): R => {
+// 						if (options.captureResult && result !== undefined) {
+// 							if (span instanceof Promise) {
+// 								span
+// 									.then((s) =>
+// 										s.setAttribute(
+// 											"code.function.result",
+// 											safeSerialize(result)
+// 										)
+// 									)
+// 									.catch(logger.error);
+// 							}
+// 						}
+//
+// 						return result;
+// 					};
+//
+// 					const except = (err: unknown): never => {
+// 						throw err;
+// 					};
+//
+// 					// this MIGHT throw, but we want to delegate error handling to the `with[?Async]Span`
+// 					// method that we're wrapping (which handles span finalization automatically)
+// 					const result = method.call(this, ...args);
+// 					if (result instanceof Promise) {
+// 						return result.then(success).catch(except);
+// 					}
+//
+// 					return success(result as R);
+// 				},
+// 				{
+// 					attributes,
+// 				}
+// 			);
+// 		};
+// 	}
+//
+// 	return decorator;
+// }
 
 function safeSerialize(value: unknown, maxLength = 1010): string {
 	try {

@@ -62,7 +62,6 @@ export const load: PageServerLoad = async ({
 		redirect(302, url);
 	}
 
-	// const fetchUrl = new URL(`${Rh.apiv1}/${params.variant}/leaderboard`);
 	const fetchUrl = new URL(
 		routeManager.internApiUrl(params.variant, "leaderboard")
 	);
@@ -88,14 +87,6 @@ export const load: PageServerLoad = async ({
 		}
 
 		const result = body.data;
-		// locals.logger.trace(
-		// 	{
-		// 		currentPage: result.page,
-		// 		totalPages: result.total_pages,
-		// 		totalItems: result.total_items,
-		// 	},
-		// 	"retrieved variant leaderboard data"
-		// );
 
 		return {
 			leaderboardData: result,

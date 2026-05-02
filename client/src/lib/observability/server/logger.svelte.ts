@@ -1,6 +1,6 @@
 import { env } from "$env/dynamic/public";
 import pino, { type Logger, type LoggerOptions } from "pino";
-import type { Cache } from "./cache.svelte";
+import type { Cache } from "$lib/server/caching";
 import type { Span } from "@opentelemetry/api";
 import type { LogEntry, TelemetryPayload } from "../types";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
@@ -39,21 +39,24 @@ export const serializeHandlers = {
 	},
 
 	cache: (cache: Cache<any>, all = false) => {
+		const nextRefresh = cache.lastRefresh
+			? cache.lastRefresh + cache.ttl
+			: Date.now();
 		if (all) {
 			return {
-				cachesFor: cache.url,
+				cachesFor: cache.endpoint,
 				currentTime: new Date().toLocaleString(),
 				lastRefresh: cache.lastRefresh,
-				nextRefresh: cache.nextRefresh,
+				nextRefresh: nextRefresh,
 				data: cache.data,
 				ttl: cache.ttl,
 			};
 		} else {
-			const slice = cache.data.slice(0, 8);
+			const slice = [...cache.data].slice(0, 8);
 			return {
 				currentTime: new Date().toLocaleString(),
 				lastRefresh: cache.lastRefresh,
-				nextRefresh: cache.nextRefresh,
+				nextRefresh: nextRefresh,
 				data:
 					Array.isArray(cache.data) && cache.data.length > 0
 						? [...slice, `...(${cache.data.length - slice.length} more)`]

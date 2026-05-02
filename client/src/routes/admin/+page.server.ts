@@ -6,35 +6,9 @@ import { invalidateCookie } from "$lib/server";
 import { routeManager } from "$lib/utils/route";
 import { buildHeaders, verifyToken } from "$lib/server/verify";
 
-// TODO:
-// -------------------------------------------------------------------
-// - endpoint needs rate limit hook,
-// - perhaps don't need to perform token verification on all actions?
-
-async function getChannelConfigs(token: string, id = "all") {
-	const headers = buildHeaders(true, token);
-	// const url = new URL(`${Rh.apiAdmin}/update/bot-config`);
-	const url = new URL(routeManager.internApiUrl("_admin", "update/bot-config"));
-
-	url.searchParams.set("id", id);
-	const res = await fetch(url, {
-		method: "GET",
-		headers,
-	});
-
-	if (!res.ok) {
-		logger.error({ response: res }, "failed to fetch bot configurations");
-		return null;
-	}
-
-	const body = await res.json();
-	return body.data;
-}
-
 export const load: PageServerLoad = async ({ cookies, url, fetch, locals }) => {
 	if (locals.channel) {
-		// redirect(302, `${Rh.proto}://${Rh.deriveBase(url.host)}/admin`);
-
+		// redirect to base host URL if the client is on a tenant subdomain
 		const adminLogin = `${routeManager.getUntenantedURL(url.host)}/admin`;
 		redirect(302, adminLogin);
 	}
@@ -51,17 +25,6 @@ export const load: PageServerLoad = async ({ cookies, url, fetch, locals }) => {
 		channels,
 	};
 };
-
-const isDigits = (str: string) => /^\d+$/.test(str);
-
-function getHelixQueryType(user: string): string {
-	//i think generall
-	if (isDigits(user) && user.length >= 7 && user.length <= 11) {
-		return "by-id";
-	}
-
-	return "by-login";
-}
 
 export const actions = {
 	helix: async ({ request, fetch, locals, cookies }) => {
@@ -82,8 +45,8 @@ export const actions = {
 			const formData = await request.formData();
 			const user = formData.get("user") as string;
 
-			// NOTE that it is technically possible for users to have 1-3 character names, though
-			// these are usually antiquated or twitch staff.
+			// NOTE that it is technically possible for users to have 1-3 character
+			// names, though these are usually antiquated or twitch staff.
 			// e.g.:
 			//  - https://www.twitch.tv/x
 			//  - https://www.twitch.tv/fig (among others)
@@ -136,7 +99,6 @@ export const actions = {
 			const formData = await request.formData();
 			const user = formData.get("user") as string;
 
-			// const endpoint = `${Rh.apiv1}/search/${user}`;
 			const endpoint = routeManager.internApiUrl("search", user);
 			const res = await fetch(endpoint, {
 				method: "GET",
@@ -160,108 +122,32 @@ export const actions = {
 			});
 		}
 	},
-
-	// getActiveHooks: async ({ fetch }) => {
-	// 	const res = await fetch("/api/hooks", {
-	// 		method: "GET",
-	// 	});
-	//
-	// 	if (res.status !== 200) {
-	// 		return { success: false, status: res.status };
-	// 	}
-	//
-	// 	logger.info({ response: res }, "hooks retrieved ok");
-	// 	const { hooks } = await res.json();
-	// 	return {
-	// 		success: true,
-	// 		from: "getActiveHooks",
-	// 		results: hooks,
-	// 	};
-	// },
-	//
-	// deleteHooks: async ({ fetch }) => {
-	// 	const res = await fetch("/api/hooks", {
-	// 		method: "DELETE",
-	// 	});
-	//
-	// 	if (res.status !== 200) {
-	// 		return { success: false, status: res.status };
-	// 	}
-	//
-	// 	logger.info({ response: res }, "hooks deleted ok");
-	// 	return {
-	// 		success: true,
-	// 	};
-	// },
-	//
-	// resetHooks: async ({ fetch }) => {
-	// 	const res = await fetch("/api/hooks", {
-	// 		method: "PUT",
-	// 	});
-	//
-	// 	if (res.status !== 200) {
-	// 		return { success: false, status: res.status };
-	// 	}
-	//
-	// 	logger.info({ response: res }, "hooks reset ok");
-	// 	return {
-	// 		success: true,
-	// 	};
-	// },
 } satisfies Actions;
 
-// const UPDATE_API_ROUTE = `${API_BASE}/update`;
+const isDigits = (str: string) => /^\d+$/.test(str);
+function getHelixQueryType(user: string): string {
+	if (isDigits(user) && user.length >= 7 && user.length <= 11) {
+		return "by-id";
+	}
 
-async function runUpdate(
-	keytype: "channel" | "chatter",
-	data: { current: string; historic: string[] },
-	headers: Headers,
-	fetch: typeof globalThis.fetch
-) {
-	// const updateEndpoint = `${Rh.apiAdmin}/update/${keytype}`;
-	const updateEndpoint = routeManager.internApiUrl(
-		"_admin",
-		`update/${keytype}`
-	);
+	return "by-login";
+}
 
-	const res = await fetch(updateEndpoint, {
-		method: "PUT",
+async function getChannelConfigs(token: string, id = "all") {
+	const headers = buildHeaders(true, token);
+	const url = new URL(routeManager.internApiUrl("_admin", "update/bot-config"));
+
+	url.searchParams.set("id", id);
+	const res = await fetch(url, {
+		method: "GET",
 		headers,
-		body: JSON.stringify(data),
 	});
 
 	if (!res.ok) {
-		logger.error({ response: res }, "failed to complete action");
+		logger.error({ response: res }, "failed to fetch bot configurations");
+		return null;
 	}
 
 	const body = await res.json();
-	logger.info({ body: body.status }, "server response status");
-
-	return {
-		success: res.ok,
-		status: res.status,
-	};
+	return body.data;
 }
-
-// async function runMerge(fetch: typeof globalThis.fetch, headers: Headers) {
-// 	const mergeEndpoint = `${UPDATE_API_ROUTE}/migrate`;
-// 	const res = await fetch(mergeEndpoint, {
-// 		method: "GET",
-// 		keepalive: true,
-// 		headers,
-// 	});
-//
-// 	if (!res.ok) {
-// 		logger.error({ response: res }, "[ACTION] update failed");
-// 		return { success: false, status: res.status, body: "" };
-// 	}
-//
-// 	const body = await res.json();
-// 	logger.info({ body }, "RX from server");
-//
-// 	return {
-// 		success: true,
-// 		status: res.status,
-// 		body,
-// 	};
-// }

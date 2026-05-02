@@ -1,7 +1,6 @@
 import { sequence } from "@sveltejs/kit/hooks";
 import {
 	redirect,
-	error,
 	type Handle,
 	type HandleServerError,
 	type RequestEvent,
@@ -9,10 +8,7 @@ import {
 import { logger } from "$lib/observability/server/logger.svelte";
 import { routeManager } from "$lib/utils/route";
 import { getBaseURLFromRequest, isIpAddr, isLocalDomain } from "$lib/utils";
-import { adminBucket, apiBucket } from "$lib/server/rate-limiter/token-bucket";
-import { env } from "$env/dynamic/private";
-
-const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
+import { channelCache } from "$lib/caching";
 
 export const handleError: HandleServerError = ({ status }) => {
 	let displayMessage;
@@ -45,55 +41,42 @@ export const handleError: HandleServerError = ({ status }) => {
 };
 
 const tenantHook: Handle = async ({ event, resolve }) => {
-	try {
-		const requestHost =
-			event.request.headers.get("host") ??
-			event.request.headers.get("x-host") ??
-			null;
+	const requestHost =
+		event.request.headers.get("host") ??
+		event.request.headers.get("x-host") ??
+		null;
 
-		if (!requestHost || isIpAddr(requestHost) || isLocalDomain(requestHost)) {
-			event.locals.channel = null;
-			return resolve(event);
-		}
+	if (!requestHost || isIpAddr(requestHost) || isLocalDomain(requestHost)) {
+		event.locals.channel = null;
+		return resolve(event);
+	}
 
-		const requestedTenant = requestHost?.split(".")[0];
+	const requestedTenant = requestHost?.split(".")[0];
 
-		if (
-			!requestedTenant ||
-			requestedTenant === routeManager.host ||
-			requestHost === routeManager.host ||
-			requestHost === routeManager.api.external
-		) {
-			event.locals.channel = null;
-			return resolve(event);
-		}
+	if (
+		!requestedTenant ||
+		requestedTenant === routeManager.host ||
+		requestHost === routeManager.host ||
+		requestHost === routeManager.api.external
+	) {
+		event.locals.channel = null;
+		return resolve(event);
+	}
 
-		if (await routeManager.reroutable(event, requestedTenant)) {
-			event.locals.channel = requestedTenant;
-			return resolve(event);
-		} else {
-			event.locals.logger.warn(
-				{ tenant: requestedTenant },
-				"denying route to invalid tenant"
-			);
-			event.locals.channel = null;
-			const baseFromRequest = getBaseURLFromRequest(requestHost);
-			const redirection = `${routeManager.proto}://${baseFromRequest}`;
-
-			redirect(302, redirection);
-		}
-	} catch (err) {
-		event.locals.logger.error(
-			{ error: err },
-			"failure while running tenant hook"
+	const cachedChannels = new Set(await channelCache.read());
+	if (await routeManager.reroutable(event, requestedTenant, cachedChannels)) {
+		event.locals.channel = requestedTenant;
+		return resolve(event);
+	} else {
+		event.locals.logger.warn(
+			{ tenant: requestedTenant },
+			"denying route to invalid tenant"
 		);
+		event.locals.channel = null;
+		const baseFromRequest = getBaseURLFromRequest(requestHost);
+		const redirection = `${routeManager.proto}://${baseFromRequest}`;
 
-		let appError: App.Error = {
-			message: JSON.stringify(err),
-			code: 500,
-		};
-
-		error(500, appError);
+		redirect(302, redirection);
 	}
 };
 

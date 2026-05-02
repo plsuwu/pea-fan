@@ -6,6 +6,7 @@ pub mod totp;
 
 use std::arch::asm;
 
+use chrono::NaiveDateTime;
 use tracing::instrument;
 
 /// Performs `&str` comparisons in constant time in an attempt to close any and all side-channels
@@ -59,6 +60,15 @@ pub fn is_user_id(str: &str) -> bool {
 
     false
 }
+
+#[instrument]
+pub fn create_timestamp(offset_days: i64) -> NaiveDateTime {
+    chrono::Utc::now()
+        .naive_utc()
+        .checked_sub_signed(chrono::Duration::days(offset_days))
+        .unwrap()
+}
+
 
 #[cfg(test)]
 mod test {
