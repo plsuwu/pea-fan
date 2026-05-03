@@ -5,6 +5,7 @@
 		CloudAlertIcon,
 		CloudBackupIcon,
 		CloudSyncIcon,
+		FishingHookIcon,
 		PlusIcon,
 	} from "@lucide/svelte";
 	import Label from "$lib/shadcn-components/ui/label/label.svelte";
@@ -15,6 +16,8 @@
 	import { mode } from "mode-watcher";
 	import dayjs from "dayjs";
 	import { readableColor } from "$lib/utils";
+	import Panel from "$lib/components/admin/settings/panel.svelte";
+	import ChannelSettings from "$lib/components/admin/settings/channel-settings.svelte";
 
 	type HookInfo = {
 		id: string;
@@ -28,10 +31,7 @@
 		created_at: string;
 	};
 
-	let { form, data } = $props();
-
-	console.log("%cinitial hooks array:", "color: blue, font-weight: bold;");
-	console.log(data.hooks);
+	let { data } = $props();
 
 	let waiting = $state(false);
 	let configs = $derived.by(() => {
@@ -63,12 +63,8 @@
 		return merged;
 	});
 
-	let createResult: { success: boolean; result?: string } | undefined =
-		$state(undefined);
-
 	let filter = $state("");
 	let cfgs = $derived.by(() => {
-		console.log(configs);
 		const cfgs = configs;
 		if (filter !== "") {
 			return cfgs.filter((el) => el.login.includes(filter));
@@ -76,6 +72,16 @@
 
 		return cfgs;
 	});
+
+	function togglePanel() {}
+
+	function setWaiting(state?: boolean) {
+		if (state != null) {
+			waiting = state;
+		} else {
+			waiting = !waiting;
+		}
+	}
 </script>
 
 <Loading {waiting} />
@@ -122,7 +128,9 @@
 	</div>
 </div>
 
-<div class="mt-8 flex w-full flex-row justify-start space-x-6 px-18">
+<div
+	class="mt-8 flex w-full flex-col justify-start space-y-2 space-x-6 px-18 md:flex-row md:space-y-0"
+>
 	<form
 		class="flex flex-row items-center space-x-2"
 		method="POST"
@@ -143,6 +151,7 @@
 			value="all"
 			name="channel-id"
 			variant="outline"
+			disabled={waiting}
 			size="icon-sm"
 			class="rounded-full"
 			aria-label="sync all"
@@ -201,143 +210,11 @@
 		</Button>
 	</form>
 </div>
-<div class="mb-16 px-12">
+<div class="mb-16">
 	<div class="my-4 w-full border-b-2"></div>
 	{#each cfgs as cfg, idx (cfg.id)}
-		<div
-			class={cn(
-				`grid grid-cols-3 items-center space-x-5 px-8 py-1.5 transition-all
-            duration-300 ease-in-out md:grid-cols-6`,
-				idx % 2 === 0 ? "bg-accent/25" : ""
-			)}
-		>
-			<div
-				class={cn(
-					"flex w-max flex-row items-center self-center text-start font-bold transition-transform duration-300 ease-in-out",
-					cfg.live ? "text-red-500" : "text-foreground"
-				)}
-			>
-				{cfg.login}
-			</div>
-
-			<div
-				class="hidden w-max text-start transition-transform duration-300 ease-in-out md:block"
-			>
-				{cfg.id}
-			</div>
-
-			<div class="mx-2 hidden w-full flex-row md:flex">
-				<div class="ml-4 h-[20px] w-[20px] border-l-2"></div>
-				<div
-					class="mx-2 hidden w-full justify-start rounded-md px-4 font-bold
-                    transition-transform duration-300 ease-in-out md:flex"
-					style={`color: ${readableColor(cfg.color, mode.current === "dark" ? "light" : "dark", 12)};
-                    background-color: ${readableColor(cfg.color, mode.current, 11)};`}
-				>
-					{cfg.color}
-				</div>
-			</div>
-
-			<div
-				class="col-span-2 flex w-full flex-row items-center justify-between justify-self-start"
-			>
-				<div class="ml-4 h-[20px] w-[20px] border-l-2"></div>
-				<div
-					class="flex w-full flex-col items-center justify-center rounded-md px-4 md:flex-row"
-				>
-					<div class="flex w-[350px] flex-col space-y-1 text-start text-xs">
-						{#if cfg.hook == null || cfg.hook.length != 2}
-							<div
-								class="flex h-full flex-row items-center self-center text-center text-red-600"
-							>
-								missing hook/s
-							</div>
-						{/if}
-						{#each cfg.hook as hook}
-							<div class="flex w-full flex-row items-center">
-								<div class="w-full self-start">
-									{cfg.hook
-										? dayjs(hook?.created_at).format("HH:mm A, YY-MM-DD")
-										: ""}
-								</div>
-								<div class="w-full self-start">
-									{hook?.type ?? "hook error"}
-								</div>
-								<div
-									class={cn(
-										"w-full self-end",
-										hook != null ? "text-foreground" : "text-accent"
-									)}
-								>
-									[{hook?.status ?? ""}]
-								</div>
-							</div>
-						{/each}
-					</div>
-				</div>
-			</div>
-
-			<div class="col-span-1 flex w-full flex-row items-center">
-				<div class="ml-4 h-[20px] w-[20px] border-l-2"></div>
-				<form
-					method="POST"
-					action="?/bot"
-					class="flex flex-col items-center space-y-2"
-					use:enhance={() => {
-						waiting = true;
-
-						return async ({ update }) => {
-							await update();
-							waiting = false;
-						};
-					}}
-				>
-					<div class="flex w-full flex-row">
-						<Label for="bot-id" class="mr-4 pl-8 text-xs md:text-sm"
-							>replies</Label
-						>
-						<div class="flex flex-row items-center">
-							<input type="hidden" name="channel-id" value={cfg.id} />
-							<Checkbox
-								value={cfg.id}
-								checked={cfg.enabled}
-								type="submit"
-								formaction="?/bot"
-							/>
-						</div>
-					</div>
-				</form>
-				<div class="ml-4 h-[20px] w-[20px] border-l-2"></div>
-				<form
-					method="POST"
-					action="?/sync"
-					class="flex flex-col items-center space-y-2"
-					use:enhance={() => {
-						waiting = true;
-						return async ({ update }) => {
-							await update({ reset: false });
-							waiting = false;
-						};
-					}}
-				>
-					<div
-						class="flex w-full flex-row justify-end justify-self-end
-                                md:justify-between"
-					>
-						<Label for="sync" class="mr-4 pl-8 text-xs md:text-sm">sync</Label>
-						<div class="flex flex-row items-center">
-							<button
-								value={cfg.id}
-								name="channel-id"
-								type="submit"
-								class="items-center transition-all duration-150 hover:brightness-50"
-							>
-								<CloudSyncIcon size={18} />
-							</button>
-						</div>
-					</div>
-				</form>
-			</div>
-		</div>
+		<Panel config={cfg} {idx} {waiting} {setWaiting}>
+			<ChannelSettings config={cfg} {waiting} {setWaiting} />
+		</Panel>
 	{/each}
 </div>

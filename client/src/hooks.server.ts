@@ -1,18 +1,14 @@
 import { sequence } from "@sveltejs/kit/hooks";
 import {
 	redirect,
-	error,
 	type Handle,
 	type HandleServerError,
 	type RequestEvent,
 } from "@sveltejs/kit";
 import { logger } from "$lib/observability/server/logger.svelte";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 import { getBaseURLFromRequest, isIpAddr, isLocalDomain } from "$lib/utils";
-import { adminBucket, apiBucket } from "$lib/server/rate-limiter/token-bucket";
-import { env } from "$env/dynamic/private";
-
-const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
+import { channelCache } from "$lib/caching";
 
 export const handleError: HandleServerError = ({ status }) => {
 	let displayMessage;
@@ -49,24 +45,26 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 		event.request.headers.get("host") ??
 		event.request.headers.get("x-host") ??
 		null;
+
 	if (!requestHost || isIpAddr(requestHost) || isLocalDomain(requestHost)) {
 		event.locals.channel = null;
-
 		return resolve(event);
 	}
 
 	const requestedTenant = requestHost?.split(".")[0];
+
 	if (
 		!requestedTenant ||
-		requestedTenant === Rh.base ||
-		requestHost === Rh.base ||
-		requestHost === Rh.apiv1
+		requestedTenant === routeManager.host ||
+		requestHost === routeManager.host ||
+		requestHost === routeManager.api.external
 	) {
 		event.locals.channel = null;
 		return resolve(event);
 	}
 
-	if (await Rh.reroutable(event, requestedTenant)) {
+	const cachedChannels = new Set(await channelCache.read());
+	if (await routeManager.reroutable(event, requestedTenant, cachedChannels)) {
 		event.locals.channel = requestedTenant;
 		return resolve(event);
 	} else {
@@ -76,7 +74,7 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 		);
 		event.locals.channel = null;
 		const baseFromRequest = getBaseURLFromRequest(requestHost);
-		const redirection = `${Rh.proto}://${baseFromRequest}`;
+		const redirection = `${routeManager.proto}://${baseFromRequest}`;
 
 		redirect(302, redirection);
 	}
@@ -109,30 +107,6 @@ const logInitHook: Handle = async ({ event, resolve }) => {
 		},
 		"logger init"
 	);
-
-	// if (
-	// 	event.route.id === "/admin/login" &&
-	// 	event.cookies.get(ADMIN_SESSION_TOKEN) == null
-	// ) {
-	// 	event.locals.logger.info({ route: event.route.id }, "checking rate limit");
-	// 	if (!adminBucket.consume(event.locals.client.cfconnecting, 1)) {
-	// 		error(429);
-	// 	}
-	// } else if (event.route.id?.startsWith("/api")) {
-	// 	event.locals.logger.info({ route: event.route.id }, "checking rate limit");
-	// 	if (!apiBucket.consume(event.locals.client.cfconnecting, 1)) {
-	// 		return new Response(
-	// 			JSON.stringify({ status: 429, error: "rate limit exceeded" }),
-	// 			{
-	// 				status: 429,
-	// 				headers: {
-	// 					"content-type": "application/json",
-	// 					"retry-after": (apiBucket.timeoutMs / 1000).toString(),
-	// 				},
-	// 			}
-	// 		);
-	// 	}
-	// }
 
 	return resolve(event);
 };

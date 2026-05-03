@@ -46,7 +46,9 @@
             justify-center px-4 align-middle text-lg lg:px-4 xl:px-26 xl:text-2xl"
 			>
 				{#if botStatus.length === 0}
-					<div class="mt-8 self-center font-bold text-muted-foreground/50">
+					<div
+						class="mt-8 self-center text-base font-normal text-muted-foreground/30"
+					>
 						disabled everywhere for now :(
 					</div>
 				{/if}

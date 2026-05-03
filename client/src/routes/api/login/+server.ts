@@ -1,8 +1,8 @@
-import { json, type RequestEvent, type RequestHandler } from "@sveltejs/kit";
-import { Rh } from "$lib/utils/route";
+import { json, type RequestHandler } from "@sveltejs/kit";
+import { routeManager } from "$lib/utils/route";
 import { buildHeaders } from "$lib/server/verify";
 
-const TOKEN_ENDPOINT = new URL(`${Rh.apiv1}/auth/new-session`);
+const TOKEN_ENDPOINT = routeManager.internApiUrl("_admin", "auth/new-session");
 
 export const POST: RequestHandler = async ({ locals, request, fetch }) => {
 	const logger = locals.logger.child({
@@ -10,12 +10,8 @@ export const POST: RequestHandler = async ({ locals, request, fetch }) => {
 	});
 
 	logger.debug("starting serverside login handler");
-
 	try {
-		// let token = null;
-
 		const { token } = await request.json();
-
 		if (token == null) {
 			logger.warn("missing token");
 			return json({ status: 400, data: "invalid token" });

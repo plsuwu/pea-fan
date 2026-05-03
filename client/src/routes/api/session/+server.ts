@@ -1,19 +1,16 @@
 import { json, type RequestEvent, type RequestHandler } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 // import { logger } from "$lib/observability/server/logger.svelte";
 import { buildHeaders } from "$lib/server/verify";
 
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
+const SESSION_ENDPOINT = routeManager.internApiUrl("_admin", "session");
 
 export const GET: RequestHandler = async ({ cookies, locals, fetch }) => {
-	const sessionUri = `${Rh.apiAdmin}/session`;
-
 	const logger = locals.logger.child({
-		sessionUri,
+		endpoint: SESSION_ENDPOINT,
 	});
-
-	// logger.info("starting serverside token validation");
 
 	let token = cookies.get(ADMIN_SESSION_TOKEN);
 	if (token == null) {
@@ -23,7 +20,7 @@ export const GET: RequestHandler = async ({ cookies, locals, fetch }) => {
 
 	try {
 		const headers = buildHeaders(true, token);
-		const res = await fetch(sessionUri, {
+		const res = await fetch(SESSION_ENDPOINT, {
 			method: "GET",
 			headers,
 		});
@@ -45,7 +42,7 @@ export const GET: RequestHandler = async ({ cookies, locals, fetch }) => {
 			return json({ status: 400, data: "invalid session token" });
 		}
 
-		// logger.trace({ body }, "valid token");
+		logger.trace({ body }, "valid token");
 		return json({ status: 200, data: body.data });
 	} catch (err) {
 		logger.error({ error: err }, "unable to process validation");

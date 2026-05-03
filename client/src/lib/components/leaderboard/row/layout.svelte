@@ -3,13 +3,15 @@
 	import { type UntypedEntry, readableColor } from "$lib/utils";
 	import { page } from "$app/state";
 	import { cn } from "$lib/shadcn-components/utils";
-	import { Rh } from "$lib/utils/route";
+	import { routeManager } from "$lib/utils/route";
 	import Ranking from "./ranking.svelte";
 	import ProfileImage from "./profile-image.svelte";
 	import SubTable from "./subtable.svelte";
 	import Total from "./total.svelte";
 	import Name from "./name.svelte";
 	import Link from "./link.svelte";
+
+	const PLACEHOLDER_STRING = "placeholder_str";
 
 	let {
 		entry,
@@ -23,8 +25,14 @@
 		showScoreIcons?: boolean;
 	} = $props();
 
+	let tenantHref = $derived(
+		routeManager.getTenantedURL(PLACEHOLDER_STRING, page.url.host).href
+	);
+
 	let isChannel = $derived(variant === "Channel");
-	let href = $derived(`${Rh.getTenantedURL(entry.login, page.url.host)}`);
+	let href = $derived(
+		`${routeManager.getTenantedURL(entry.login, page.url.host)}`
+	);
 	let nameElement: HTMLDivElement;
 	let ringedElement: HTMLImageElement | undefined = $state();
 
@@ -84,7 +92,7 @@
 </script>
 
 <div
-    id={entry.ranking.toString()}
+	id={entry.ranking.toString()}
 	class={cn(
 		`relative flex items-center justify-between space-x-4 overflow-x-hidden
         rounded-[1px] border-2 border-foreground bg-background py-4 pl-4 transition-all
@@ -109,7 +117,6 @@
 				bind:this={nameElement}
 			>
 				<Name isLive={entry.isLive} name={entry.name} />
-					
 			</div>
 		</Link>
 	</div>
@@ -124,6 +131,7 @@
 					login={entry.login}
 					scores={subtableScores}
 					totalScores={entry.totalScores}
+					{tenantHref}
 				/>
 			</div>
 		{/if}

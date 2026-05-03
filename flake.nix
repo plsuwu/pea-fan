@@ -76,10 +76,10 @@
 
         client = pkgs.buildNpmPackage {
           pname = "piss-fan-client";
-          version = "1.3.5";
+          version = "1.3.6";
           src = ./client;
 
-          npmDepsHash = "sha256-hZHjcSrdKGYSz1rkKDHCwUZNgpnRjddxy23QipPT0Sc=";
+          npmDepsHash = "sha256-zqBjLXnz4hCZV5elDNBMoi954afDYHXqK+csSds7Y5w=";
 
           buildPhase = ''
             npm install
@@ -146,6 +146,8 @@
 
             postgresql
             redis
+
+            valkey
 
             grafana-alloy
           ];

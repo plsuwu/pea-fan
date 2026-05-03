@@ -12,17 +12,13 @@
 	});
 
 	const META_IF_BASE =
-		"Leaderboard ranking a handful of Twitch broadcasters (primarily vtubers) by the number of times a chatter has sent a message about piss to their chat room.";
+		"Piss.fan is a leaderboard ranking a handful of Twitch VTubers based on the number of piss-related messages sent to their chat rooms.";
 	const META_IF_CHANNEL = $derived(
-		`Leaderboard of chatters in Twitch broadcaster ${channelData!.name}'s chat room, whereby chatters are ranked based on the number of their chat messages mentioning piss.`
+		`Piss.fan leaderboard for ${channelData!.name}'s chat room, ranking chatters by the number of times they have sent a message about piss`
 	);
 
 	let content = $derived.by(() => {
-		if (channel) {
-			return META_IF_CHANNEL;
-		}
-
-		return META_IF_BASE;
+		return channel ? META_IF_CHANNEL : META_IF_BASE;
 	});
 </script>
 

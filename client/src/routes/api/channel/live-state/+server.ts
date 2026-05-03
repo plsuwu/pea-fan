@@ -1,9 +1,9 @@
 import { buildHeaders, verifyToken } from "$lib/server/verify";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 import { json, type RequestHandler } from "@sveltejs/kit";
 import { type Logger } from "pino";
 
-const API_ENDPOINT = `${Rh.apiAdmin}/update/live`;
+const API_ENDPOINT = routeManager.internApiUrl("_admin", "update/live");
 
 export const PUT: RequestHandler = async ({
 	cookies,
@@ -26,7 +26,9 @@ export const PUT: RequestHandler = async ({
 		const headers = buildHeaders(true, token);
 		const { id } = await request.json();
 
+        logger.debug({ id }, "called sync handler");
 		const endpoint = new URL(API_ENDPOINT);
+
 		logger.setBindings({
 			channelId: id,
 			endpoint: endpoint,

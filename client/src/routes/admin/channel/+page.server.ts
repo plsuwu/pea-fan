@@ -4,13 +4,10 @@ import {
 	buildHeadersAuthless,
 	verifyToken,
 } from "$lib/server/verify";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { fail, type Actions } from "@sveltejs/kit";
-import { env } from "$env/dynamic/private";
-
-const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
 type BotConfig = {
 	id: string;
@@ -21,12 +18,26 @@ type BotConfig = {
 	image: string;
 };
 
+export const load: PageServerLoad = async ({ cookies, locals, fetch }) => {
+	let token = await verifyToken(cookies, locals, fetch);
+	if (token == null) {
+		invalidateCookie(cookies);
+		redirect(302, "/admin/login");
+	}
+	const configs = await getChannelConfigs(token, locals, "all");
+	const hooks = (await getChannelHooks(token, locals, fetch)) ?? new Array();
+	return {
+		configs,
+		hooks,
+	};
+};
+
 async function getChannelConfigs(
 	token: string,
 	locals: App.Locals,
 	id = "all"
 ): Promise<BotConfig[]> {
-	const url = new URL(`${Rh.apiAdmin}/update/bot-config`);
+	const url = new URL(routeManager.internApiUrl("_admin", "update/bot-config"));
 	const logger = locals.logger.child({
 		endpoint: url,
 		channelId: id,
@@ -84,20 +95,6 @@ async function getChannelHooks(
 	}
 }
 
-export const load: PageServerLoad = async ({ cookies, locals, fetch }) => {
-	let token = await verifyToken(cookies, locals, fetch);
-	if (token == null) {
-		invalidateCookie(cookies);
-		redirect(302, "/admin/login");
-	}
-	const configs = await getChannelConfigs(token, locals, "all");
-	const hooks = await getChannelHooks(token, locals, fetch) ?? new Array();
-	return {
-		configs,
-        hooks,
-	};
-};
-
 export const actions = {
 	create: async ({ locals, request, fetch }) => {
 		const logger = locals.logger.child({
@@ -109,7 +106,8 @@ export const actions = {
 			const formData = await request.formData();
 			const channel = formData.get("channel") as string;
 
-			if (channel === "" || channel.length < 4) {
+			// twitch usernames CAN be < 4 characters
+			if (channel === "") {
 				return fail(400, {
 					error: "missing or invalid channel name",
 				});
@@ -182,11 +180,10 @@ export const actions = {
 		try {
 			const headers = buildHeadersAuthless(true);
 			const formData = await request.formData();
-			let id = formData.get("channel-id") as string;
+			let id = formData.get("channel-id");
 
-			logger.info({ id });
-
-			if (id === "") {
+			logger.debug({ id }, "syncing channel live state");
+			if (id === "" || id == null) {
 				id = "all";
 			}
 
@@ -213,10 +210,8 @@ export const actions = {
 	},
 
 	resethooks: async ({ locals, fetch }) => {
-		const endpoint = `${Rh.apiAdmin}/helix/hooks`;
 		const logger = locals.logger.child({
 			action: "reset-hooks",
-			endpoint,
 		});
 
 		try {
@@ -242,10 +237,8 @@ export const actions = {
 	},
 
 	deletehooks: async ({ locals, fetch }) => {
-		const endpoint = `${Rh.apiAdmin}/helix/hooks`;
 		const logger = locals.logger.child({
 			action: "delete-hooks",
-			endpoint,
 		});
 
 		try {

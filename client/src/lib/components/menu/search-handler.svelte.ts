@@ -1,5 +1,3 @@
-import { Rh } from "$lib/utils/route";
-
 export type SearchResult = {
 	id: string;
 	name: string;
@@ -29,43 +27,43 @@ export function debounce<
 		}, delay);
 	};
 }
-
-export class SearchHandler {
-	readonly apiUrl = new URL(`${Rh.apiv1}/search/by-login`);
-
-	loading = $state(false);
-	results = $state<SearchResult[]>([]);
-	count = $state(0);
-
-	current = $state("");
-	previous = $state("");
-
-	constructor() {}
-
-	public async search(signal: AbortSignal, q: string) {}
-
-	private createQueryUrl(login: string): URL {
-		const url = this.apiUrl;
-		url.searchParams.set("login", login);
-
-		return url;
-	}
-
-	public clearSearch() {
-		this.clearQuery();
-		this.results = [];
-	}
-
-	public resultsEmpty(): boolean {
-		return this.results.length <= 0;
-	}
-
-	public queryIsEmpty(): boolean {
-		return this.current === "" && this.previous === this.current;
-	}
-
-	public clearQuery() {
-		this.current = "";
-		this.previous = "";
-	}
-}
+//
+// export class SearchHandler {
+// 	readonly apiUrl = new URL(`${Rh.apiv1}/search/by-login`);
+//
+// 	loading = $state(false);
+// 	results = $state<SearchResult[]>([]);
+// 	count = $state(0);
+//
+// 	current = $state("");
+// 	previous = $state("");
+//
+// 	constructor() {}
+//
+// 	public async search(signal: AbortSignal, q: string) {}
+//
+// 	private createQueryUrl(login: string): URL {
+// 		const url = this.apiUrl;
+// 		url.searchParams.set("login", login);
+//
+// 		return url;
+// 	}
+//
+// 	public clearSearch() {
+// 		this.clearQuery();
+// 		this.results = [];
+// 	}
+//
+// 	public resultsEmpty(): boolean {
+// 		return this.results.length <= 0;
+// 	}
+//
+// 	public queryIsEmpty(): boolean {
+// 		return this.current === "" && this.previous === this.current;
+// 	}
+//
+// 	public clearQuery() {
+// 		this.current = "";
+// 		this.previous = "";
+// 	}
+// }

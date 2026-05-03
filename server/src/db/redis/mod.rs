@@ -6,9 +6,6 @@ use crate::{db::prelude::ChannelId, util::helix::Helix};
 
 pub mod redis_pool;
 
-#[cfg(feature = "migration-util")]
-pub mod migrator;
-
 #[instrument(skip(redis_pool))]
 pub async fn clear_stream_states<R: AsyncCommands + Sync>(redis_pool: &mut R) -> RedisResult<()> {
     let cached_live = get_all_live(redis_pool).await?.unwrap_or_default();
@@ -42,14 +39,11 @@ pub async fn init_stream_states<R: AsyncCommands + Sync>(
     tracing::debug!(live_broadcasters = ?live, "retrieved stream states");
 
     for id in ids {
-        let key = format!("{}:online", id);
-        match live.iter().any(|br| &br.user_id == id) {
-            true => {
-                tracing::debug!(id, "caching stream.online");
-                pipeline.set(key, 1);
-            }
-            _ => (),
-        };
+        let key = format!("{id}:online");
+        if live.iter().any(|br| &br.user_id == id) {
+            tracing::debug!(id, "caching stream.online");
+            pipeline.set(key, 1);
+        }
     }
 
     let _: () = pipeline.query_async(redis_pool).await?;

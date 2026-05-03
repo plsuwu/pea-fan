@@ -1,17 +1,12 @@
 <script lang="ts">
-	import { page } from "$app/state";
 	import * as Tt from "$lib/shadcn-components/ui/tooltip/index";
 	import { getAltImageSizeUrl } from "$lib/utils";
-	// import { URLS } from "$lib";
-	import { Rh } from "$lib/utils/route";
 	import SkeletonImage from "./skeleton-image.svelte";
 
-	let { login, totalScores, scores, variant } = $props();
+	const PLACEHOLDER_STRING = "placeholder_str";
 
-	// let preposition = $derived(variant === "Channel" ? "by" : "in");
+	let { login, totalScores, scores, variant, tenantHref } = $props();
 	let subvariant = $derived(variant === "Channel" ? "chatter" : "channel");
-
-	let { host } = $derived(page.url);
 
 	const PREVIEWS_COUNT = 6;
 
@@ -51,7 +46,7 @@
 				<SkeletonImage
 					src={getAltImageSizeUrl(imgUrl, "XS")}
 					alt={login}
-					class="z-10 rounded-full bg-background ring-1 ring-offset-1"
+					class="z-10 rounded-full bg-background ring-1 ring-offset-1 h-[20px] my-0.5"
 					skeletonClass="size-6 rounded-full"
 				/>
 			</Tt.Trigger>
@@ -83,7 +78,9 @@
 
 		<div class="items-row flex flex-row">
 			<div class="mt-2 ml-3 space-x-2">
-				<div class="flex flex-row -space-x-1 w-[105px] min-w-[105px] justify-end">
+				<div
+					class="flex w-[105px] min-w-[105px] flex-row justify-end -space-x-1"
+				>
 					{#each scores?.slice(0, PREVIEWS_COUNT) as subentry}
 						<div>
 							{@render Hoverable({
@@ -98,7 +95,7 @@
 				</div>
 				{#if totalScores > PREVIEWS_COUNT}
 					{#if variant === "Channel"}
-						<a href={`${Rh.getTenantedURL(login, host)}`}>
+						<a href={`${tenantHref.replace(PLACEHOLDER_STRING, login)}`}>
 							<span
 								class="ml-1 text-sm font-semibold -tracking-wider text-accent-foreground/55
                             italic transition-all duration-100 ease-in hover:text-accent-foreground/90"
@@ -109,9 +106,9 @@
 					{:else}
 						<div>
 							<span
-								class="ml-1 text-sm font-semibold -tracking-wider text-accent-foreground/55
-                                italic transition-all duration-100 ease-in hover:text-accent-foreground/90
-                                cursor-default"
+								class="ml-1 cursor-default text-sm font-semibold -tracking-wider
+                                text-accent-foreground/55 italic transition-all duration-100 ease-in
+                                hover:text-accent-foreground/90"
 							>
 								{getMentionedSubtitle(totalScores)}
 							</span>

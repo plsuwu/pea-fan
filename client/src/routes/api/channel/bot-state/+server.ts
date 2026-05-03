@@ -1,10 +1,13 @@
 import { env } from "$env/dynamic/private";
 import { buildHeaders } from "$lib/server/verify";
-import { Rh } from "$lib/utils/route";
+import { routeManager } from "$lib/utils/route";
 import { json, type RequestHandler } from "@sveltejs/kit";
 
-const CONFIG_ENDPOINT = `${Rh.apiAdmin}/update/bot-config`;
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
+const CONFIG_ENDPOINT = routeManager.internApiUrl(
+	"_admin",
+	"update/bot-config"
+);
 
 export const PUT: RequestHandler = async ({
 	cookies,

@@ -171,15 +171,19 @@ pub async fn refresh_channel_state(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<UserIdRequest>,
 ) -> ApiResult<()> {
-    let ids = if payload.id == "all" {
-        ChannelRepository::new(state.database_pool)
-            .get_all_channel_ids()
-            .await?
-    } else {
-        vec![payload.id]
-    };
+    if payload.id == "all" {
+        let _guard = state.channel_ids.read().await;
+        let ids = _guard.clone();
+        drop(_guard);
 
-    db::redis::init_stream_states(&mut state.redis_pool.clone(), &ids).await?;
+        db::redis::init_stream_states(&mut state.redis_pool.clone(), &ids).await?;
+    } else {
+        let id = payload.id.clone();
+        let live = !Helix::get_streams(&[id]).await?.is_empty();
+
+        db::redis::set_stream_state(&mut state.redis_pool.clone(), &ChannelId(payload.id), live)
+            .await?;
+    }
 
     Ok(ApiResponse::<()>::empty())
 }

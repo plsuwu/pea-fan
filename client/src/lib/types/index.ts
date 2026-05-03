@@ -112,8 +112,6 @@ export type Score =
 	| { _tag: "Channel"; data: ChannelScore }
 	| { _tag: "Chatter"; data: ChatterScore };
 
-export { Result, Err, Ok } from "./result";
-
 export const TWITCH_IMAGE_SIZE = {
 	XXL: "600x600",
 	XL: "300x300",
