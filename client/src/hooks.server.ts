@@ -7,9 +7,8 @@ import {
 } from "@sveltejs/kit";
 import { logger } from "$lib/observability/server/logger.svelte";
 import { routeManager } from "$lib/utils/route";
-import { getBaseURLFromRequest, isIpAddr, isLocalDomain } from "$lib/utils";
-import { channelCache } from "$lib/caching";
 
+// TODO fix this bullshit ohg ymtifuhfkjfhljk
 export const handleError: HandleServerError = ({ status }) => {
 	let displayMessage;
 	switch (status) {
@@ -41,41 +40,36 @@ export const handleError: HandleServerError = ({ status }) => {
 };
 
 const tenantHook: Handle = async ({ event, resolve }) => {
+
 	const requestHost =
 		event.request.headers.get("host") ??
 		event.request.headers.get("x-host") ??
-		null;
+		"missing_host";
 
-	if (!requestHost || isIpAddr(requestHost) || isLocalDomain(requestHost)) {
-		event.locals.channel = null;
-		return resolve(event);
-	}
-
-	const requestedTenant = requestHost?.split(".")[0];
+	const urlParts = requestHost?.split(".");
 
 	if (
-		!requestedTenant ||
-		requestedTenant === routeManager.host ||
+		urlParts.length < 3 ||
 		requestHost === routeManager.host ||
-		requestHost === routeManager.api.external
+		requestHost === routeManager.api.external ||
+		requestHost === routeManager.deriveBase(requestHost)
 	) {
 		event.locals.channel = null;
 		return resolve(event);
 	}
 
-	const cachedChannels = new Set(await channelCache.read());
-	if (await routeManager.reroutable(event, requestedTenant, cachedChannels)) {
+	const requestedTenant = urlParts[0];
+	if (await routeManager.reroutable(requestedTenant)) {
 		event.locals.channel = requestedTenant;
 		return resolve(event);
 	} else {
+		const redirection = `${routeManager.proto}://${routeManager.host}`;
 		event.locals.logger.warn(
-			{ tenant: requestedTenant },
-			"denying route to invalid tenant"
+			{ tenant: requestedTenant, redirection },
+			"denying route - redirecting"
 		);
-		event.locals.channel = null;
-		const baseFromRequest = getBaseURLFromRequest(requestHost);
-		const redirection = `${routeManager.proto}://${baseFromRequest}`;
 
+		event.locals.channel = null;
 		redirect(302, redirection);
 	}
 };
@@ -115,10 +109,11 @@ export const handle = sequence(logInitHook, tenantHook);
 
 function getClientFromHeaders(event: RequestEvent) {
 	const headers = event.request.headers;
-
 	const userAgent = headers.get("user-agent") ?? "MISSING";
+
 	const cfconnecting =
 		headers.get("cf-connecting-ip") ?? event.getClientAddress();
+
 	const xforwardedList = headers
 		.get("x-forwarded-for")
 		?.split(",")

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { SystemModeValue } from "mode-watcher";
 	import { type UntypedEntry, readableColor } from "$lib/utils";
-	import { page } from "$app/state";
 	import { cn } from "$lib/shadcn-components/utils";
 	import { routeManager } from "$lib/utils/route";
 	import Ranking from "./ranking.svelte";
@@ -10,8 +9,7 @@
 	import Total from "./total.svelte";
 	import Name from "./name.svelte";
 	import Link from "./link.svelte";
-
-	const PLACEHOLDER_STRING = "placeholder_str";
+	import { page } from "$app/state";
 
 	let {
 		entry,
@@ -25,14 +23,11 @@
 		showScoreIcons?: boolean;
 	} = $props();
 
-	let tenantHref = $derived(
-		routeManager.getTenantedURL(PLACEHOLDER_STRING, page.url.host).href
+	let href = $derived(
+		routeManager.getTenantedURL(entry.login, page.url.host).href
 	);
 
 	let isChannel = $derived(variant === "Channel");
-	let href = $derived(
-		`${routeManager.getTenantedURL(entry.login, page.url.host)}`
-	);
 	let nameElement: HTMLDivElement;
 	let ringedElement: HTMLImageElement | undefined = $state();
 
@@ -131,7 +126,7 @@
 					login={entry.login}
 					scores={subtableScores}
 					totalScores={entry.totalScores}
-					{tenantHref}
+					tenantHref={href}
 				/>
 			</div>
 		{/if}

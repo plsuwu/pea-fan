@@ -2,10 +2,14 @@ import { env } from "$env/dynamic/public";
 import type { RequestEvent } from "@sveltejs/kit";
 import { isIpAddr } from ".";
 import { logger } from "$lib/observability/server/logger.svelte";
+import { channelCache } from "$lib/caching";
 
 export const BASE_HOST = env.PUBLIC_BASE_HOST ?? "https://piss.fan";
 export const INTERN_API = env.PUBLIC_INTERNAL_API ?? "http://localhost:8080";
 export const EXTERN_API = env.PUBLIC_EXTERNAL_API ?? "https://api.piss.fan";
+
+export const TENANT_PLACEHOLDER = "__";
+
 export type ApiRoute = (typeof API_ROUTE)[number];
 export const API_ROUTE = [
 	"checkhealth",
@@ -39,6 +43,7 @@ export class RouteManager implements Route {
 	readonly host = BASE_HOST;
 	readonly baseRoutes = API_ROUTE;
 	readonly proto = this._devel ? "http" : "https";
+
 	readonly api = {
 		internal: `${INTERN_API}/${this._apiBase}`,
 		external: `${EXTERN_API}/${this._apiBase}`,
@@ -50,14 +55,14 @@ export class RouteManager implements Route {
 
 	public externApiUrl(at: ApiRoute, loc: string) {
 		const uri = `${this.api.external}/${at}/${loc}`;
-		// logger.trace({ route: uri }, "routeman constructed external uri");
+		// logger.debug({ route: uri }, "routeman constructed external uri");
 
 		return uri;
 	}
 
 	public internApiUrl(at: ApiRoute, loc: string) {
 		const uri = `${this.api.internal}/${at}/${loc}`;
-		logger.trace({ route: uri }, "routeman constructed internal uri");
+		// logger.debug({ route: uri }, "routeman constructed internal uri");
 
 		return uri;
 	}
@@ -66,14 +71,14 @@ export class RouteManager implements Route {
 		const parts = host.split(".");
 		if (parts.length > 1 && parts[1].includes("localhost")) {
 			const out = parts.slice(1).join(".");
-		    // logger.trace({ host: out }, "derived base localhost tenant");
+			// logger.debug({ host: out }, "derived base localhost host");
 
 			return out;
 		}
 
 		const out =
 			parts.length > 2 && !isIpAddr(host) ? parts.slice(1).join(".") : host;
-		// logger.trace({ host: out }, "derived base localhost tenant");
+		// logger.debug({ host: out }, "derived base external host");
 
 		return out;
 	}
@@ -81,7 +86,7 @@ export class RouteManager implements Route {
 	getTenantedURL(login: string, host?: string): URL {
 		const base = host ? this.deriveBase(host) : this.host;
 		const res = new URL(`${this.proto}://${login}.${base}`);
-		// logger.trace({ result: res }, "using tenanted base");
+		// logger.debug({ result: res }, "using tenanted base");
 
 		return res;
 	}
@@ -94,11 +99,9 @@ export class RouteManager implements Route {
 		return res;
 	}
 
-	async reroutable(_: RequestEvent, channel: string, channels: Set<string>) {
-		// logger.trace({ requestHost: _.url.host }, "checking re-routability");
-
-		const isValid = channels.has(channel);
-		return isValid;
+	async reroutable(channel: string) {
+		const channels = await channelCache.read();
+		return channels.includes(channel);
 	}
 }
 

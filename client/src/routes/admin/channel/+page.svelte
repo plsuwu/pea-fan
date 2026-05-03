@@ -5,17 +5,11 @@
 		CloudAlertIcon,
 		CloudBackupIcon,
 		CloudSyncIcon,
-		FishingHookIcon,
 		PlusIcon,
 	} from "@lucide/svelte";
 	import Label from "$lib/shadcn-components/ui/label/label.svelte";
-	import Checkbox from "$lib/shadcn-components/ui/checkbox/checkbox.svelte";
 	import Loading from "$lib/components/loading/loading.svelte";
 	import { enhance } from "$app/forms";
-	import { cn } from "tailwind-variants";
-	import { mode } from "mode-watcher";
-	import dayjs from "dayjs";
-	import { readableColor } from "$lib/utils";
 	import Panel from "$lib/components/admin/settings/panel.svelte";
 	import ChannelSettings from "$lib/components/admin/settings/channel-settings.svelte";
 
@@ -72,8 +66,6 @@
 
 		return cfgs;
 	});
-
-	function togglePanel() {}
 
 	function setWaiting(state?: boolean) {
 		if (state != null) {
@@ -213,7 +205,7 @@
 <div class="mb-16">
 	<div class="my-4 w-full border-b-2"></div>
 	{#each cfgs as cfg, idx (cfg.id)}
-		<Panel config={cfg} {idx} {waiting} {setWaiting}>
+		<Panel config={cfg} {idx}>
 			<ChannelSettings config={cfg} {waiting} {setWaiting} />
 		</Panel>
 	{/each}

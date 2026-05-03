@@ -18,6 +18,7 @@
 
 	let currentMode = $derived(mode.current);
 	let filtering = $derived(variant === "Channel" && onlyShowLive);
+
 </script>
 
 {#snippet Loader()}

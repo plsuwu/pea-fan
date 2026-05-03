@@ -3,7 +3,7 @@
 	import dayjs from "dayjs";
 	import { cn } from "tailwind-variants";
 
-	const INDICES = new Array(2);
+	const INDICES = [0, 1];
 	const FORMAT_STR = "HH:mm A, YY-MM-DD";
 	const dateFmt = (date: string) => dayjs(date).format(FORMAT_STR);
 
@@ -24,7 +24,7 @@
 			{dateFmt(h.created_at)}
 		</div>
 		<div class="w-full self-start">
-			{h?.type ?? "hook error"}
+			{h.type}
 		</div>
 		<div
 			class={cn(
@@ -32,14 +32,17 @@
 				h != null ? "text-foreground" : "text-accent"
 			)}
 		>
-			[{h?.status ?? ""}]
+			[{h.status}]
 		</div>
+        <div class="w-full self-center">
+            {h.id}
+        </div>
 	</div>
 {/snippet}
 
 <div class="flex w-full flex-col self-start justify-self-start py-4">
 	<div class="flex flex-col space-y-1 text-start text-xs">
-		{#each INDICES as i}
+		{#each INDICES as _, i}
 			{@const h = getHookEntry(i, hook)}
 			{#if h}
 				{@render HookInfo(h)}
