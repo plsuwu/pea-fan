@@ -9,8 +9,7 @@ use crate::db::models::chatter::{ChatterId, ChatterLeaderboardEntry};
 use crate::db::models::chatter::{ChatterLeaderboardRow, ChatterScoreSummary};
 use crate::db::models::leaderboard::{Score, TimeWindow};
 use crate::db::prelude::{Channel, ChannelRepository, Chatter};
-use crate::db::prelude::{ChatterRepository, Repository,ScoreSummary};
- 
+use crate::db::prelude::{ChatterRepository, Repository, ScoreSummary};
 
 pub struct LeaderboardRepository {
     pool: &'static Pool<Postgres>,
@@ -240,30 +239,29 @@ impl LeaderboardRepository {
         id: ChannelId,
         score_pagination: ScorePagination,
     ) -> SqlxResult<Option<ChannelLeaderboardEntry>> {
-        let channel = sqlx::query_as!(
-            ChannelLeaderboardRow,
+        let channel = sqlx::query_as::<_, ChannelLeaderboardRow>(
             r#"
             SELECT 
-                ch.id AS "id!",
-                ch.name AS "name!",
-                ch.login AS "login!",
-                ch.color AS "color!",
-                ch.image AS "image!",
-                ch.total_chatter AS "total_chatter!",
-                ch.total_channel AS "total_channel!",
-                ch.ranking AS "ranking!",
+                ch.id,
+                ch.name,
+                ch.login,
+                ch.color,
+                ch.image,
+                ch.total_chatter,
+                ch.total_channel,
+                ch.ranking,
                 (
                     SELECT COUNT(*) 
                     FROM ranked_scores_view_per_channel 
                     WHERE channel_id = ch.id
-                ) as "total_scores!",
-                ch.created_at AS "created_at!",
-                ch.updated_at AS "updated_at!"
+                ) as total_scores,
+                ch.created_at,
+                ch.updated_at
             FROM channel_leaderboard ch
             WHERE ch.id = $1
             "#,
-            &id.to_string()
         )
+        .bind(&id.to_string())
         .fetch_optional(self.pool)
         .await?;
 
@@ -291,30 +289,32 @@ impl LeaderboardRepository {
         id: ChatterId,
         // score_pagination: ScorePagination,
     ) -> SqlxResult<Option<ChatterLeaderboardEntry>> {
-        let chatter = sqlx::query_as!(
-            ChatterLeaderboardRow,
+        // TODO when/if implementing chatter view pages - note that this query is based on
+        //      an older query that im like 90% sure was functional but this appears a
+        //      little bit dubious around the join...
+        let chatter = sqlx::query_as::<_, ChatterLeaderboardRow>(
             r#"
             SELECT 
-                ch.id as "id!",
-                ch.name as "name!",
-                ch.login as "login!",
-                ch.color as "color!",
-                ch.image as "image!",
-                ch.total as "total!",
-                ch.private as "private!",
-                ch.ranking as "ranking!",
+                c.id,
+                c.name, 
+                c.login,
+                c.color,
+                c.image,
+                c.total,
+                c.private,
+                c.ranking,
                 (
-                    SELECT COUNT(*)
-                    FROM ranked_scores_view_per_channel 
-                    WHERE channel_id = ch.id
-                ) as "total_scores!",
-                ch.created_at as "created_at!",
-                ch.updated_at as "updated_at!"
-            FROM chatter_leaderboard ch
-            WHERE ch.id = $1
+                    SELECT COUNT(*) 
+                    FROM ranked_scores_view_per_channel rs
+                    WHERE rs.chatter_id = c.id
+                ) as total_scores,
+                c.created_at,
+                c.updated_at
+            FROM chatter_leaderboard c
+            WHERE c.id = $1
             "#,
-            &id.to_string()
         )
+        .bind(&id.to_string())
         .fetch_optional(self.pool)
         .await?;
 
@@ -345,32 +345,32 @@ impl LeaderboardRepository {
             .await?
             .unwrap_or_default();
 
-        let chatters = sqlx::query_as!(
-            ChatterLeaderboardRow,
+        let chatters = sqlx::query_as::<_, ChatterLeaderboardRow>(
             r#"
-            SELECT 
-                id  as "id!",
-                name as "name!",
-                login as "login!",
-                color as "color!",
-                image as "image!",
-                total as "total!",
-                private as "private!",
-                ranking as "ranking!",
-                (
-                    SELECT COUNT (*) 
-                    FROM ranked_scores_view_per_channel
-                    WHERE chatter_id = id
-                ) as "total_scores!",
-                created_at as "created_at!",
-                updated_at as "updated_at!"
-            FROM ranked_scores_view_chatters
-            ORDER BY ranking ASC
+            SELECT
+                c.id, 
+                c.name,
+                c.login,
+                c.color, 
+                c.image,
+                c.total,
+                c.private,
+                c.ranking,
+                COALESCE(s.total_scores, 0) AS total_scores,
+                c.created_at, 
+                c.updated_at
+            FROM ranked_scores_view_chatters c
+            LEFT JOIN (
+                SELECT chatter_id, COUNT(*) AS total_scores
+                FROM ranked_scores_view_per_channel
+                GROUP BY chatter_id
+            ) s ON s.chatter_id = c.id
+            ORDER BY c.ranking ASC
             LIMIT $1 OFFSET $2
             "#,
-            limit,
-            offset,
         )
+        .bind(limit)
+        .bind(offset)
         .fetch_all(self.pool)
         .await?;
 
@@ -411,32 +411,32 @@ impl LeaderboardRepository {
             .fetch_one(self.pool)
             .await?;
 
-        let channels = sqlx::query_as!(
-            ChannelLeaderboardRow,
+        let channels = sqlx::query_as::<_, ChannelLeaderboardRow>(
             r#"
             SELECT 
-                id AS "id!",
-                name AS "name!",
-                login AS "login!",
-                color AS "color!",
-                image AS "image!",
-                total_chatter AS "total_chatter!",
-                total_channel AS "total_channel!",
-                ranking AS "ranking!",
-                (
-                    SELECT COUNT (*) 
-                    FROM ranked_scores_view_per_channel 
-                    WHERE channel_id = id
-                ) as "total_scores!",
-                created_at AS "created_at!",
-                updated_at AS "updated_at!"
-            FROM channel_leaderboard
-            ORDER BY ranking ASC
+                ch.id, 
+                ch.name, 
+                ch.login,
+                ch.image,
+                ch.color,
+                ch.total_chatter,
+                ch.total_channel, 
+                ch.ranking,
+                COALESCE(s.total_scores, 0) AS total_scores,
+                ch.created_at, 
+                ch.updated_at
+            FROM channel_leaderboard ch
+            LEFT JOIN (
+                SELECT channel_id, COUNT(*) as total_scores
+                FROM ranked_scores_view_per_channel
+                GROUP BY channel_id
+            ) s ON s.channel_id = ch.id
+            ORDER BY ch.ranking ASC
             LIMIT $1 OFFSET $2
             "#,
-            limit,
-            offset,
         )
+        .bind(limit)
+        .bind(offset)
         .fetch_all(self.pool)
         .await?;
 
