@@ -4,7 +4,7 @@ import { isIpAddr } from ".";
 import { logger } from "$lib/observability/server/logger.svelte";
 import { channelCache } from "$lib/caching";
 
-export const BASE_HOST = env.PUBLIC_BASE_HOST ?? "https://piss.fan";
+export const BASE_HOST = env.PUBLIC_BASE_HOST ?? "piss.fan";
 export const INTERN_API = env.PUBLIC_INTERNAL_API ?? "http://localhost:8080";
 export const EXTERN_API = env.PUBLIC_EXTERNAL_API ?? "https://api.piss.fan";
 
@@ -12,6 +12,7 @@ export const TENANT_PLACEHOLDER = "__";
 
 export type ApiRoute = (typeof API_ROUTE)[number];
 export const API_ROUTE = [
+    "auth",
 	"checkhealth",
 	"channel",
 	"chatter",

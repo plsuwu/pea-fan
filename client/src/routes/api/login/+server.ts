@@ -2,7 +2,7 @@ import { json, type RequestHandler } from "@sveltejs/kit";
 import { routeManager } from "$lib/utils/route";
 import { buildHeaders } from "$lib/server/verify";
 
-const TOKEN_ENDPOINT = routeManager.internApiUrl("_admin", "auth/new-session");
+const TOKEN_ENDPOINT = routeManager.internApiUrl("auth", "new-session");
 
 export const POST: RequestHandler = async ({ locals, request, fetch }) => {
 	const logger = locals.logger.child({

@@ -47,9 +47,11 @@ const tenantHook: Handle = async ({ event, resolve }) => {
 		"missing_host";
 
 	const urlParts = requestHost?.split(".");
+    logger.warn({ urlParts, requestHost });
 
 	if (
 		urlParts.length < 3 ||
+        urlParts[0] === "www" ||
 		requestHost === routeManager.host ||
 		requestHost === routeManager.api.external ||
 		requestHost === routeManager.deriveBase(requestHost)
