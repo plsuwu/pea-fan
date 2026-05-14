@@ -12,11 +12,15 @@ const HELIX_URL: &str = "https://api.twitch.tv/helix";
 #[instrument(skip(ids))]
 pub async fn reset_hooks(ids: &[String]) -> Result<()> {
     let active_hooks = Helix::get_active_subscriptions().await?;
-    tracing::debug!(?active_hooks, "active_hooks");
+
+    tracing::debug!(count = active_hooks.len(), "active_hooks");
 
     if !active_hooks.is_empty() {
-        tracing::debug!("active_hooks populated - deleting...");
-        Helix::delete_subscriptions(&active_hooks).await?;
+         
+        tracing::debug!("active_hooks populated");
+        let active_ids: Vec<String> = active_hooks.into_iter().map(|hook| hook.id).collect();
+
+        Helix::delete_subscriptions(&active_ids).await?;
     }
 
     let mut futs: FuturesUnordered<_> = ids

@@ -17,7 +17,7 @@ use tokio::sync::OnceCell;
 use tracing::{Instrument, error, instrument, warn};
 
 use crate::api::middleware::{MiddlewareErr, verify_external};
-use crate::api::webhook::SubscriptionGenericData;
+use crate::api::webhook::{HelixDataGeneric, SubscriptionGenericData};
 use crate::api::webhook::{StreamGenericRequest, StreamGenericRequestType};
 use crate::db::prelude::{ChannelId, ChatterId};
 use crate::util::env::{EnvErr, Var};
@@ -111,7 +111,7 @@ impl Helix {
 
     /// Makes a GET request
     #[instrument]
-    async fn send(uri: String) -> HelixResult<reqwest::Response> {
+    async fn send(uri: &str) -> HelixResult<reqwest::Response> {
         let client = reqwest::Client::new();
         let headers = auth_headers().await?.bearer.clone();
 
@@ -130,7 +130,7 @@ impl Helix {
     #[instrument(skip(ids), fields(fetch_for = ids.len()))]
     pub async fn get_streams(ids: &[String]) -> HelixResult<Vec<HelixStream>> {
         let mut all_streams = Vec::with_capacity(ids.len());
-        let params = build_query_params(HelixParamType::UserId, &ids);
+        let params = build_query_params(HelixParamType::UserId, ids);
 
         for param in params {
             let uri = format!("{}{}&type=live", String::from(HelixUri::Streams), param);
@@ -216,7 +216,7 @@ impl Helix {
     where
         T: DeserializeOwned + fmt::Debug,
     {
-        let res = Self::send(uri).await?;
+        let res = Self::send(&uri).await?;
 
         // if the request was unsuccessful, check to see whether the response
         // contained extra details about the error and return the corresponding
@@ -366,23 +366,61 @@ impl Helix {
     }
 
     #[instrument]
-    pub async fn get_active_subscriptions() -> HelixResult<Vec<String>> {
-        let body = Self::get_active_subscriptions_raw().await?;
+    pub async fn get_active_subscription_ids() -> HelixResult<Vec<String>> {
+        let body =
+            Self::get_active_subscriptions_raw(&String::from(HelixUri::WebhookSubscriptions))
+                .await?;
 
-        if let Some(vec_value) = body["data"].as_array()
-            && let Some(total_active) = body["total"].as_i64()
-            && total_active > 0
-        {
-            let mut result = Vec::new();
-            for element in vec_value {
-                let sub_id = element["id"].as_str().unwrap().to_string();
-                result.push(sub_id);
-            }
+        let result = body.data.into_iter().map(|sub| sub.id).collect();
 
-            return Ok(result);
+        return Ok(result);
+    }
+
+    #[instrument]
+    pub async fn get_active_subscriptions() -> HelixResult<Vec<SubscriptionGenericData>> {
+        let mut out = Vec::new();
+        let mut curr_page = 1;
+
+        let mut page_result =
+            Self::get_active_subscriptions_raw(&String::from(HelixUri::WebhookSubscriptions))
+                .await?;
+
+        tracing::debug!(curr_page, ?page_result, "fetched raw hook subscriptions");
+
+        out.extend(page_result.data);
+
+        while let Some(cursor) = &page_result.pagination.cursor {
+            let request_page = PaginatedHelixRequest {
+                cursor: cursor.clone(),
+                params: HelixParamType::After,
+            };
+
+            let uri = Self::build_subscription_uri(request_page);
+            page_result = Self::get_active_subscriptions_raw(&uri).await?;
+
+            curr_page += 1;
+            tracing::debug!(curr_page, ?page_result, "fetched raw hook subscriptions");
+
+            out.extend(page_result.data);
         }
 
-        Ok(Vec::new())
+        Ok(out)
+    }
+
+    #[instrument]
+    pub fn build_subscription_uri(request_page: PaginatedHelixRequest) -> String {
+        // let params = build_query_params(request_page.params, &[request_page.cursor.to_string()]);
+        //
+        // `build_query_params` calls `to_lowercase()` on the param value?? why would i do
+        // that?????? anyway,
+
+        // let query = format!("?{}{}", String::from(request_page.params), request_page.cursor);
+        format!(
+            "{}?{}{}",
+            String::from(HelixUri::WebhookSubscriptions),
+            String::from(request_page.params),
+            request_page.cursor,
+        )
     }
 
     #[instrument]
@@ -391,28 +429,16 @@ impl Helix {
     /// For the JSON structure.
     ///
     /// TODO make deserializable struct
-    pub async fn get_active_subscriptions_raw() -> HelixResult<Value> {
-        let params = build_query_params(HelixParamType::Status, &["enabled".to_string()]);
-        if params.len() != 1 {
-            return Err(HelixErr::FetchErr(
-                "invalid active_hooks query param".to_string(),
-            ));
-        }
-
-        let uri = format!(
-            "{}{}",
-            String::from(HelixUri::WebhookSubscriptions),
-            params[0]
-        );
+    pub async fn get_active_subscriptions_raw(
+        uri: &str,
+    ) -> HelixResult<HelixDataGeneric<SubscriptionGenericData>> {
         let result = Self::send(uri).await?;
-        let body: Value = match result.json().await {
-            Ok(val) => val,
-            Err(e) => {
-                tracing::error!(error = ?e, "failed to unwrap result body text");
-                return Err(HelixErr::ReqwestError(e));
-            }
-        };
+        tracing::debug!(?result, "subscriptions GET result (raw)");
 
+        let val_body: Value = result.json().await?;
+        tracing::debug!(?val_body, "subscriptions GET body");
+
+        let body: HelixDataGeneric<SubscriptionGenericData> = serde_json::from_value(val_body)?;
         Ok(body)
     }
 
@@ -426,7 +452,7 @@ impl Helix {
         tracing::info!(callback_url, "using callback uri");
 
         let key = verify_external::get_hmac_key().await?;
-        let body = StreamGenericRequest::new(&id.to_string(), &callback_url, &key, notif_type);
+        let body = StreamGenericRequest::new(&id.to_string(), callback_url, &key, notif_type);
 
         let uri = String::from(HelixUri::WebhookSubscriptions);
         let response = Self::post(uri, &body).await?;
@@ -451,10 +477,9 @@ impl Helix {
         if let Some(data_body) = &deserialized_body["data"].as_array() {
             let element = &data_body[0];
 
-            let subscription_type = element["type"].as_str().clone().unwrap();
+            let subscription_type = element["type"].as_str().unwrap();
             let broadcaster_id = element["condition"]["broadcaster_user_id"]
                 .as_str()
-                .clone()
                 .unwrap();
 
             tracing::info!(subscription_type, broadcaster_id, "created subscription");
@@ -481,8 +506,8 @@ impl Helix {
 
         while let Some(result) = futures.next().await {
             match result {
-                Ok(res) => tracing::info!(?res, "HOOK DELETION OK"),
-                Err(e) => tracing::error!(error = ?e, "HOOK DELETION FAIL"),
+                Ok(res) => tracing::info!(?res, "hook deleted"),
+                Err(e) => tracing::error!(error = ?e, "failed to delete hook"),
             }
         }
 
@@ -518,6 +543,22 @@ pub enum HelixParamType {
     Login,
     Id,
     Status,
+
+    /// Requests the next page of results - i.e., the page **after** the given
+    /// cursor for a pagination-supported endpoint.
+    ///
+    /// See the [Twitch API Concepts] page for additional documentation on pagination.
+    ///
+    /// [Twitch API Concepts]: https://dev.twitch.tv/docs/api/guide/#pagination
+    After,
+
+    /// Requests the previous page of results - i.e., the page **before** the given
+    /// cursor for a pagination-supported endpoint.
+    ///
+    /// See the [Twitch API Concepts] page for additional documentation on pagination.
+    ///
+    /// [Twitch API Concepts]: https://dev.twitch.tv/docs/api/guide/#pagination
+    Before,
 }
 
 impl From<HelixUri> for String {
@@ -543,6 +584,8 @@ impl From<HelixParamType> for String {
             HelixParamType::Login => "login=".to_string(),
             HelixParamType::Id => "id=".to_string(),
             HelixParamType::Status => "status=".to_string(),
+            HelixParamType::After => "after=".to_string(),
+            HelixParamType::Before => "before=".to_string(),
         }
     }
 }
@@ -568,12 +611,23 @@ pub fn build_query_params(param_type: HelixParamType, items: &[String]) -> Vec<S
     queries
 }
 
+#[derive(Debug, Clone)]
+pub struct PaginatedHelixRequest {
+    pub cursor: String,
+
+    /// Only valid if set to either `Before` or `After`.
+    ///
+    /// > This whole `util::helix` module needs to be reworked, so this is
+    /// > a bit of a hacky-feeling implementation until then...
+    pub params: HelixParamType,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct HelixDataResponse<T> {
     data: Vec<T>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default, Hash)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct HelixUser {
     pub id: String,
     pub login: String,
@@ -588,6 +642,13 @@ pub struct HelixUser {
     pub total: i64,
     #[serde(default)]
     pub private: bool,
+}
+
+impl std::hash::Hash for HelixUser {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.login.hash(state);
+    }
 }
 
 impl PartialEq<str> for HelixUser {
@@ -622,7 +683,7 @@ pub struct HelixStream {
     #[serde(rename = "user_login")]
     pub login: String,
     #[serde(rename = "thumbnail_url")]
-    pub thumnail: String,
+    pub thumbnail: String,
     #[serde(rename = "game_name")]
     pub game: String,
 }

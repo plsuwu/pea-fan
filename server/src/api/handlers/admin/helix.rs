@@ -6,7 +6,7 @@ use tracing::instrument;
 use crate::api::handlers::spawn_protected;
 use crate::api::server::stream_online_hook_handler;
 use crate::api::server::{ApiResponse, ApiResult, AppState, RouteError};
-use crate::api::webhook::{HelixDataGeneric, SubscriptionGenericData};
+use crate::api::webhook::SubscriptionGenericData;
 use crate::util::helix::{Helix, HelixUser};
 
 /// GET
@@ -37,7 +37,7 @@ pub async fn delete_hooks(State(state): State<Arc<AppState>>) -> ApiResult<usize
 
         tracing::info!("removed all channel states from redis cache");
 
-        let active_hooks = Helix::get_active_subscriptions().await?;
+        let active_hooks = Helix::get_active_subscription_ids().await?;
         tracing::debug!(?active_hooks, "active_hooks");
 
         if !active_hooks.is_empty() {
@@ -75,14 +75,16 @@ pub async fn active_hooks(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<Vec<(String, SubscriptionGenericData)>> {
     let channel_data = spawn_protected(async move {
-        let active_data: HelixDataGeneric<SubscriptionGenericData> =
-            serde_json::from_value(Helix::get_active_subscriptions_raw().await?)
-                .map_err(RouteError::from)?;
+        let active_subscriptions = Helix::get_active_subscriptions().await?;
+
+        // let active_data: HelixDataGeneric<SubscriptionGenericData> =
+        //     serde_json::from_value(Helix::get_active_subscriptions_raw().await)
+        //         .map_err(RouteError::from)?;
 
         let mut channel_data = Vec::new();
         let mut tx = state.database_pool.begin().await?;
 
-        for sub in active_data.data.into_iter() {
+        for sub in active_subscriptions.into_iter() {
             let broadcaster_id = &sub.condition.broadcaster_user_id;
             let query = sqlx::query_scalar!(
                 r#"
@@ -104,7 +106,7 @@ pub async fn active_hooks(
                     );
 
                     continue;
-                },
+                }
             };
 
             channel_data.push((login, sub));

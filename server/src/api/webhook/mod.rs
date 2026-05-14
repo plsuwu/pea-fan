@@ -236,6 +236,15 @@ pub struct Transport {
 #[derive(Deserialize, Debug, Clone)]
 pub struct HelixDataGeneric<T> {
     pub data: Vec<T>,
+    pub total: usize,
+    pub total_cost: usize,
+    pub max_total_cost: usize,
+    pub pagination: HelixPagination,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct HelixPagination {
+    pub cursor: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -247,8 +256,9 @@ pub struct SubscriptionGenericData {
     pub cost: usize,
 
     /// NOTE:
-    ///  this doesn't handle for the case where we are required to
-    ///  provide a `user_id` over a `broadcaster_user_id`
+    ///  this doesn't handle for the case where we are required to provide
+    ///  a `user_id` over a `broadcaster_user_id`; not generalized here as
+    ///  we don't (currently) need to handle other condition types...
     pub condition: BroadcasterUserId,
     pub transport: Transport,
     pub created_at: String,

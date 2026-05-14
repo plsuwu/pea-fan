@@ -82,12 +82,12 @@ pub async fn stream_online_hook_handler<R: AsyncCommands + Sync>(
     channel_ids: &[String],
     mut redis_pool: R,
 ) -> Result<(), RouteError> {
-    match webhook::dispatch::reset_hooks(&channel_ids).await {
+    match webhook::dispatch::reset_hooks(channel_ids).await {
         Ok(_) => tracing::debug!("webhook subs reset"),
         Err(e) => tracing::error!(error = ?e, "reset webhook subs failure"),
     }
 
-    match crate::db::redis::init_stream_states(&mut redis_pool, &channel_ids).await {
+    match crate::db::redis::init_stream_states(&mut redis_pool, channel_ids).await {
         Ok(_) => tracing::debug!("initial cache entries created"),
         Err(e) => tracing::error!(error = ?e, "initial cache entry create failure"),
     }
@@ -302,7 +302,7 @@ pub async fn router(
     let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
 
     // we want to trigger these every time we run as each new run uses a unique HMAC secret
-    if !cfg!(debug_assertions) {
+    // if !cfg!(debug_assertions) {
         tokio::spawn(async move {
             let _guard = server_state_clone.channel_ids.read().await;
             let channel_ids = _guard.clone();
@@ -319,7 +319,7 @@ pub async fn router(
         })
         .await
         .unwrap();
-    }
+    // }
 
     tx.send(socket_addr).unwrap();
     axum::serve(listener, app).await.unwrap()
