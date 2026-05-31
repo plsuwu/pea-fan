@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { fade } from "svelte/transition";
-
 	let {
 		src,
 		alt,
@@ -24,30 +22,33 @@
 <span class="skeleton-host inline-grid place-items-center">
 	<span
 		class="skeleton rounded-full {skeletonClass}"
-        class:is-hidden={loaded || errored}
+		class:is-hidden={loaded || errored}
 		aria-hidden="true"
 	></span>
-	<!-- {#if !loaded && !errored} -->
-	<!-- {/if} -->
+
 	<img
 		loading="lazy"
-        decoding="async"
+		decoding="async"
 		bind:this={element}
 		{src}
 		{alt}
 		{...rest}
 		class="{className} img-fade"
-		class:visible={loaded}
+		class:visible={loaded && !errored}
 		onload={() => (loaded = true)}
 		onerror={() => (errored = true)}
 	/>
+
+	{#if errored}
+		<div class={className}></div>
+	{/if}
 </span>
 
 <style>
 	.skeleton-host {
 		display: inline-grid;
 		place-items: center;
-        contain: layout style;
+		contain: layout style;
 	}
 
 	.skeleton-host > * {
@@ -62,8 +63,8 @@
 		overflow: hidden;
 		isolation: isolate;
 		position: relative;
-        opacity: 1;
-        transition: opacity 250ms ease-out;
+		opacity: 1;
+		transition: opacity 250ms ease-out;
 
 		&::after {
 			content: "";
@@ -83,14 +84,14 @@
 		}
 	}
 
-    .skeleton.is-hidden {
-        opacity: 0;
-        pointer-events: none;
-    }
+	.skeleton.is-hidden {
+		opacity: 0;
+		pointer-events: none;
+	}
 
-    .skeleton.is-hidden::after {
-        animation-play-state: paused;
-    }
+	.skeleton.is-hidden::after {
+		animation-play-state: paused;
+	}
 
 	@keyframes shimmer {
 		to {
@@ -100,7 +101,7 @@
 
 	.img-fade {
 		opacity: 0;
-        transition: opacity 250ms ease-out;
+		transition: opacity 250ms ease-out;
 	}
 
 	.img-fade.visible {

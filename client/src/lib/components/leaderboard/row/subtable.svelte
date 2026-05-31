@@ -46,7 +46,7 @@
 				<SkeletonImage
 					src={getAltImageSizeUrl(imgUrl, "XS")}
 					alt={login}
-					class="z-10 rounded-full bg-background ring-1 ring-offset-1 h-[20px] my-0.5"
+					class="z-10 my-0.5 h-[20px] w-[20px] rounded-full bg-background ring-1 ring-offset-1"
 					skeletonClass="size-6 rounded-full"
 				/>
 			</Tt.Trigger>
