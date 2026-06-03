@@ -1,30 +1,27 @@
 <script lang="ts">
 	import "./layout.css";
 	import "$lib/assets/iosevka.css";
-	// import favicon from "$lib/assets/favicon.svg";
-
 	import type { LayoutData } from "./$types";
 	import { onMount } from "svelte";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
-
-	import { mode, ModeWatcher, setMode } from "mode-watcher";
-	import * as Tt from "$lib/shadcn-components/ui/tooltip/index";
+	import { slide } from "svelte/transition";
+	import { expoInOut } from "svelte/easing";
 	import { MoveLeft, X } from "@lucide/svelte";
 	import {
 		setModeCookie,
 		getModeCookie,
 		getParentDomain,
 	} from "$lib/utils/mode-cookie.svelte";
+	import { mode, ModeWatcher, setMode } from "mode-watcher";
+	import { Button } from "$lib/shadcn-components/ui/button";
 	import { routeManager } from "$lib/utils/route";
-
 	import Footer from "$lib/components/menu/footer.svelte";
 	import Stats from "$lib/components/tenant/stats/stats.svelte";
 	import ExternalLinks from "$lib/components/tenant/stats/external.svelte";
 	import Menubar from "$lib/components/menu/menubar.svelte";
-	import { slide } from "svelte/transition";
-	import { Button } from "$lib/shadcn-components/ui/button";
-	import { expoInOut } from "svelte/easing";
+	import * as Tt from "$lib/shadcn-components/ui/tooltip/index";
+	import { updatePageTitle } from "$lib/utils/page-title.svelte";
 
 	let { data, children } = $props();
 	let { host } = page.url;
@@ -57,39 +54,12 @@
 		document.cookie = `seen-announcement=${announcement?.hash}; domain=${getParentDomain()}; path=/; max-age=${ANNOUNCEMENT_MAX_AGE};`;
 	}
 
-	// TODO:
-	//  move this + the keyboard handler into a utility function (or
-	//  perhaps standalone class store)
-	let pageTitle = $derived.by(() => {
-		let title: string = "piss fan";
-		const rawPath = page.url.pathname;
-
-		if (channel) {
-			title = `${channel} | ${title}`;
-		} else if (rawPath !== "/admin" && rawPath !== "/admin/login") {
-			const currPath = page.url.pathname
-				.trim()
-				.split("/")
-				.filter((p) => p !== "");
-
-			const currParams = page.url.searchParams.get("page");
-			if (currPath[1]) {
-				title = `${currPath[1]}s ${
-					currParams ? `| page ${currParams}` : ""
-				} | ${title}`;
-			}
-		}
-
-		return title;
-	});
+	let pageTitle = $derived(updatePageTitle(page, channel));
 
 	function getNextUrlBase(path: string) {
-		// const next = new URL(`${Rh.proto}://${Rh.deriveBase(host)}`);
 		const next = routeManager.getUntenantedURL(host);
-
 		next.pathname = path;
 		next.searchParams.set("page", "1");
-
 		return next;
 	}
 
@@ -122,7 +92,6 @@
 </script>
 
 <svelte:head>
-	<!-- <link rel="icon" href={favicon} /> -->
 	<title>{pageTitle}</title>
 </svelte:head>
 
@@ -135,7 +104,6 @@
 	>
 		<Menubar />
 	</header>
-
 	<div class="border-t-2"></div>
 	{#if announcement.content && !announcementCleared}
 		<div

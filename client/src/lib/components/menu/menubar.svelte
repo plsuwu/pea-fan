@@ -26,12 +26,18 @@
 	import { setModeCookie } from "$lib/utils/mode-cookie.svelte";
 	import { logger } from "$lib/observability/server/logger.svelte";
 
-	// const BASE_HOST_URL = `${Rh.proto}://${Rh.deriveBase(page.url.host)}`;
-	// const BASE_API_URL = `${Rh.apiv1}`;
 
 	const BASE_HOST_URL = routeManager.getUntenantedURL(page.url.host).href;
+	const DEBOUNCE_CALLBACK = debounce(handleSearch, 500);
 
-	const searchDebounceCallback = debounce(handleSearch, 500);
+	let inputRef = $state<HTMLElement | null>(null);
+    let results = $state<SearchResult[]>([]);
+
+	let loading = $state(false);
+	let inputVisible = $state(true);
+
+	let current = $state("");
+	let previous = $state("");
 
 	async function handleSearch(signal: AbortSignal, query: string) {
 		const login = query.trim();
@@ -61,9 +67,6 @@
 						page: Math.ceil(result.ranking / 15),
 					};
 				});
-				// for (const result of results) {
-				// 	getPageFromRank(result.ranking, body.data[0]);
-				// }
 			}
 		} finally {
 			previous = current;
@@ -71,20 +74,10 @@
 		}
 	}
 
-	let inputRef = $state<HTMLElement | null>(null);
-	let loading = $state(false);
-
-	let current = $state("");
-	let previous = $state("");
-
-	let results = $state<SearchResult[]>([]);
-
-	let inputVisible = $state(true);
-
 	$effect(() => {
 		if (current !== previous && !!current) {
 			loading = true;
-			searchDebounceCallback(current);
+			DEBOUNCE_CALLBACK(current);
 		}
 	});
 
@@ -285,9 +278,6 @@
 							{/if}
 						</div>
 						<div>dark mode</div>
-						<!-- <div> -->
-						<!-- 	<ModeChanger /> -->
-						<!-- </div> -->
 					</button>
 				</Dropdown.Item>
 			</Dropdown.Group>
