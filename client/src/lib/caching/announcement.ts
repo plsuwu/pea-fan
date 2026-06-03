@@ -18,9 +18,9 @@ export class AnnouncementCache extends Cache<Announcement> {
 
 		if (!res.ok) {
 			this.logger.error({ response: res }, "failed to fetch announcement data");
-			if (this.data.size > 0) { 
-                return this.data;
-            }
+			if (this.data.size > 0) {
+				return this.data;
+			}
 
 			return this.fallback;
 		}
@@ -39,6 +39,7 @@ export class AnnouncementCache extends Cache<Announcement> {
 
 export const announcementCache = new AnnouncementCache(
 	"announcement",
-	util.endpoint("announcement"),
+	// util.endpoint("announcement"),
+    "/api/announcement",
 	DEFAULT_ANNOUNCEMENT
 );

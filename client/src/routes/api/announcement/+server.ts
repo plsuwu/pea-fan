@@ -1,6 +1,5 @@
 import { json, type RequestHandler } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
-// import { logger } from "$lib/observability/server/logger.svelte";
 
 const ADMIN_SESSION_TOKEN = env.ADMIN_SESSION_TOKEN;
 
