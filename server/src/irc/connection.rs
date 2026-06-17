@@ -293,11 +293,13 @@ impl ConnectionClient {
     pub async fn connect(&mut self) -> ClientResult<()> {
         tracing::debug!("connecting to IRC: authorizing + requesting capabilities");
 
+        // they killed him...
+
         // `identify()` authenticates the user with the server
         self.inner.identify()?;
         self.inner.send_cap_req(&[
-            TwitchCapability::Commands.into(),
             TwitchCapability::Membership.into(),
+            TwitchCapability::Commands.into(),
             TwitchCapability::Tags.into(),
         ])?;
 

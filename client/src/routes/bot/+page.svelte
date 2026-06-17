@@ -37,7 +37,7 @@
 						>
 					</div>
 					<div class="text-base text-muted-foreground/85 lg:text-2xl">
-						piss-related chatbot; currently enabled for these broadcasters:
+						piss-related chatbot - currently DEAD
 					</div>
 				</div>
 			</div>
@@ -78,23 +78,28 @@
 					</a>
 				{/each}
 			</div>
-			<div class="mt-14 xl:mt-48">
-				<span class="text-[28px] font-extrabold xl:text-5xl"
-					>his usage instructions</span
+			<div class="mt-14 xl:mt-22">
+				<span class="text-[28px] font-extrabold line-through xl:text-5xl"
+					><span class="text-muted-foreground/45">his usage instructions</span
+					></span
 				>
-				<div class="mt-8 w-max text-xl xl:ml-2">
-					<Kbd>
+				<div class="mt-8 w-max text-xl line-through xl:ml-2">
+					<Kbd class=" text-muted-foreground/45">
 						!pisscount <span class="text-muted-foreground">[?username]</span>
 					</Kbd>
 				</div>
 				<div
-					class="mt-6 flex flex-row items-center align-middle text-lg xl:ml-4"
+					class="mt-6 flex flex-row items-center align-middle text-lg line-through xl:ml-4"
 				>
 					<div>
-						<p class="mb-2.5 text-base leading-[1.2] lg:text-lg">
+						<p
+							class="mb-2.5 text-base leading-[1.2] text-muted-foreground/45 lg:text-lg"
+						>
 							Responds with a specified user's pisscount.
 						</p>
-						<p class="mb-1 text-base leading-[1.2] lg:text-lg">
+						<p
+							class="mb-1 text-base leading-[1.2] text-muted-foreground/45 lg:text-lg"
+						>
 							If no user is specified, this command returns the pisscount for
 							the requesting user instead.
 						</p>
@@ -102,23 +107,15 @@
 				</div>
 			</div>
 			<div class="mt-18">
-				<div class="text-sm text-muted-foreground/85 lg:text-base">
-					Responses are queued and sent in one-and-a-half-second intervals, with
-					the queue holding a maximum of 16 messages before it begins dropping
-					queries. The queue is shared across
-					<span class="font-bold italic">all</span> channels, as per
-					<a
-						href="https://dev.twitch.tv/docs/chat#twitch-chat-rate-limits"
-						target="_blank"
-						rel="noopener noreferrer"
-						class="text-blue-600/75 transition-opacity duration-200 ease-in-out hover:opacity-50"
-						>Twitch's IRC rate limits</a
-					>.
-				</div>
-				<div class="mt-6 text-sm text-muted-foreground/85 lg:text-base">
-					Also, he is not enabled everywhere because I fear this he is mostly
-					just bullshit that creates unwanted noise more than anything (in
-					addition to the chat rate limit stuff mentioned above).
+				<div class="text-center text-xl text-foreground lg:text-3xl">
+					<div class="flex flex-col items-center justify-center">
+						<img
+							class="mb-4 size-20"
+							src="https://static-cdn.jtvnw.net/emoticons/v2/emotesv2_790549147d4946b5b71db6345b5a2c05/static/light/3.0"
+							alt="chocojDogSob"
+						/>
+						<div>they killed him</div>
+					</div>
 				</div>
 			</div>
 		</div>

@@ -1,14 +1,29 @@
 <script lang="ts">
 	import * as Tt from "$lib/shadcn-components/ui/tooltip/index";
 	import { getAltImageSizeUrl } from "$lib/utils";
+	import { SvelteMap, SvelteSet } from "svelte/reactivity";
 	import SkeletonImage from "./skeleton-image.svelte";
 
 	const PLACEHOLDER_STRING = "placeholder_str";
+	const PREVIEWS_COUNT = 6;
 
 	let { login, totalScores, scores, variant, tenantHref } = $props();
 	let subvariant = $derived(variant === "Channel" ? "chatter" : "channel");
 
-	const PREVIEWS_COUNT = 6;
+	let activated = $state(new SvelteSet<string>());
+	let openLogin = $state<string | null>(null);
+
+	let imgState = $state(
+		new SvelteMap<string, { loaded: boolean; errored: boolean }>()
+	);
+
+	function activate(login: string) {
+		if (!activated.has(login)) {
+			activated.add(login);
+		}
+
+		openLogin = login;
+	}
 
 	function getMentionedSubtitle(
 		scoresCount: number,
@@ -41,29 +56,37 @@
 	{@const href = `https://twitch.tv/${login}`}
 
 	<a {href} rel="noreferrer noopener" target="_blank" class="cursor-pointer">
-		<Tt.Root>
+		<Tt.Root
+			open={openLogin === login}
+			onOpenChange={(o) => {
+				if (o) activate(login);
+				else if (openLogin === login) openLogin = null;
+			}}
+		>
 			<Tt.Trigger>
 				<SkeletonImage
 					src={getAltImageSizeUrl(imgUrl, "XS")}
 					alt={login}
-					class="z-10 my-0.5 h-[20px] w-[20px] rounded-full bg-background ring-1 ring-offset-1"
+					class="z-10 my-0.5 h-[20px] w-[20px] rounded-full border-2 border-accent-foreground bg-background"
 					skeletonClass="size-6 rounded-full"
 				/>
 			</Tt.Trigger>
-			<Tt.Content
-				class="border border-accent-foreground bg-background font-iosevka text-foreground"
-				arrowClasses="bg-background border-b border-r border-accent-foreground"
-			>
-				<div
-					class="flex w-full justify-between text-base font-semibold"
-					style={`color: ${color};`}
+			{#if activated.has(login)}
+				<Tt.Content
+					class="border border-accent-foreground bg-background font-iosevka text-foreground"
+					arrowClasses="bg-background border-b border-r border-accent-foreground"
 				>
-					{name}
-				</div>
-				<div class="font-normal">
-					total: <span class="text-sm font-bold">{total}</span>
-				</div>
-			</Tt.Content>
+					<div
+						class="flex w-full justify-between text-base font-semibold"
+						style={`color: ${color};`}
+					>
+						{name}
+					</div>
+					<div class="font-normal">
+						total: <span class="text-sm font-bold">{total}</span>
+					</div>
+				</Tt.Content>
+			{/if}
 		</Tt.Root>
 	</a>
 {/snippet}

@@ -22,9 +22,8 @@
 		bind:element
 		src={getAltImageSizeUrl(image, "MD")}
 		{alt}
-		class="ring-inset-4 size-[35px] shrink-0 rounded-full border-3
-        border-background ring-2 transition-all duration-100 ease-out md:size-[55px] 
-        lg:size-[60px] lg:border-5 lg:ring-3"
+		class="size-[30px] shrink-0 rounded-full transition-all
+        duration-100 ease-out md:size-[55px] lg:size-[60px]"
 		skeletonClass="lg:size-[60px] size-[35px]"
 		{...rest}
 	/>

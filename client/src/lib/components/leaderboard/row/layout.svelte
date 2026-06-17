@@ -32,9 +32,11 @@
 	let ringedElement: HTMLImageElement | undefined = $state();
 
 	let entryColor = $derived(readableColor(entry.color));
+	let mousedOver = $state(false);
 
 	function handleMouseEvent(event: MouseEvent) {
 		if (event.type === "mouseover") {
+			mousedOver = true;
 			nameElement.setAttribute(
 				"style",
 				`color: ${entryColor}; 
@@ -42,16 +44,8 @@
                 transition-duration: 300ms;
                 transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));`
 			);
-			if (ringedElement) {
-				ringedElement.setAttribute(
-					"style",
-					`--tw-ring-color: ${entryColor};
-                    transition-property: all; 
-                    transition-duration: 300ms;
-                    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));`
-				);
-			}
-		} else {
+		} else if (mousedOver) {
+			mousedOver = false;
 			nameElement.setAttribute(
 				"style",
 				`color: var(--foreground);
@@ -59,16 +53,6 @@
                 transition-duration: 300ms;
                 transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));`
 			);
-			if (ringedElement) {
-				ringedElement.setAttribute(
-					"style",
-					`--tw-ring-color: var(--foreground);
-                    transition-property: all; 
-                    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
-                    transition-duration: 300ms;
-                    `
-				);
-			}
 		}
 	}
 

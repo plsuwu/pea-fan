@@ -17,12 +17,31 @@
 
 	let loaded = $state(false);
 	let errored = $state(false);
+	let inView = $state(true);
+	let host = $state<HTMLElement>();
+
+	$effect(() => {
+		const el = host;
+		if (!el) return;
+
+		const io = new IntersectionObserver(
+			(entries) => {
+				inView = entries[0].isIntersecting;
+			},
+			{ rootMargin: "100px" }
+		);
+		io.observe(el);
+		return () => io.disconnect();
+	});
+
+	let animate = $derived(inView && !loaded && !errored);
 </script>
 
-<span class="skeleton-host inline-grid place-items-center">
+<span bind:this={host} class="skeleton-host inline-grid place-items-center">
 	<span
 		class="skeleton rounded-full {skeletonClass}"
 		class:is-hidden={loaded || errored}
+		class:animate
 		aria-hidden="true"
 	></span>
 
@@ -48,7 +67,7 @@
 	.skeleton-host {
 		display: inline-grid;
 		place-items: center;
-		contain: layout style;
+		contain: layout style paint;
 	}
 
 	.skeleton-host > * {
@@ -65,23 +84,24 @@
 		position: relative;
 		opacity: 1;
 		transition: opacity 250ms ease-out;
+	}
 
-		&::after {
-			content: "";
-			position: absolute;
-			inset: 0;
-			background: linear-gradient(
-				90deg,
-				transparent 0%,
-				color-mix(in srgb, currentColor 4%, transparent) 5%,
-				color-mix(in srgb, currentColor 14%, transparent) 40%,
-				color-mix(in srgb, currentColor 4%, transparent) 95%,
-				transparent 100%
-			);
-			background-size: 800% 600%;
-			transform: translateX(-100%);
-			animation: shimmer 1.5s ease-in-out infinite;
-		}
+	.skeleton.animate::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(
+			90deg,
+			transparent 0%,
+			color-mix(in srgb, currentColor 4%, transparent) 5%,
+			color-mix(in srgb, currentColor 14%, transparent) 40%,
+			color-mix(in srgb, currentColor 4%, transparent) 95%,
+			transparent 100%
+		);
+		background-size: 800% 600%;
+		transform: translateX(-100%);
+		animation: shimmer 1.5s ease-in-out infinite;
+		will-change: transform;
 	}
 
 	.skeleton.is-hidden {

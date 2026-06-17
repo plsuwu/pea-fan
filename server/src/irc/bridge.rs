@@ -30,7 +30,7 @@ impl IrcHandle {
         let (tx, rx) = oneshot::channel();
         self.query_tx
             .send(IrcQuery::InsertNewChannel {
-                channel: channel,
+                channel,
                 reply: tx,
             })
             .await?;

@@ -23,7 +23,8 @@ use crate::util::helix::Helix;
 
 const TRAILER_CHAR: char = '\u{180B}';
 const KEYWORD: &str = "piss";
-pub const COUNTER_USER: &str = "pee_liker";
+// pub const COUNTER_USER: &str = "pee_liker";
+pub const COUNTER_USER: &str = "ghhhuhgguh";
 
 const ID_BLACKLIST: [&str; 1] = [
     // i am allowing the bots because its kind of funny
