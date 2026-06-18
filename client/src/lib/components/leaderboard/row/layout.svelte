@@ -15,11 +15,13 @@
 		entry,
 		variant,
 		mode,
+		hidden,
 		showScoreIcons = true,
 	}: {
 		entry: UntypedEntry & { isLive: boolean };
 		variant: "Channel" | "Chatter";
 		mode: SystemModeValue;
+		hidden: boolean;
 		showScoreIcons?: boolean;
 	} = $props();
 
@@ -71,11 +73,12 @@
 </script>
 
 <div
+	class:hidden
 	id={entry.ranking.toString()}
 	class={cn(
-		`relative flex items-center justify-between space-x-4 overflow-x-hidden
+		`relative mb-px flex items-center justify-between space-x-4 overflow-x-hidden
         rounded-[1px] border-2 border-foreground bg-background py-4 pl-4 transition-all
-        duration-300 ease-out hover:-translate-y-4 md:pl-6`,
+        duration-200 ease-out z-30 hover:-translate-y-3 md:pl-6`,
 		containerClass
 	)}
 >

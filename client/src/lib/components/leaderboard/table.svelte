@@ -18,7 +18,6 @@
 
 	let currentMode = $derived(mode.current);
 	let filtering = $derived(variant === "Channel" && onlyShowLive);
-
 </script>
 
 {#snippet Loader()}
@@ -43,9 +42,13 @@
 		out:fade={{ delay: 100, duration: 0 }}
 	>
 		{#each entries as entry}
-			<div class:hidden={filtering && !entry.isLive}>
-				<RowLayout {entry} {variant} mode={currentMode} showScoreIcons={true} />
-			</div>
+			<RowLayout
+				{entry}
+				{variant}
+				mode={currentMode}
+				showScoreIcons={true}
+				hidden={filtering && !entry.isLive}
+			/>
 		{/each}
 	</div>
 </div>

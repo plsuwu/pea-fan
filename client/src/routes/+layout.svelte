@@ -108,8 +108,8 @@
 	{#if announcement.content && !announcementCleared}
 		<div
 			transition:slide={{ duration: 250, axis: "y", easing: expoInOut }}
-			class="flex max-h-[105px] w-full flex-row items-center justify-between bg-amber-200
-            px-2 py-1 text-xs text-black lg:px-8 lg:py-2 lg:text-base"
+			class="z-50 flex max-h-[105px] w-full flex-row items-center justify-between
+            bg-select-fg px-2 py-1 text-xs text-foreground lg:px-8 lg:py-2 lg:text-base"
 		>
 			<div></div>
 			<div class="text-[11px] font-semibold sm:text-sm lg:text-base">
@@ -117,12 +117,13 @@
 			</div>
 			<Button
 				onclick={handleClearAnnouncement}
-				variant="ghost"
+				variant="outline"
 				size="icon-sm"
 				class="ml-2 flex flex-row items-center justify-center rounded-full border
-                text-black hover:cursor-pointer hover:text-black"
+                border-foreground bg-transparent text-foreground
+                hover:cursor-pointer hover:bg-transparent hover:text-foreground"
 			>
-				<X size={3} />
+				<X size={2} />
 			</Button>
 		</div>
 	{/if}
